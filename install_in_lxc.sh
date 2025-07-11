@@ -57,7 +57,7 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=${APP_DIR}
-ExecStart=${APP_DIR}/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 "app:app"
+ExecStart=/opt/mikrotik-manager/venv/bin/gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 "app:app"
 Restart=always
 RestartSec=10
 Environment="DATA_DIR=${DATA_DIR}/data"

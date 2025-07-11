@@ -35,7 +35,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Cesty k súborom a adresárom
-DATA_DIR = os.environ.get('DATA_DIR', '/data')
+DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
 DB_PATH = os.path.join(DATA_DIR, 'mikrotik_backup.db')
 BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
 
@@ -156,7 +156,7 @@ def run_backup_logic(device):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(ip, username=username, password=password, timeout=30)
-        add_log('info', "SSH pripojenie úspešné.", ip)
+        add_log('info', "SSH pripojenie úspešne.", ip)
 
         # 1. Porovnanie konfigurácie
         remote_config = get_mikrotik_export_direct(client, ip)

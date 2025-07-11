@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Backup Manager v2.2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --main-bg: #111827; --card-bg: #1f2937; --border-color: #374151; 
+            --text-color: #d1d5db; --accent-color: #38bdf8; --accent-color-hover: #0ea5e9;
+        }
+        body { background-color: var(--main-bg); color: var(--text-color); font-family: 'Inter', sans-serif; }
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); transition: all 0.3s ease; }
+        .card:hover { box-shadow: 0 0 15px rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); }
+        .btn { transition: all 0.2s ease-in-out; }
+        .btn-primary { background-color: var(--accent-color); color: #ffffff; }
+        .btn-primary:hover { background-color: var(--accent-color-hover); }
+        .status-online { color: #4ade80; }
+        .status-offline { color: #f87171; }
+        .status-unknown { color: #9ca3af; }
+        .log-info { border-left-color: #38bdf8; }
+        .log-success { border-left-color: #4ade80; }
+        .log-warning { border-left-color: #facc15; }
+        .log-error { border-left-color: #f87171; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spinning { animation: spin 1s linear infinite; }
+        .modal-content { animation: modal-fade-in 0.3s ease-out; }
+        @keyframes modal-fade-in { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-content::-webkit-scrollbar { width: 8px; }
+        .modal-content::-webkit-scrollbar-track { background: var(--card-bg); }
+        .modal-content::-webkit-scrollbar-thumb { background-color: var(--accent-color); border-radius: 10px; border: 2px solid var(--card-bg); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div id="app" class="container mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-white mb-2">🛡️ MikroTik Backup Manager v2.2</h1>
+            <p class="text-lg text-gray-400">Správa, zálohovanie a monitoring vašich MikroTik zariadení.</p>
+        </header>
+
+        <div class="card p-4 rounded-lg mb-8 flex flex-wrap gap-4 items-center justify-center">
+            <button id="addDeviceBtn" class="btn btn-primary font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-plus"></i> Pridať zariadenie</button>
+            <button id="backupAllBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-save"></i> Zálohovať všetky</button>
+            <button id="refreshAllSnmpBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-sync"></i> Refresh SNMP</button>
+            <button id="settingsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-cog"></i> Nastavenia</button>
+        </div>
+
+        <div id="devicesGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8"></div>
+
+        <div class="card p-4 rounded-lg">
+            <h2 class="text-2xl font-bold text-white mb-4">📋 Logy aktivít</h2>
+            <div id="logsContainer" class="h-64 overflow-y-auto space-y-2 pr-2"></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="deviceModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="card p-8 rounded-lg w-full max-w-md modal-content">
+            <h2 class="text-2xl font-bold text-white mb-6">Pridať/Upraviť zariadenie</h2>
+            <form id="deviceForm" class="space-y-4">
+                <input type="hidden" id="deviceId">
+                <div><label for="deviceName" class="block mb-1 font-semibold">Názov zariadenia</label><input type="text" id="deviceName" class="w-full p-2 rounded bg-gray-800 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-sky-500" required></div>
+                <div><label for="deviceIp" class="block mb-1 font-semibold">IP Adresa</label><input type="text" id="deviceIp" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required></div>
+                <div><label for="deviceUsername" class="block mb-1 font-semibold">Používateľské meno</label><input type="text" id="deviceUsername" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required></div>
+                <div><label for="devicePassword" class="block mb-1 font-semibold">Heslo</label><input type="password" id="devicePassword" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required></div>
+                <div><label for="deviceSnmpCommunity" class="block mb-1 font-semibold">SNMP Community</label><input type="text" id="deviceSnmpCommunity" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="public"></div>
+                <div class="flex items-center"><input type="checkbox" id="deviceLowMemory" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500"><label for="deviceLowMemory" class="ml-2">Zariadenie s nízkou pamäťou (16MB)</label></div>
+                <div class="flex justify-end gap-4 mt-6"><button type="button" id="cancelDeviceBtn" class="btn bg-gray-600 hover:bg-gray-700 py-2 px-4 rounded-lg">Zrušiť</button><button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Uložiť</button></div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-4">
+        <div class="card p-8 rounded-lg w-full max-w-2xl modal-content max-h-[90vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold text-white mb-6">Nastavenia</h2>
+            <form id="settingsForm" class="space-y-8">
+                <div>
+                    <h3 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">⏰ Automatické zálohovanie</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center"><input type="checkbox" id="backupScheduleEnabled" name="backup_schedule_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500"><label for="backupScheduleEnabled" class="ml-2">Povoliť automatické zálohovanie</label></div>
+                        <div><label for="backupScheduleType" class="block mb-1">Interval</label><select id="backupScheduleType" name="backup_schedule_type" class="w-full p-2 rounded bg-gray-800 border border-gray-600"><option value="daily">Denne</option><option value="weekly">Týždenne</option></select></div>
+                        <div id="weeklySettings" class="hidden"><label for="backupScheduleDay" class="block mb-1">Deň v týždni</label><select id="backupScheduleDay" name="backup_schedule_day" class="w-full p-2 rounded bg-gray-800 border border-gray-600"><option value="monday">Pondelok</option><option value="tuesday">Utorok</option><option value="wednesday">Streda</option><option value="thursday">Štvrtok</option><option value="friday">Piatok</option><option value="saturday">Sobota</option><option value="sunday">Nedeľa</option></select></div>
+                        <div><label for="backupScheduleTime" class="block mb-1">Čas (HH:MM)</label><input type="time" id="backupScheduleTime" name="backup_schedule_time" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">📁 FTP Server</h3>
+                    <div class="space-y-4">
+                        <div><label for="ftp_server" class="block mb-1">FTP Server IP</label><input type="text" id="ftp_server" name="ftp_server" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                        <div><label for="ftp_username" class="block mb-1">FTP Používateľ</label><input type="text" id="ftp_username" name="ftp_username" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                        <div><label for="ftp_password" class="block mb-1">FTP Heslo</label><input type="password" id="ftp_password" name="ftp_password" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                        <div><label for="ftp_directory" class="block mb-1">FTP Adresár</label><input type="text" id="ftp_directory" name="ftp_directory" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">📱 Inteligentné Notifikácie (Pushover)</h3>
+                    <div class="space-y-4">
+                        <div><label for="pushover_app_key" class="block mb-1 font-semibold">Pushover App Key/Token</label><input type="text" id="pushover_app_key" name="pushover_app_key" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Váš App Key z Pushover"></div>
+                        <div><label for="pushover_user_key" class="block mb-1 font-semibold">Pushover User Key</label><input type="text" id="pushover_user_key" name="pushover_user_key" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Váš User Key z Pushover"></div>
+                        <h4 class="font-semibold pt-2">Typy notifikácií</h4>
+                        <div id="notificationTypes" class="grid grid-cols-2 gap-x-4 gap-y-2"></div>
+                        <h4 class="font-semibold pt-2">Kritické limity</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label for="temp_critical_threshold" class="block mb-1">Teplota (°C)</label><input type="number" id="temp_critical_threshold" name="temp_critical_threshold" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                            <div><label for="cpu_critical_threshold" class="block mb-1">CPU (%)</label><input type="number" id="cpu_critical_threshold" name="cpu_critical_threshold" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                            <div><label for="memory_critical_threshold" class="block mb-1">Pamäť (%)</label><input type="number" id="memory_critical_threshold" name="memory_critical_threshold" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                            <div><label for="voltage_low_threshold" class="block mb-1">Napätie (V)</label><input type="number" id="voltage_low_threshold" name="voltage_low_threshold" step="0.1" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                        </div>
+                        <h4 class="font-semibold pt-2">Obmedzenia</h4>
+                        <div class="flex items-center"><input type="checkbox" id="quiet_hours_enabled" name="quiet_hours_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500"><label for="quiet_hours_enabled" class="ml-2">Povoliť "Quiet Hours" (tichý režim)</label></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label for="quiet_hours_start" class="block mb-1">Tichý režim od</label><input type="time" id="quiet_hours_start" name="quiet_hours_start" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                            <div><label for="quiet_hours_end" class="block mb-1">Tichý režim do</label><input type="time" id="quiet_hours_end" name="quiet_hours_end" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                        </div>
+                        <div><button type="button" id="testPushoverBtn" class="btn bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg w-full flex items-center justify-center gap-2"><i class="fas fa-paper-plane"></i> Otestovať Notifikáciu</button></div>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-4 pt-6 border-t border-gray-700"><button type="button" id="cancelSettingsBtn" class="btn bg-gray-600 hover:bg-gray-700 py-2 px-4 rounded-lg">Zrušiť</button><button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Uložiť nastavenia</button></div>
+            </form>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const API_URL = '';
+    const devicesGrid = document.getElementById('devicesGrid');
+    const logsContainer = document.getElementById('logsContainer');
+    const deviceModal = document.getElementById('deviceModal');
+    const settingsModal = document.getElementById('settingsModal');
+    const deviceForm = document.getElementById('deviceForm');
+    const settingsForm = document.getElementById('settingsForm');
+    const notificationTypes = {
+        notify_device_offline: "🔴 Zariadenie offline", notify_device_online: "✅ Zariadenie online",
+        notify_high_temperature: "🌡️ Vysoká teplota", notify_high_cpu: "⚡ Vysoké CPU",
+        notify_low_memory: "💾 Málo pamäte", notify_low_voltage: "🔋 Nízke napätie",
+        notify_reboot_detected: "🔄 Reboot detekovaný", notify_version_change: "🆕 Zmena verzie OS",
+    };
+
+    const api = {
+        get: (endpoint) => fetch(`${API_URL}/api/${endpoint}`).then(res => res.json()),
+        post: (endpoint, body) => fetch(`${API_URL}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(res => res.json()),
+        delete: (endpoint) => fetch(`${API_URL}/api/${endpoint}`, { method: 'DELETE' }).then(res => res.json()),
+    };
+
+    const socket = io();
+    socket.on('connect', () => addLog('info', 'WebSocket pripojenie nadviazané.'));
+    socket.on('log_update', (log) => addLog(log.level, log.message, log.device_ip, log.timestamp));
+    socket.on('snmp_update', ({ id, data, status }) => updateDeviceCard(id, { last_snmp_data: JSON.stringify(data), status }));
+    socket.on('backup_status', ({ ip, id, status, last_backup }) => {
+        const card = document.querySelector(`[data-id="${id}"]`);
+        if (card) {
+            card.querySelector('.backup-btn i').classList.remove('spinning');
+            if (last_backup) card.querySelector('.last-backup-val').textContent = new Date(last_backup).toLocaleString('sk-SK');
+        }
+    });
+
+    const createDeviceCard = (device) => {
+        const snmpData = device.last_snmp_data ? JSON.parse(device.last_snmp_data) : {};
+        const statusClass = device.status === 'online' ? 'status-online' : 'status-offline';
+        const card = document.createElement('div');
+        card.className = 'card p-6 rounded-lg flex flex-col gap-4';
+        card.dataset.id = device.id;
+        card.dataset.ip = device.ip;
+        card.innerHTML = `
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-xl font-bold text-white">${device.name}</h3>
+                    <span class="font-mono text-sm font-semibold ${statusClass}"><i class="fas fa-circle mr-2"></i>${device.status}</span>
+                </div>
+                <p class="font-mono text-gray-400">${device.ip}</p>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <p><strong>Verzia:</strong> <span class="font-mono text-gray-300">${snmpData.version || 'N/A'}</span></p>
+                <p><strong>Board:</strong> <span class="font-mono text-gray-300">${snmpData.board_name || 'N/A'}</span></p>
+                <p><strong>Uptime:</strong> <span class="font-mono text-gray-300">${snmpData.uptime || 'N/A'}</span></p>
+                <p><strong>CPU:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_load || 'N/A'}%</span></p>
+                <p><strong>Teplota:</strong> <span class="font-mono text-gray-300">${snmpData.temperature || 'N/A'} °C</span></p>
+                <p><strong>Napätie:</strong> <span class="font-mono text-gray-300">${snmpData.voltage || 'N/A'} V</span></p>
+                <p><strong>Pamäť:</strong> <span class="font-mono text-gray-300">${snmpData.free_memory || 'N/A'}</span></p>
+                <p><strong>Posl. záloha:</strong> <span class="font-mono text-gray-300 last-backup-val">${device.last_backup ? new Date(device.last_backup).toLocaleString('sk-SK') : 'Nikdy'}</span></p>
+            </div>
+            <div class="flex gap-2 mt-auto pt-4 border-t border-gray-700">
+                <button class="backup-btn btn flex-grow bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"><i class="fas fa-save"></i> Zálohovať</button>
+                <button class="snmp-btn btn flex-grow bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"><i class="fas fa-sync"></i> SNMP</button>
+                <button class="edit-btn btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm"><i class="fas fa-pencil-alt"></i></button>
+                <button class="delete-btn btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg text-sm"><i class="fas fa-trash"></i></button>
+            </div>`;
+        card.querySelector('.backup-btn').addEventListener('click', (e) => { e.currentTarget.querySelector('i').classList.add('spinning'); api.post(`backup/${device.id}`); });
+        card.querySelector('.snmp-btn').addEventListener('click', () => api.get(`snmp/${device.id}`));
+        card.querySelector('.edit-btn').addEventListener('click', () => openDeviceModal(device));
+        card.querySelector('.delete-btn').addEventListener('click', () => deleteDevice(device.id, device.ip));
+        return card;
+    };
+    
+    const updateDeviceCard = (id, data) => {
+        const card = document.querySelector(`[data-id="${id}"]`);
+        if (!card) return;
+        if (data.last_snmp_data) {
+            const snmpData = JSON.parse(data.last_snmp_data);
+            const statusEl = card.querySelector('.font-mono.text-sm.font-semibold');
+            statusEl.innerHTML = `<i class="fas fa-circle mr-2"></i>${data.status}`;
+            statusEl.className = `font-mono text-sm font-semibold status-${data.status}`;
+            card.querySelector('p:nth-child(1) span').textContent = snmpData.version || 'N/A';
+            // ... update other snmp fields
+        }
+        if (data.last_backup) {
+            card.querySelector('.last-backup-val').textContent = new Date(data.last_backup).toLocaleString('sk-SK');
+        }
+    };
+
+    const addLog = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
+        const logEntry = document.createElement('div');
+        logEntry.className = `p-2 border-l-4 log-${level} bg-gray-800 text-sm`;
+        logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleTimeString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${message}</p>`;
+        logsContainer.prepend(logEntry);
+        if (logsContainer.children.length > 200) logsContainer.lastChild.remove();
+    };
+
+    const openDeviceModal = (device = null) => {
+        deviceForm.reset();
+        document.getElementById('deviceId').value = device ? device.id : '';
+        document.getElementById('deviceName').value = device ? device.name : '';
+        document.getElementById('deviceIp').value = device ? device.ip : '';
+        document.getElementById('deviceUsername').value = device ? device.username : '';
+        document.getElementById('devicePassword').value = device ? device.password : '';
+        document.getElementById('deviceSnmpCommunity').value = device ? device.snmp_community : 'public';
+        document.getElementById('deviceLowMemory').checked = device ? device.low_memory : false;
+        deviceModal.classList.remove('hidden');
+    };
+    
+    const openSettingsModal = async () => {
+        const settings = await api.get('settings');
+        Object.keys(settings).forEach(key => {
+            const el = document.getElementById(key);
+            if (el) el.type === 'checkbox' ? el.checked = (settings[key] === 'true') : el.value = settings[key];
+        });
+        Object.keys(notificationTypes).forEach(key => {
+            const el = document.getElementById(key);
+            if(el) el.checked = settings[key] === 'true';
+        });
+        toggleWeeklySettings();
+        settingsModal.classList.remove('hidden');
+    };
+
+    const closeModal = () => {
+        deviceModal.classList.add('hidden');
+        settingsModal.classList.add('hidden');
+    };
+
+    const loadDevices = async () => {
+        const devices = await api.get('devices');
+        devicesGrid.innerHTML = '';
+        devices.forEach(device => devicesGrid.appendChild(createDeviceCard(device)));
+    };
+
+    const deleteDevice = async (id, ip) => {
+        if (confirm(`Naozaj chcete odstrániť zariadenie ${ip}?`)) {
+            await api.delete(`devices/${id}`);
+            loadDevices();
+        }
+    };
+
+    const toggleWeeklySettings = () => {
+        document.getElementById('weeklySettings').style.display = document.getElementById('backupScheduleType').value === 'weekly' ? 'block' : 'none';
+    };
+    
+    const populateNotificationTypes = () => {
+        const container = document.getElementById('notificationTypes');
+        container.innerHTML = Object.entries(notificationTypes).map(([key, label]) => `
+            <div class="flex items-center">
+                <input type="checkbox" id="${key}" name="${key}" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                <label for="${key}" class="ml-2 text-sm">${label}</label>
+            </div>`).join('');
+    };
+
+    // --- Event Listeners ---
+    document.getElementById('addDeviceBtn').addEventListener('click', () => openDeviceModal());
+    document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
+    document.getElementById('cancelDeviceBtn').addEventListener('click', closeModal);
+    document.getElementById('cancelSettingsBtn').addEventListener('click', closeModal);
+    document.getElementById('backupAllBtn').addEventListener('click', () => api.post('backup/all'));
+    document.getElementById('refreshAllSnmpBtn').addEventListener('click', () => document.querySelectorAll('[data-id]').forEach(card => api.get(`snmp/${card.dataset.id}`)));
+    document.getElementById('backupScheduleType').addEventListener('change', toggleWeeklySettings);
+    document.getElementById('testPushoverBtn').addEventListener('click', () => api.post('notifications/test'));
+
+    deviceForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {
+            id: document.getElementById('deviceId').value,
+            name: document.getElementById('deviceName').value,
+            ip: document.getElementById('deviceIp').value,
+            username: document.getElementById('deviceUsername').value,
+            password: document.getElementById('devicePassword').value,
+            snmp_community: document.getElementById('deviceSnmpCommunity').value,
+            low_memory: document.getElementById('deviceLowMemory').checked,
+        };
+        await api.post('devices', body);
+        closeModal();
+        loadDevices();
+    });
+    
+    settingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = {};
+        new FormData(settingsForm).forEach((value, key) => body[key] = value);
+        settingsForm.querySelectorAll('input[type="checkbox"]').forEach(cb => body[cb.id] = cb.checked.toString());
+        await api.post('settings', body);
+        closeModal();
+        addLog('success', 'Nastavenia boli uložené.');
+    });
+
+    // --- Inicializácia ---
+    populateNotificationTypes();
+    loadDevices();
+    addLog('info', 'Vitajte v MikroTik Backup Manager v2.2!');
+});
+</script>
+</body>
+</html>

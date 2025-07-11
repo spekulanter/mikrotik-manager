@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# MikroTik Backup Manager - Proxmox VE Helper Script v4.2
-# Inšpirované filozofiou tteck.io
+# MikroTik Backup Manager - Proxmox VE Helper Script v4.4
+# Inšpirované filozofiou tteck.io - s automatickou inštaláciou jq a správnym odkazom
 #
 set -e
 
@@ -14,12 +14,12 @@ function msg_error() { echo -e "\\033[1;31mERROR\\033[0m: $1"; }
 REPO_URL="https://github.com/spekulanter/mikrotik-manager.git"
 APP_DIR="/opt/mikrotik-manager"
 
-# --- Kontrola, či už aplikácia beží (pre aktualizácie) ---
-if [ -d "$APP_DIR" ]; then
-    msg_info "Detekovaná existujúca inštalácia. Spúšťam aktualizačný proces..."
-    cd $APP_DIR
-    bash update.sh
-    exit 0
+# --- Kontrola a inštalácia `jq` na Proxmox hostiteľovi ---
+if ! command -v jq &> /dev/null; then
+    msg_info "Požadovaný nástroj 'jq' nebol nájdený. Spúšťam inštaláciu..."
+    apt-get update >/dev/null
+    apt-get install -y jq >/dev/null
+    msg_ok "'jq' bol úspešne nainštalovaný."
 fi
 
 # --- Interaktívna časť pre novú inštaláciu ---

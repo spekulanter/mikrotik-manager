@@ -205,7 +205,7 @@ def run_backup_logic(device):
             conn.execute("UPDATE devices SET last_backup = CURRENT_TIMESTAMP WHERE id = ?", (device['id'],))
             conn.commit()
 
-        add_log('success', f"Záloha pre {ip} dokončená.", ip)
+        add_log('info', f"Záloha pre {ip} dokončená.", ip)
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now().isoformat()})
         
         upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
@@ -257,7 +257,7 @@ def send_pushover_notification(message, title="MikroTik Manager"):
         conn_pushover = http.client.HTTPSConnection("api.pushover.net:443")
         conn_pushover.request("POST", "/1/messages.json", urllib.parse.urlencode({"token": settings['pushover_app_key'], "user": settings['pushover_user_key'], "title": title, "message": message}), {"Content-type": "application/x-www-form-urlencoded"})
         conn_pushover.getresponse()
-        add_log('success', f"Pushover notifikácia odoslaná: {message}")
+        add_log('info', f"Pushover notifikácia odoslaná: {message}")
     except Exception as e: add_log('error', f"Odoslanie Pushover notifikácie zlyhalo: {e}")
 
 @app.route('/')
@@ -275,7 +275,7 @@ def handle_devices():
                 else:
                     conn.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community) VALUES (?, ?, ?, ?, ?, ?)", (data['name'], data['ip'], data['username'], data['password'], data.get('low_memory', False), data.get('snmp_community', 'public')))
                 conn.commit()
-                add_log('success', f"Zariadenie {data['ip']} uložené.")
+                add_log('info', f"Zariadenie {data['ip']} uložené.")
                 return jsonify({'status': 'success'})
             except sqlite3.IntegrityError: return jsonify({'status': 'error', 'message': 'Zariadenie s touto IP už existuje'}), 409
 
@@ -326,7 +326,7 @@ def handle_settings():
             for key, value in request.json.items():
                 conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
             conn.commit()
-            add_log('success', "Nastavenia boli aktualizované.")
+            add_log('info', "Nastavenia boli aktualizované.")
             setup_scheduler()
             return jsonify({'status': 'success'})
 

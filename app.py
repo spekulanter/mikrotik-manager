@@ -360,10 +360,14 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(60)
 
+# Inicializácia, ktorá sa musí spustiť vždy (aj pod Gunicornom)
+init_environment()
+init_database()
+setup_scheduler()
+threading.Thread(target=run_scheduler, daemon=True).start()
+logger.info("Aplikácia MikroTik Backup Manager sa spúšťa...")
+
+# Tento blok sa použije len pre lokálny vývoj
 if __name__ == '__main__':
-    init_environment()
-    init_database()
-    setup_scheduler()
-    threading.Thread(target=run_scheduler, daemon=True).start()
-    logger.info("Server sa spúšťa na http://0.0.0.0:5000")
+    logger.info("Server sa spúšťa v režime pre vývoj na http://0.0.0.0:5000")
     socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)

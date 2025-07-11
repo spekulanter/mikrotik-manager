@@ -156,7 +156,7 @@ def run_backup_logic(device):
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(ip, username=username, password=password, timeout=30)
-        add_log('info', "SSH pripojenie úspešné.", ip)
+        add_log('info', "SSH pripojenie úspešne.", ip)
 
         # 1. Porovnanie konfigurácie
         remote_config = get_mikrotik_export_direct(client, ip)

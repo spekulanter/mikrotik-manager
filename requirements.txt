@@ -2,7 +2,7 @@ Flask
 Flask-SocketIO
 Flask-Cors
 paramiko
-pysnmp
+pysnmp==4.4.12
 schedule
 gunicorn
 eventlet

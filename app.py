@@ -12,7 +12,6 @@ import sqlite3
 import threading
 from datetime import datetime
 # --- PRIDANÉ PRE LOGIN ---
-# Pridali sme render_template pre zobrazovanie HTML šablón a session pre udržanie stavu prihlásenia
 from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, session
 from flask_socketio import SocketIO
 from flask_cors import CORS
@@ -27,7 +26,6 @@ import logging
 import schedule
 
 # --- PRIDANÉ PRE LOGIN ---
-# Nové importy pre prihlasovanie, hashovanie hesiel a 2FA
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import pyotp
@@ -36,9 +34,9 @@ import base64
 from io import BytesIO
 
 # --- Základné nastavenie ---
-# Upravené, aby Flask vedel, kde hľadať HTML šablóny (login.html, atď.)
+# Upravené, aby Flask vedel, kde hľadať HTML šablóny
 app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
-app.config['SECRET_KEY'] = os.urandom(32) # Dôležité pre session a Flask-Login
+app.config['SECRET_KEY'] = os.urandom(32)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 CORS(app)
 
@@ -55,14 +53,12 @@ BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
 backup_tasks = {}
 
 # --- PRIDANÉ PRE LOGIN ---
-# Kompletné nastavenie Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login' # Stránka, na ktorú presmeruje, ak používateľ nie je prihlásený
+login_manager.login_view = 'login'
 login_manager.session_protection = "strong"
 
 class User(UserMixin):
-    """Jednoduchý model používateľa pre Flask-Login."""
     def __init__(self, id, username, password, totp_secret):
         self.id = id
         self.username = username
@@ -71,7 +67,6 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    """Načíta používateľa z databázy podľa jeho ID."""
     with get_db_connection() as conn:
         user_data = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
         if user_data:
@@ -87,7 +82,7 @@ def init_environment():
 @contextmanager
 def get_db_connection():
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         yield conn
     except sqlite3.Error as e:
@@ -98,11 +93,9 @@ def get_db_connection():
             conn.close()
 
 def init_database():
-    """Inicializuje databázu a pridá novú tabuľku 'users'."""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # Pôvodné tabuľky
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS devices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
@@ -119,7 +112,6 @@ def init_database():
                 )
             ''')
             # --- PRIDANÉ PRE LOGIN ---
-            # Nová tabuľka pre používateľov
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,7 +127,6 @@ def init_database():
 
 # --- PRIDANÉ PRE LOGIN ---
 def create_admin_user_if_not_exists():
-    """Vytvorí predvoleného administrátora, ak v databáze žiadny neexistuje."""
     with get_db_connection() as conn:
         admin = conn.execute('SELECT * FROM users WHERE username = ?', ('admin',)).fetchone()
         if not admin:
@@ -167,7 +158,6 @@ def add_log(level, message, device_ip=None):
         logger.error(f"Nepodarilo sa zapísať log do databázy: {e}")
 
 def get_mikrotik_export_direct(ssh_client, ip):
-    """Získa obsah konfigurácie priamo cez SSH bez ukladania súboru na MikroTiku."""
     try:
         add_log('info', f"Získavam priamy SSH export z {ip}...", ip)
         _, stdout, _ = ssh_client.exec_command('/export')
@@ -180,42 +170,171 @@ def get_mikrotik_export_direct(ssh_client, ip):
         add_log('error', f"Priamy SSH export zlyhal: {e}", ip)
         return None
 
-# ... (Všetky ostatné vaše funkcie ako `compare_with_local_backup`, `run_backup_logic`, `get_snmp_data`, atď. tu pokračujú bez zmeny)
-# Pre prehľadnosť ich tu neskracujem, ale vo finálnom súbore musia byť.
 def compare_with_local_backup(ip, remote_content):
-    # ... (celý kód funkcie)
-    pass
-def run_backup_logic(device):
-    # ... (celý kód funkcie)
-    pass
-def get_snmp_data(ip, community='public'):
-    # ... (celý kód funkcie)
-    pass
-def upload_to_ftp(local_path):
-    # ... (celý kód funkcie)
-    pass
-def send_pushover_notification(message, title="MikroTik Manager"):
-    # ... (celý kód funkcie)
-    pass
+    try:
+        local_backups = sorted(
+            [f for f in os.listdir(BACKUP_DIR) if ip in f and f.endswith('.rsc')],
+            reverse=True
+        )
+        if not local_backups:
+            add_log('info', f"Žiadna lokálna záloha pre {ip} nájdená. Vytváram novú.", ip)
+            return True
 
+        latest_backup_path = os.path.join(BACKUP_DIR, local_backups[0])
+        with open(latest_backup_path, 'r', encoding='utf-8', errors='ignore') as f:
+            local_content = f.read()
+
+        ignore_keywords = ['list=blacklist', 'comment=spamhaus']
+        local_lines = [line for line in local_content.splitlines() if not any(kw in line for kw in ignore_keywords)]
+        remote_lines = [line for line in remote_content.splitlines() if not any(kw in line for kw in ignore_keywords)]
+        
+        diff = list(difflib.unified_diff(local_lines, remote_lines))
+        
+        if len(diff) > 2:
+            add_log('info', f"Zistené zmeny v konfigurácii pre {ip}. Spúšťam zálohu.", ip)
+            return True
+        else:
+            add_log('info', f"Žiadne zmeny v konfigurácii pre {ip}. Záloha sa preskakuje.", ip)
+            return False
+    except Exception as e:
+        add_log('error', f"Chyba pri porovnávaní záloh pre {ip}: {e}", ip)
+        return True
+
+def run_backup_logic(device):
+    ip, username, password, low_memory = device['ip'], device['username'], device['password'], device['low_memory']
+    add_log('info', f"Spúšťam pokročilú zálohu pre {ip}", ip)
+    socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'starting'})
+    
+    client = None
+    try:
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(ip, username=username, password=password, timeout=30)
+        add_log('info', "SSH pripojenie úspešne.", ip)
+
+        remote_config = get_mikrotik_export_direct(client, ip)
+        if remote_config is None:
+            raise Exception("Nepodarilo sa získať konfiguráciu na porovnanie.")
+        
+        if not compare_with_local_backup(ip, remote_config):
+            socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'skipped'})
+            return
+
+        _, stdout, _ = client.exec_command('/system identity print')
+        identity_match = re.search(r'name:\s*(.+)', stdout.read().decode().strip())
+        safe_identity = re.sub(r'[^a-zA-Z0-9_-]', '_', identity_match.group(1) if identity_match else ip)
+        
+        _, stdout, _ = client.exec_command('/file print where type=directory')
+        has_flash = 'flash' in stdout.read().decode()
+        add_log('info', f"Zariadenie {'má' if has_flash else 'nemá'} /flash adresár.", ip)
+
+        add_log('info', "Vykonávam cleanup starých súborov na zariadení...", ip)
+        safe_cleanup_command = f':foreach i in=[/file find where (name~".backup" or name~".rsc") and name~"_{ip}_"] do={{/file remove $i}}'
+        client.exec_command(safe_cleanup_command)
+        time.sleep(5)
+
+        date_str = datetime.now().strftime("%Y%m%d-%H%M%S")
+        base_filename = f"{safe_identity}_{ip}_{date_str}"
+        backup_path = f"flash/{base_filename}.backup" if has_flash else f"{base_filename}.backup"
+        rsc_path = f"flash/{base_filename}.rsc" if has_flash else f"{base_filename}.rsc"
+        
+        add_log('info', f"Vytváram súbory {base_filename}.backup a .rsc...", ip)
+        client.exec_command(f'/system backup save name="{backup_path}" dont-encrypt=yes')
+        time.sleep(15 if low_memory else 10)
+        client.exec_command(f'/export file="{rsc_path}"')
+        time.sleep(20 if low_memory else 15)
+
+        with client.open_sftp() as sftp:
+            sftp.get(backup_path, os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
+            sftp.get(rsc_path, os.path.join(BACKUP_DIR, f"{base_filename}.rsc"))
+            add_log('info', "Súbory úspešne stiahnuté.", ip)
+            sftp.remove(rsc_path)
+
+        with get_db_connection() as conn:
+            conn.execute("UPDATE devices SET last_backup = CURRENT_TIMESTAMP WHERE id = ?", (device['id'],))
+            conn.commit()
+
+        add_log('success', f"Záloha pre {ip} dokončená.", ip)
+        socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now().isoformat()})
+        
+        upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
+        upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.rsc"))
+
+    except Exception as e:
+        add_log('error', f"Chyba pri zálohe: {e}", ip)
+        socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'error', 'message': str(e)})
+    finally:
+        if client: client.close()
+        if ip in backup_tasks: del backup_tasks[ip]
+
+def get_snmp_data(ip, community='public'):
+    oids = {
+        'identity': '1.3.6.1.2.1.1.5.0','uptime': '1.3.6.1.2.1.1.3.0','version': '1.3.6.1.4.1.14988.1.1.4.4.0',
+        'board_name': '1.3.6.1.4.1.14988.1.1.7.8.0','cpu_load': '1.3.6.1.2.1.25.3.3.1.2.1','temperature': '1.3.6.1.4.1.14988.1.1.3.11.0',
+        'cpu_count': '1.3.6.1.2.1.25.3.3.1.0','cpu_frequency': '1.3.6.1.4.1.14988.1.1.3.14.0','total_memory': '1.3.6.1.2.1.25.2.2.0',
+        'architecture': '1.3.6.1.4.1.14988.1.1.7.7.0'
+    }
+    results = {}
+    try:
+        from pysnmp.hlapi import getCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+        from datetime import timedelta
+        for name, oid in oids.items():
+            errorIndication, errorStatus, _, varBinds = next(getCmd(SnmpEngine(),CommunityData(community, mpModel=0),UdpTransportTarget((ip, 161), timeout=2, retries=1),ContextData(),ObjectType(ObjectIdentity(oid))))
+            if errorIndication or errorStatus:
+                results[name] = 'N/A'
+            else:
+                val = varBinds[0][1]
+                if name == 'uptime':
+                    td = timedelta(seconds=float(val) / 100.0)
+                    results[name] = f"{td.days}d {td.seconds//3600}h {(td.seconds//60)%60}m"
+                elif name == 'temperature': results[name] = str(int(int(val) / 10.0))
+                else: results[name] = str(val)
+        if 'cpu_count' in results and results['cpu_count'] != 'N/A': results['free_memory'] = results['cpu_count']
+        else: results['free_memory'] = 'N/A'
+        for key in ['cpu_count', 'cpu_frequency', 'total_memory', 'architecture']:
+            if key in results: del results[key]
+        return results
+    except Exception as e:
+        add_log('error', f"SNMP query for IP {ip} failed: {e}", device_ip=ip)
+        return {k: 'N/A' for k in ['identity', 'uptime', 'version', 'board_name', 'cpu_load', 'temperature', 'free_memory']}
+
+def upload_to_ftp(local_path):
+    try:
+        with get_db_connection() as conn:
+            settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE "ftp_%"')}
+        if all(k in settings and settings[k] for k in ['ftp_server', 'ftp_username', 'ftp_password']):
+            with FTP(settings['ftp_server']) as ftp:
+                ftp.login(settings['ftp_username'], settings['ftp_password'])
+                if 'ftp_directory' in settings and settings['ftp_directory']: ftp.cwd(settings['ftp_directory'])
+                with open(local_path, 'rb') as f:
+                    ftp.storbinary(f'STOR {os.path.basename(local_path)}', f)
+                add_log('info', f"Súbor {os.path.basename(local_path)} nahraný na FTP.")
+    except Exception as e: add_log('error', f"FTP upload zlyhal: {e}")
+
+def send_pushover_notification(message, title="MikroTik Manager"):
+    try:
+        with get_db_connection() as conn:
+            settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE "pushover_%"')}
+        if not all(k in settings and settings[k] for k in ['pushover_app_key', 'pushover_user_key']): return
+        conn_pushover = http.client.HTTPSConnection("api.pushover.net:443")
+        conn_pushover.request("POST", "/1/messages.json", urllib.parse.urlencode({"token": settings['pushover_app_key'], "user": settings['pushover_user_key'], "title": title, "message": message}), {"Content-type": "application/x-www-form-urlencoded"})
+        conn_pushover.getresponse()
+        add_log('info', f"Pushover notifikácia odoslaná: {message}")
+    except Exception as e: add_log('error', f"Odoslanie Pushover notifikácie zlyhalo: {e}")
 
 # --- PRIDANÉ PRE LOGIN ---
-# Nové routy pre prihlasovanie, odhlasovanie a nastavenie 2FA
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-
     error = None
     two_factor_required = '2fa_user_id' in session
-
     if request.method == 'POST':
         if '2fa_user_id' in session:
             user = load_user(session['2fa_user_id'])
             if not user:
                 session.pop('2fa_user_id', None)
                 return redirect(url_for('login'))
-
             totp_code = request.form.get('totp_code', '').strip()
             if pyotp.TOTP(user.totp_secret).verify(totp_code):
                 login_user(user, remember=True)
@@ -228,14 +347,12 @@ def login():
             password = request.form.get('password')
             with get_db_connection() as conn:
                 user_data = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-            
             if user_data and check_password_hash(user_data['password'], password):
                 session['2fa_user_id'] = user_data['id']
                 return redirect(url_for('login'))
             else:
                 error = 'Neplatné meno alebo heslo.'
                 time.sleep(1)
-
     return render_template('login.html', error=error, two_factor_required=two_factor_required)
 
 @app.route('/setup-2fa')
@@ -243,12 +360,10 @@ def login():
 def setup_2fa():
     secret = current_user.totp_secret
     uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.username, issuer_name="MikroTik Manager")
-    
     img = qrcode.make(uri)
     buf = BytesIO()
     img.save(buf)
     qr_code_data = base64.b64encode(buf.getvalue()).decode('ascii')
-
     return render_template('setup_2fa.html', qr_code=qr_code_data)
 
 @app.route('/logout')
@@ -258,16 +373,13 @@ def logout():
     return redirect(url_for('login'))
 
 # --- Ochrana pôvodných rout ---
-# Hlavná stránka aplikácie je teraz chránená
 @app.route('/')
 @login_required
 def index():
-    # Ak používateľ pri prvom prihlásení ešte nenastavil 2FA, presmerujeme ho
-    if current_user.is_authenticated and not current_user.totp_secret:
+    if current_user.is_authenticated and not pyotp.TOTP(current_user.totp_secret).now():
          return redirect(url_for('setup_2fa'))
     return send_from_directory('.', 'index.html')
 
-# Všetky API routy musia byť chránené dekorátorom @login_required
 @app.route('/api/devices', methods=['GET', 'POST'])
 @login_required
 def handle_devices():
@@ -347,11 +459,9 @@ def test_notification():
     send_pushover_notification("Toto je testovacia správa z MikroTik Backup Manager.")
     return jsonify({'status': 'success'})
 
-# --- Pôvodné funkcie pre plánovač (zostávajú nezmenené) ---
 def scheduled_backup_job():
     add_log('info', "Spúšťam naplánovanú úlohu zálohovania...")
-    socketio.emit('log_update', {'level': 'info', 'message': 'Spúšťa sa automatická úloha zálohovania...'})
-    with app.app_context(): # Dôležité pre beh v threade
+    with app.app_context():
         backup_all_devices()
 
 def setup_scheduler():
@@ -376,7 +486,6 @@ def run_scheduler():
 
 # --- Upravená inicializácia na konci súboru ---
 init_environment()
-# Používame app_context, aby sme mali prístup k aplikácii pri inicializácii
 with app.app_context():
     init_database()
     create_admin_user_if_not_exists()
@@ -385,7 +494,6 @@ with app.app_context():
 threading.Thread(target=run_scheduler, daemon=True).start()
 logger.info("Aplikácia MikroTik Backup Manager sa spúšťa...")
 
-# Tento blok sa použije len pre lokálny vývoj (zostáva pôvodný)
 if __name__ == '__main__':
     logger.info("Server sa spúšťa v režime pre vývoj na http://0.0.0.0:5000")
     socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)

@@ -178,7 +178,9 @@ def run_backup_logic(device):
 
         # 3. Dôkladný cleanup
         add_log('info', "Vykonávam cleanup starých súborov na zariadení...", ip)
-        client.exec_command(':foreach i in=[/file find where name~".backup" or name~".rsc"] do={/file remove $i}')
+        # Bezpečnejší príkaz, ktorý maže len súbory obsahujúce IP adresu v názve
+        safe_cleanup_command = f':foreach i in=[/file find where (name~".backup" or name~".rsc") and name~"_{ip}_"] do={{/file remove $i}}'
+        client.exec_command(safe_cleanup_command)
         time.sleep(5)
 
         # 4. Vytvorenie záloh
@@ -198,7 +200,7 @@ def run_backup_logic(device):
             sftp.get(backup_path, os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
             sftp.get(rsc_path, os.path.join(BACKUP_DIR, f"{base_filename}.rsc"))
             add_log('info', "Súbory úspešne stiahnuté.", ip)
-            sftp.remove(backup_path)
+            # sftp.remove(backup_path)
             sftp.remove(rsc_path)
 
         with get_db_connection() as conn:

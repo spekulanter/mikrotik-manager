@@ -11,8 +11,7 @@ function msg_ok() { echo -e "\\033[1;32mSUCCESS\\033[0m: $1"; }
 # Premenné
 REPO_URL="https://github.com/spekulanter/mikrotik-manager.git"
 APP_DIR="/opt/mikrotik-manager"
-# --- ZMENA 1: Definujeme novú cestu pre dáta ---
-DATA_DIR="/opt/backups"
+DATA_DIR="/var/lib/mikrotik-manager"
 
 # Aktualizácia systému a inštalácia závislostí
 msg_info "Aktualizujem systém a inštalujem potrebné balíčky..."
@@ -23,8 +22,7 @@ msg_ok "Systémové závislosti sú nainštalované."
 # Vytvorenie adresárov
 msg_info "Vytváram adresáre aplikácie a pre dáta..."
 mkdir -p ${APP_DIR}
-# --- ZMENA 2: Vytvárame nový adresár a nastavujeme mu práva ---
-mkdir -p ${DATA_DIR}
+mkdir -p ${DATA_DIR}/data/backups
 chown -R root:root ${APP_DIR}
 chown -R root:root ${DATA_DIR}
 msg_ok "Adresáre sú pripravené."
@@ -62,8 +60,7 @@ WorkingDirectory=${APP_DIR}
 ExecStart=/opt/mikrotik-manager/venv/bin/gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 "app:app"
 Restart=always
 RestartSec=10
-# --- ZMENA 3: Nastavujeme Environment premennú na novú cestu ---
-Environment="DATA_DIR=${DATA_DIR}"
+Environment="DATA_DIR=${DATA_DIR}/data"
 
 [Install]
 WantedBy=multi-user.target

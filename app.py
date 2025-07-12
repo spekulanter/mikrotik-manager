@@ -220,21 +220,102 @@ def run_backup_logic(device):
 
 # --- Ostatné funkcie (SNMP, FTP, Pushover, API) ---
 def get_snmp_data(ip, community='public'):
-    oids = {'identity': '1.3.6.1.2.1.1.5.0', 'uptime': '1.3.6.1.2.1.1.3.0', 'version': '1.3.6.1.4.1.14988.1.1.4.4.0', 'board_name': '1.3.6.1.4.1.14988.1.1.7.3.0', 'cpu_load': '1.3.6.1.4.1.14988.1.1.3.14.0', 'temperature': '1.3.6.1.4.1.14988.1.1.3.10.0', 'voltage': '1.3.6.1.4.1.14988.1.1.3.8.0', 'free_memory': '1.3.6.1.4.1.14988.1.1.1.1.0'}
+    # OID pre MikroTik RouterOS 7
+    oids = {
+        'identity': '1.3.6.1.2.1.1.5.0',
+        'uptime': '1.3.6.1.2.1.1.3.0',
+        'version': '1.3.6.1.4.1.14988.1.1.4.4.0',
+        'board_name': '1.3.6.1.4.1.14988.1.1.7.8.0',
+        'cpu_load': '1.3.6.1.2.1.25.3.3.1.2.1',
+        'temperature': '1.3.6.1.4.1.14988.1.1.3.11.0',
+        'cpu_count': '1.3.6.1.2.1.25.3.3.1.0',         # Počet CPU/procesorov
+        'cpu_frequency': '1.3.6.1.4.1.14988.1.1.3.14.0', # CPU frekvencia
+        'total_memory': '1.3.6.1.2.1.25.2.2.0',        # Total RAM v kB
+        'architecture': '1.3.6.1.4.1.14988.1.1.7.7.0'  # Architektúra
+    }
+    
     results = {}
+    
     try:
         from pysnmp.hlapi import getCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+        from datetime import timedelta
+        
         for name, oid in oids.items():
-            errorIndication, errorStatus, _, varBinds = next(getCmd(SnmpEngine(), CommunityData(community, mpModel=0), UdpTransportTarget((ip, 161), timeout=2, retries=1), ContextData(), ObjectType(ObjectIdentity(oid))))
-            if errorIndication or errorStatus: results[name] = 'N/A'
+            errorIndication, errorStatus, _, varBinds = next(
+                getCmd(SnmpEngine(), 
+                       CommunityData(community, mpModel=0), 
+                       UdpTransportTarget((ip, 161), timeout=2, retries=1), 
+                       ContextData(), 
+                       ObjectType(ObjectIdentity(oid)))
+            )
+            
+            if errorIndication or errorStatus:
+                results[name] = 'N/A'
+                add_log('debug', f"SNMP error for {name}: {errorIndication or errorStatus}", ip)
             else:
                 val = varBinds[0][1]
-                if name == 'uptime': results[name] = str(datetime.fromtimestamp(time.time() - int(val) / 100).strftime('%jd %Hh %Mm'))
-                elif name in ['temperature', 'voltage']: results[name] = f"{float(val) / 10:.1f}"
-                elif name == 'free_memory': results[name] = f"{int(val) / 1024 / 1024:.2f} MB"
-                else: results[name] = str(val)
+                
+                if name == 'uptime':
+                    total_seconds = float(val) / 100.0
+                    td = timedelta(seconds=total_seconds)
+                    days = td.days
+                    hours, remainder = divmod(td.seconds, 3600)
+                    minutes, _ = divmod(remainder, 60)
+                    results[name] = f"{days}d {hours}h {minutes}m"
+                    
+                elif name == 'cpu_load':
+                    results[name] = str(int(val))  # Len číslo bez %
+                    
+                elif name == 'temperature':
+                    # Teplota je v jednotkách 1/10°C
+                    temp = int(val) / 10.0
+                    results[name] = str(int(temp))  # Zaokrúhlené na celé číslo
+                    add_log('debug', f"Temperature raw value: {val}, converted: {temp}", ip)
+                    
+                elif name == 'cpu_count':
+                    # Počet CPU jadier/procesorov
+                    results[name] = str(int(val))
+                    
+                elif name == 'cpu_frequency':
+                    # CPU frekvencia v MHz
+                    results[name] = f"{int(val)} MHz"
+                    
+                elif name == 'total_memory':
+                    # RAM v kB, konvertujeme na MB
+                    memory_mb = int(val) / 1024.0
+                    results[name] = f"{memory_mb:.0f} MB"
+                    
+                elif name == 'architecture':
+                    # Architektúra procesora
+                    results[name] = str(val)
+                    
+                else:
+                    results[name] = str(val)
+        
+        # Použijeme 'free_memory' kľúč pre počet CPU jadier
+        if 'cpu_count' in results and results['cpu_count'] != 'N/A':
+            results['free_memory'] = results['cpu_count']  # Len číslo
+        else:
+            results['free_memory'] = 'N/A'
+        
+        # Odstránime pomocné hodnoty
+        for key in ['cpu_count', 'cpu_frequency', 'total_memory', 'architecture']:
+            if key in results:
+                del results[key]
+        
         return results
-    except Exception: return {key: 'N/A' for key in oids}
+        
+    except Exception as e:
+        add_log('error', f"SNMP query for IP {ip} failed: {e}", device_ip=ip)
+        return {
+            'identity': 'N/A',
+            'uptime': 'N/A',
+            'version': 'N/A',
+            'board_name': 'N/A',
+            'cpu_load': 'N/A',
+            'temperature': 'N/A',
+            'free_memory': 'N/A'
+        }
 
 def upload_to_ftp(local_path):
     try:

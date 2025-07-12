@@ -110,7 +110,6 @@
                             <div><label for="temp_critical_threshold" class="block mb-1">Teplota (°C)</label><input type="number" id="temp_critical_threshold" name="temp_critical_threshold" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
                             <div><label for="cpu_critical_threshold" class="block mb-1">CPU (%)</label><input type="number" id="cpu_critical_threshold" name="cpu_critical_threshold" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
                             <div><label for="memory_critical_threshold" class="block mb-1">Pamäť (%)</label><input type="number" id="memory_critical_threshold" name="memory_critical_threshold" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
-                            <div><label for="voltage_low_threshold" class="block mb-1">Napätie (V)</label><input type="number" id="voltage_low_threshold" name="voltage_low_threshold" step="0.1" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
                         </div>
                         <h4 class="font-semibold pt-2">Obmedzenia</h4>
                         <div class="flex items-center"><input type="checkbox" id="quiet_hours_enabled" name="quiet_hours_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500"><label for="quiet_hours_enabled" class="ml-2">Povoliť "Quiet Hours" (tichý režim)</label></div>
@@ -138,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const notificationTypes = {
         notify_device_offline: "🔴 Zariadenie offline", notify_device_online: "✅ Zariadenie online",
         notify_high_temperature: "🌡️ Vysoká teplota", notify_high_cpu: "⚡ Vysoké CPU",
-        notify_low_memory: "💾 Málo pamäte", notify_low_voltage: "🔋 Nízke napätie",
+        notify_low_memory: "💾 Málo pamäte",
         notify_reboot_detected: "🔄 Reboot detekovaný", notify_version_change: "🆕 Zmena verzie OS",
     };
 
@@ -181,8 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><strong>Uptime:</strong> <span class="font-mono text-gray-300">${snmpData.uptime || 'N/A'}</span></p>
                 <p><strong>CPU:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_load || 'N/A'}%</span></p>
                 <p><strong>Teplota:</strong> <span class="font-mono text-gray-300">${snmpData.temperature || 'N/A'} °C</span></p>
-                <p><strong>Napätie:</strong> <span class="font-mono text-gray-300">${snmpData.voltage || 'N/A'} V</span></p>
-                <p><strong>Pamäť:</strong> <span class="font-mono text-gray-300">${snmpData.free_memory || 'N/A'}</span></p>
+                <p><strong>CPU jadrá:</strong> <span class="font-mono text-gray-300">${snmpData.free_memory || 'N/A'}</span></p>
                 <p><strong>Posl. záloha:</strong> <span class="font-mono text-gray-300 last-backup-val">${device.last_backup ? new Date(device.last_backup).toLocaleString('sk-SK') : 'Nikdy'}</span></p>
             </div>
             <div class="flex gap-2 mt-auto pt-4 border-t border-gray-700">
@@ -207,7 +205,11 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = `<i class="fas fa-circle mr-2"></i>${data.status}`;
             statusEl.className = `font-mono text-sm font-semibold status-${data.status}`;
             card.querySelector('p:nth-child(1) span').textContent = snmpData.version || 'N/A';
-            // ... update other snmp fields
+            card.querySelector('p:nth-child(2) span').textContent = snmpData.board_name || 'N/A';
+            card.querySelector('p:nth-child(3) span').textContent = snmpData.uptime || 'N/A';
+            card.querySelector('p:nth-child(4) span').textContent = (snmpData.cpu_load || 'N/A') + '%';
+            card.querySelector('p:nth-child(5) span').textContent = (snmpData.temperature || 'N/A') + ' °C';
+            card.querySelector('p:nth-child(6) span').textContent = snmpData.free_memory || 'N/A';
         }
         if (data.last_backup) {
             card.querySelector('.last-backup-val').textContent = new Date(data.last_backup).toLocaleString('sk-SK');

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-MikroTik Backup Web Backend v2.3 - Secured
+MikroTik Backup Web Backend v2.4 - Secured
 Flask server s WebSocket a SNMP podporou, integrovaná pokročilá logika.
-Pridané povinné prihlasovanie a 2FA (TOTP).
+Pridané povinné prihlasovanie a 2FA (TOTP) so správnym setup flow.
 """
 
 import os
@@ -11,7 +11,6 @@ import json
 import sqlite3
 import threading
 from datetime import datetime
-# --- PRIDANÉ PRE LOGIN ---
 from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, session
 from flask_socketio import SocketIO
 from flask_cors import CORS
@@ -25,7 +24,6 @@ from contextlib import contextmanager
 import logging
 import schedule
 
-# --- PRIDANÉ PRE LOGIN ---
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import pyotp
@@ -33,47 +31,41 @@ import qrcode
 import base64
 from io import BytesIO
 
-# --- Základné nastavenie ---
-# Upravené, aby Flask vedel, kde hľadať HTML šablóny
 app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
 app.config['SECRET_KEY'] = os.urandom(32)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 CORS(app)
 
-# Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Cesty k súborom a adresárom (zostáva pôvodné)
 DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
 DB_PATH = os.path.join(DATA_DIR, 'mikrotik_backup.db')
 BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
 
-# Globálne premenné (zostáva pôvodné)
 backup_tasks = {}
 
-# --- PRIDANÉ PRE LOGIN ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.session_protection = "strong"
 
 class User(UserMixin):
-    def __init__(self, id, username, password, totp_secret):
+    def __init__(self, id, username, password, totp_secret, totp_enabled):
         self.id = id
         self.username = username
         self.password = password
         self.totp_secret = totp_secret
+        self.totp_enabled = totp_enabled
 
 @login_manager.user_loader
 def load_user(user_id):
     with get_db_connection() as conn:
         user_data = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
         if user_data:
-            return User(id=user_data['id'], username=user_data['username'], password=user_data['password'], totp_secret=user_data['totp_secret'])
+            return User(id=user_data['id'], username=user_data['username'], password=user_data['password'], totp_secret=user_data['totp_secret'], totp_enabled=user_data['totp_enabled'])
     return None
 
-# --- Inicializácia --- (zostáva pôvodné)
 def init_environment():
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -93,59 +85,56 @@ def get_db_connection():
             conn.close()
 
 def init_database():
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS devices (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
-                    username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
-                    snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
-                    last_backup TIMESTAMP, last_snmp_data TEXT
-                )
-            ''')
-            cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    level TEXT NOT NULL, message TEXT NOT NULL, device_ip TEXT
-                )
-            ''')
-            # --- PRIDANÉ PRE LOGIN ---
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL,
-                    totp_secret TEXT
-                )
-            ''')
-            conn.commit()
-            logger.info("Databáza úspešne inicializovaná.")
-    except sqlite3.Error as e:
-        logger.error(f"Chyba pri inicializácii databázy: {e}")
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Pôvodné tabuľky
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+                username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
+                snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
+                last_backup TIMESTAMP, last_snmp_data TEXT
+            )
+        ''')
+        cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                level TEXT NOT NULL, message TEXT NOT NULL, device_ip TEXT
+            )
+        ''')
+        # Upravená tabuľka pre používateľov
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                totp_secret TEXT,
+                totp_enabled BOOLEAN NOT NULL DEFAULT 0
+            )
+        ''')
+        # Pridanie stĺpca, ak chýba v existujúcej DB
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT 0')
+            logger.info("Pridaný stĺpec 'totp_enabled' do tabuľky users.")
+        except sqlite3.OperationalError:
+            pass # Stĺpec už existuje
+        conn.commit()
+        logger.info("Databáza úspešne inicializovaná.")
 
-# --- PRIDANÉ PRE LOGIN ---
 def create_admin_user_if_not_exists():
     with get_db_connection() as conn:
         admin = conn.execute('SELECT * FROM users WHERE username = ?', ('admin',)).fetchone()
         if not admin:
-            # ===================================================================
-            # === DÔLEŽITÉ: ZMEŇTE TOTO HESLO PRED PRVÝM SPUSTENÍM! ===
-            # ===================================================================
             ADMIN_PASSWORD = "change-this-super-strong-password-now"
-            
             password_hash = generate_password_hash(ADMIN_PASSWORD)
             totp_secret = pyotp.random_base32()
-            
-            conn.execute('INSERT INTO users (username, password, totp_secret) VALUES (?, ?, ?)',
-                         ('admin', password_hash, totp_secret))
+            conn.execute('INSERT INTO users (username, password, totp_secret, totp_enabled) VALUES (?, ?, ?, ?)',
+                         ('admin', password_hash, totp_secret, 0))
             conn.commit()
             logger.warning("Vytvorený predvolený administrátorský účet.")
-            logger.warning("Prihláste sa s menom 'admin' a heslom, ktoré ste nastavili v app.py.")
-            logger.warning("Následne budete vyzvaný na nastavenie 2FA.")
 
-# --- Pôvodné funkcie (zostávajú nezmenené) ---
+# --- Pôvodné funkcie zostávajú nedotknuté ---
 def add_log(level, message, device_ip=None):
     log_level = level.upper()
     logger.log(logging.getLevelName(log_level), f"{f'[{device_ip}] ' if device_ip else ''}{message}")
@@ -322,42 +311,52 @@ def send_pushover_notification(message, title="MikroTik Manager"):
         add_log('info', f"Pushover notifikácia odoslaná: {message}")
     except Exception as e: add_log('error', f"Odoslanie Pushover notifikácie zlyhalo: {e}")
 
-# --- PRIDANÉ PRE LOGIN ---
+# --- Opravená logika prihlasovania ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     error = None
-    two_factor_required = '2fa_user_id' in session
     if request.method == 'POST':
-        if '2fa_user_id' in session:
-            user = load_user(session['2fa_user_id'])
-            if not user:
-                session.pop('2fa_user_id', None)
-                return redirect(url_for('login'))
-            totp_code = request.form.get('totp_code', '').strip()
-            if pyotp.TOTP(user.totp_secret).verify(totp_code):
-                login_user(user, remember=True)
-                session.pop('2fa_user_id', None)
-                return redirect(request.args.get('next') or url_for('index'))
+        username = request.form.get('username')
+        password = request.form.get('password')
+        with get_db_connection() as conn:
+            user_data = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        
+        if user_data and check_password_hash(user_data['password'], password):
+            user = load_user(user_data['id'])
+            if user.totp_enabled:
+                session['2fa_user_id'] = user.id
+                return redirect(url_for('login_2fa'))
             else:
-                error = 'Neplatný overovací kód.'
+                login_user(user)
+                return redirect(url_for('setup_2fa'))
         else:
-            username = request.form.get('username')
-            password = request.form.get('password')
-            with get_db_connection() as conn:
-                user_data = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-            if user_data and check_password_hash(user_data['password'], password):
-                session['2fa_user_id'] = user_data['id']
-                return redirect(url_for('login'))
-            else:
-                error = 'Neplatné meno alebo heslo.'
-                time.sleep(1)
-    return render_template('login.html', error=error, two_factor_required=two_factor_required)
+            error = 'Neplatné meno alebo heslo.'
+            time.sleep(1)
+    return render_template('login.html', error=error)
+
+@app.route('/login/2fa', methods=['GET', 'POST'])
+def login_2fa():
+    if '2fa_user_id' not in session:
+        return redirect(url_for('login'))
+    error = None
+    if request.method == 'POST':
+        user = load_user(session['2fa_user_id'])
+        totp_code = request.form.get('totp_code', '').strip()
+        if pyotp.TOTP(user.totp_secret).verify(totp_code):
+            login_user(user, remember=True)
+            session.pop('2fa_user_id', None)
+            return redirect(request.args.get('next') or url_for('index'))
+        else:
+            error = 'Neplatný overovací kód.'
+    return render_template('login_2fa.html', error=error)
 
 @app.route('/setup-2fa')
 @login_required
 def setup_2fa():
+    if current_user.totp_enabled:
+        return redirect(url_for('index'))
     secret = current_user.totp_secret
     uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.username, issuer_name="MikroTik Manager")
     img = qrcode.make(uri)
@@ -365,6 +364,25 @@ def setup_2fa():
     img.save(buf)
     qr_code_data = base64.b64encode(buf.getvalue()).decode('ascii')
     return render_template('setup_2fa.html', qr_code=qr_code_data)
+
+@app.route('/verify-2fa', methods=['POST'])
+@login_required
+def verify_2fa():
+    totp_code = request.form.get('totp_code', '').strip()
+    if pyotp.TOTP(current_user.totp_secret).verify(totp_code):
+        with get_db_connection() as conn:
+            conn.execute('UPDATE users SET totp_enabled = 1 WHERE id = ?', (current_user.id,))
+            conn.commit()
+        return redirect(url_for('index'))
+    else:
+        # Ak je kód nesprávny, zobrazíme znova setup stránku s chybovou hláškou
+        secret = current_user.totp_secret
+        uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.username, issuer_name="MikroTik Manager")
+        img = qrcode.make(uri)
+        buf = BytesIO()
+        img.save(buf)
+        qr_code_data = base64.b64encode(buf.getvalue()).decode('ascii')
+        return render_template('setup_2fa.html', qr_code=qr_code_data, error="Neplatný kód, skúste to znova.")
 
 @app.route('/logout')
 @login_required
@@ -376,10 +394,11 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    if current_user.is_authenticated and not pyotp.TOTP(current_user.totp_secret).now():
-         return redirect(url_for('setup_2fa'))
+    if not current_user.totp_enabled:
+        return redirect(url_for('setup_2fa'))
     return send_from_directory('.', 'index.html')
 
+# Všetky API routy musia byť chránené
 @app.route('/api/devices', methods=['GET', 'POST'])
 @login_required
 def handle_devices():
@@ -460,8 +479,8 @@ def test_notification():
     return jsonify({'status': 'success'})
 
 def scheduled_backup_job():
-    add_log('info', "Spúšťam naplánovanú úlohu zálohovania...")
     with app.app_context():
+        add_log('info', "Spúšťam naplánovanú úlohu zálohovania...")
         backup_all_devices()
 
 def setup_scheduler():
@@ -484,8 +503,7 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(60)
 
-# --- Upravená inicializácia na konci súboru ---
-init_environment()
+# --- Upravená inicializácia ---
 with app.app_context():
     init_database()
     create_admin_user_if_not_exists()

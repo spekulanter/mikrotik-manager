@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-MikroTik Backup Web Backend v2.1
-Flask server s WebSocket a SNMP podporou, integrovaná pokročilá logika
-z pôvodného skriptu mikrotik_backup_v9_no_login.py.
+MikroTik Backup Web Backend v2.7 - Secured
+Pridaná webová registrácia, zobrazenie stavu prihlásenia a možnosť zmeny hesla.
 """
 
 import os
@@ -11,7 +10,8 @@ import json
 import sqlite3
 import threading
 from datetime import datetime
-from flask import Flask, request, jsonify, send_from_directory
+# PRIDANÉ: g pre globálny kontext požiadavky
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, session, g
 from flask_socketio import SocketIO
 from flask_cors import CORS
 import paramiko
@@ -24,25 +24,49 @@ from contextlib import contextmanager
 import logging
 import schedule
 
-# --- Základné nastavenie ---
-app = Flask(__name__, static_folder='.', static_url_path='')
-app.config['SECRET_KEY'] = os.urandom(24)
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+import pyotp
+import qrcode
+import base64
+from io import BytesIO
+
+# --- Nastavenie aplikácie (upravené pre HTML šablóny) ---
+app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
+app.config['SECRET_KEY'] = os.urandom(32)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 CORS(app)
 
-# Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Cesty k súborom a adresárom
 DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
 DB_PATH = os.path.join(DATA_DIR, 'mikrotik_backup.db')
 BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
 
-# Globálne premenné
-backup_tasks = {} # Sleduje bežiace backup úlohy
+backup_tasks = {}
 
-# --- Inicializácia ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.session_protection = "strong"
+
+class User(UserMixin):
+    def __init__(self, id, username, password, totp_secret, totp_enabled):
+        self.id = id
+        self.username = username
+        self.password = password
+        self.totp_secret = totp_secret
+        self.totp_enabled = totp_enabled
+
+@login_manager.user_loader
+def load_user(user_id):
+    with get_db_connection() as conn:
+        user_data = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if user_data:
+            return User(id=user_data['id'], username=user_data['username'], password=user_data['password'], totp_secret=user_data['totp_secret'], totp_enabled=user_data['totp_enabled'])
+    return None
+
 def init_environment():
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -51,7 +75,7 @@ def init_environment():
 @contextmanager
 def get_db_connection():
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         yield conn
     except sqlite3.Error as e:
@@ -62,32 +86,56 @@ def get_db_connection():
             conn.close()
 
 def init_database():
-    try:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+                username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
+                snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
+                last_backup TIMESTAMP, last_snmp_data TEXT
+            )
+        ''')
+        cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                level TEXT NOT NULL, message TEXT NOT NULL, device_ip TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                totp_secret TEXT,
+                totp_enabled BOOLEAN NOT NULL DEFAULT 0
+            )
+        ''')
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        conn.commit()
+        logger.info("Databáza úspešne inicializovaná.")
+
+@app.before_request
+def before_request_handler():
+    if 'user_exists' not in g:
         with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS devices (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
-                    username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
-                    snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
-                    last_backup TIMESTAMP, last_snmp_data TEXT
-                )
-            ''')
-            cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    level TEXT NOT NULL, message TEXT NOT NULL, device_ip TEXT
-                )
-            ''')
-            conn.commit()
-            logger.info("Databáza úspešne inicializovaná.")
-    except sqlite3.Error as e:
-        logger.error(f"Chyba pri inicializácii databázy: {e}")
+            try:
+                user_count = conn.execute('SELECT COUNT(id) FROM users').fetchone()[0]
+                g.user_exists = user_count > 0
+            except sqlite3.OperationalError:
+                g.user_exists = False
+    
+    if not g.user_exists and request.endpoint not in ['register', 'static']:
+        return redirect(url_for('register'))
 
 def add_log(level, message, device_ip=None):
-    log_level = level.upper()
-    logger.log(logging.getLevelName(log_level), f"{f'[{device_ip}] ' if device_ip else ''}{message}")
+    level_map = {'INFO': logging.INFO, 'SUCCESS': logging.INFO, 'WARNING': logging.WARNING, 'ERROR': logging.ERROR, 'DEBUG': logging.DEBUG}
+    log_level_int = level_map.get(level.upper(), logging.INFO)
+    logger.log(log_level_int, f"{f'[{device_ip}] ' if device_ip else ''}{message}")
     try:
         with get_db_connection() as conn:
             conn.execute("INSERT INTO logs (level, message, device_ip) VALUES (?, ?, ?)", (level, message, device_ip))
@@ -96,10 +144,7 @@ def add_log(level, message, device_ip=None):
     except Exception as e:
         logger.error(f"Nepodarilo sa zapísať log do databázy: {e}")
 
-# --- Pokročilá logika zálohovania (z pôvodného skriptu) ---
-
 def get_mikrotik_export_direct(ssh_client, ip):
-    """Získa obsah konfigurácie priamo cez SSH bez ukladania súboru na MikroTiku."""
     try:
         add_log('info', f"Získavam priamy SSH export z {ip}...", ip)
         _, stdout, _ = ssh_client.exec_command('/export')
@@ -113,9 +158,7 @@ def get_mikrotik_export_direct(ssh_client, ip):
         return None
 
 def compare_with_local_backup(ip, remote_content):
-    """Porovná vzdialenú konfiguráciu s poslednou lokálnou zálohou."""
     try:
-        # Nájdi najnovší lokálny .rsc súbor pre danú IP
         local_backups = sorted(
             [f for f in os.listdir(BACKUP_DIR) if ip in f and f.endswith('.rsc')],
             reverse=True
@@ -123,19 +166,14 @@ def compare_with_local_backup(ip, remote_content):
         if not local_backups:
             add_log('info', f"Žiadna lokálna záloha pre {ip} nájdená. Vytváram novú.", ip)
             return True
-
         latest_backup_path = os.path.join(BACKUP_DIR, local_backups[0])
         with open(latest_backup_path, 'r', encoding='utf-8', errors='ignore') as f:
             local_content = f.read()
-
-        # Porovnanie s ignorovaním dynamických častí
         ignore_keywords = ['list=blacklist', 'comment=spamhaus']
         local_lines = [line for line in local_content.splitlines() if not any(kw in line for kw in ignore_keywords)]
         remote_lines = [line for line in remote_content.splitlines() if not any(kw in line for kw in ignore_keywords)]
-        
         diff = list(difflib.unified_diff(local_lines, remote_lines))
-        
-        if len(diff) > 2: # unified_diff always has header lines, so > 2 means changes
+        if len(diff) > 2:
             add_log('info', f"Zistené zmeny v konfigurácii pre {ip}. Spúšťam zálohu.", ip)
             return True
         else:
@@ -143,76 +181,55 @@ def compare_with_local_backup(ip, remote_content):
             return False
     except Exception as e:
         add_log('error', f"Chyba pri porovnávaní záloh pre {ip}: {e}", ip)
-        return True # V prípade chyby radšej zálohovať
+        return True
 
 def run_backup_logic(device):
-    """Hlavná logika pre vytvorenie zálohy, teraz s pokročilými kontrolami."""
     ip, username, password, low_memory = device['ip'], device['username'], device['password'], device['low_memory']
     add_log('info', f"Spúšťam pokročilú zálohu pre {ip}", ip)
     socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'starting'})
-    
     client = None
     try:
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(ip, username=username, password=password, timeout=30)
         add_log('info', "SSH pripojenie úspešne.", ip)
-
-        # 1. Porovnanie konfigurácie
         remote_config = get_mikrotik_export_direct(client, ip)
         if remote_config is None:
             raise Exception("Nepodarilo sa získať konfiguráciu na porovnanie.")
-        
         if not compare_with_local_backup(ip, remote_config):
             socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'skipped'})
-            return # Koniec, ak nie sú zmeny
-
-        # 2. Získanie identity a detekcia /flash
+            return
         _, stdout, _ = client.exec_command('/system identity print')
         identity_match = re.search(r'name:\s*(.+)', stdout.read().decode().strip())
         safe_identity = re.sub(r'[^a-zA-Z0-9_-]', '_', identity_match.group(1) if identity_match else ip)
-        
         _, stdout, _ = client.exec_command('/file print where type=directory')
         has_flash = 'flash' in stdout.read().decode()
         add_log('info', f"Zariadenie {'má' if has_flash else 'nemá'} /flash adresár.", ip)
-
-        # 3. Dôkladný cleanup
         add_log('info', "Vykonávam cleanup starých súborov na zariadení...", ip)
-        # Bezpečnejší príkaz, ktorý maže len súbory obsahujúce IP adresu v názve
         safe_cleanup_command = f':foreach i in=[/file find where (name~".backup" or name~".rsc") and name~"_{ip}_"] do={{/file remove $i}}'
         client.exec_command(safe_cleanup_command)
         time.sleep(5)
-
-        # 4. Vytvorenie záloh
         date_str = datetime.now().strftime("%Y%m%d-%H%M%S")
         base_filename = f"{safe_identity}_{ip}_{date_str}"
         backup_path = f"flash/{base_filename}.backup" if has_flash else f"{base_filename}.backup"
         rsc_path = f"flash/{base_filename}.rsc" if has_flash else f"{base_filename}.rsc"
-        
         add_log('info', f"Vytváram súbory {base_filename}.backup a .rsc...", ip)
         client.exec_command(f'/system backup save name="{backup_path}" dont-encrypt=yes')
         time.sleep(15 if low_memory else 10)
         client.exec_command(f'/export file="{rsc_path}"')
         time.sleep(20 if low_memory else 15)
-
-        # 5. Sťahovanie a finálny cleanup
         with client.open_sftp() as sftp:
             sftp.get(backup_path, os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
             sftp.get(rsc_path, os.path.join(BACKUP_DIR, f"{base_filename}.rsc"))
             add_log('info', "Súbory úspešne stiahnuté.", ip)
-            # sftp.remove(backup_path)
             sftp.remove(rsc_path)
-
         with get_db_connection() as conn:
             conn.execute("UPDATE devices SET last_backup = CURRENT_TIMESTAMP WHERE id = ?", (device['id'],))
             conn.commit()
-
-        add_log('info', f"Záloha pre {ip} dokončená.", ip)
+        add_log('success', f"Záloha pre {ip} dokončená.", ip)
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now().isoformat()})
-        
         upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
         upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.rsc"))
-
     except Exception as e:
         add_log('error', f"Chyba pri zálohe: {e}", ip)
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'error', 'message': str(e)})
@@ -220,104 +237,29 @@ def run_backup_logic(device):
         if client: client.close()
         if ip in backup_tasks: del backup_tasks[ip]
 
-# --- Ostatné funkcie (SNMP, FTP, Pushover, API) ---
 def get_snmp_data(ip, community='public'):
-    # OID pre MikroTik RouterOS 7
-    oids = {
-        'identity': '1.3.6.1.2.1.1.5.0',
-        'uptime': '1.3.6.1.2.1.1.3.0',
-        'version': '1.3.6.1.4.1.14988.1.1.4.4.0',
-        'board_name': '1.3.6.1.4.1.14988.1.1.7.8.0',
-        'cpu_load': '1.3.6.1.2.1.25.3.3.1.2.1',
-        'temperature': '1.3.6.1.4.1.14988.1.1.3.11.0',
-        'cpu_count': '1.3.6.1.2.1.25.3.3.1.0',         # Počet CPU/procesorov
-        'cpu_frequency': '1.3.6.1.4.1.14988.1.1.3.14.0', # CPU frekvencia
-        'total_memory': '1.3.6.1.2.1.25.2.2.0',        # Total RAM v kB
-        'architecture': '1.3.6.1.4.1.14988.1.1.7.7.0'  # Architektúra
-    }
-    
+    oids = {'identity':'1.3.6.1.2.1.1.5.0','uptime':'1.3.6.1.2.1.1.3.0','version':'1.3.6.1.4.1.14988.1.1.4.4.0','board_name':'1.3.6.1.4.1.14988.1.1.7.8.0','cpu_load':'1.3.6.1.2.1.25.3.3.1.2.1','temperature':'1.3.6.1.4.1.14988.1.1.3.11.0','cpu_count':'1.3.6.1.2.1.25.3.3.1.0','cpu_frequency':'1.3.6.1.4.1.14988.1.1.3.14.0','total_memory':'1.3.6.1.2.1.25.2.2.0','architecture':'1.3.6.1.4.1.14988.1.1.7.7.0'}
     results = {}
-    
     try:
         from pysnmp.hlapi import getCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
         from datetime import timedelta
-        
         for name, oid in oids.items():
-            errorIndication, errorStatus, _, varBinds = next(
-                getCmd(SnmpEngine(), 
-                       CommunityData(community, mpModel=0), 
-                       UdpTransportTarget((ip, 161), timeout=2, retries=1), 
-                       ContextData(), 
-                       ObjectType(ObjectIdentity(oid)))
-            )
-            
-            if errorIndication or errorStatus:
-                results[name] = 'N/A'
-                add_log('debug', f"SNMP error for {name}: {errorIndication or errorStatus}", ip)
+            errorIndication, errorStatus, _, varBinds = next(getCmd(SnmpEngine(),CommunityData(community,mpModel=0),UdpTransportTarget((ip,161),timeout=2,retries=1),ContextData(),ObjectType(ObjectIdentity(oid))))
+            if errorIndication or errorStatus: results[name] = 'N/A'
             else:
                 val = varBinds[0][1]
-                
                 if name == 'uptime':
-                    total_seconds = float(val) / 100.0
-                    td = timedelta(seconds=total_seconds)
-                    days = td.days
-                    hours, remainder = divmod(td.seconds, 3600)
-                    minutes, _ = divmod(remainder, 60)
-                    results[name] = f"{days}d {hours}h {minutes}m"
-                    
-                elif name == 'cpu_load':
-                    results[name] = str(int(val))  # Len číslo bez %
-                    
-                elif name == 'temperature':
-                    # Teplota je v jednotkách 1/10°C
-                    temp = int(val) / 10.0
-                    results[name] = str(int(temp))  # Zaokrúhlené na celé číslo
-                    add_log('debug', f"Temperature raw value: {val}, converted: {temp}", ip)
-                    
-                elif name == 'cpu_count':
-                    # Počet CPU jadier/procesorov
-                    results[name] = str(int(val))
-                    
-                elif name == 'cpu_frequency':
-                    # CPU frekvencia v MHz
-                    results[name] = f"{int(val)} MHz"
-                    
-                elif name == 'total_memory':
-                    # RAM v kB, konvertujeme na MB
-                    memory_mb = int(val) / 1024.0
-                    results[name] = f"{memory_mb:.0f} MB"
-                    
-                elif name == 'architecture':
-                    # Architektúra procesora
-                    results[name] = str(val)
-                    
-                else:
-                    results[name] = str(val)
-        
-        # Použijeme 'free_memory' kľúč pre počet CPU jadier
-        if 'cpu_count' in results and results['cpu_count'] != 'N/A':
-            results['free_memory'] = results['cpu_count']  # Len číslo
-        else:
-            results['free_memory'] = 'N/A'
-        
-        # Odstránime pomocné hodnoty
-        for key in ['cpu_count', 'cpu_frequency', 'total_memory', 'architecture']:
-            if key in results:
-                del results[key]
-        
+                    td = timedelta(seconds=float(val)/100.0); results[name] = f"{td.days}d {td.seconds//3600}h {(td.seconds//60)%60}m"
+                elif name == 'temperature': results[name] = str(int(int(val)/10.0))
+                else: results[name] = str(val)
+        if 'cpu_count' in results and results['cpu_count'] != 'N/A': results['free_memory'] = results['cpu_count']
+        else: results['free_memory'] = 'N/A'
+        for key in ['cpu_count','cpu_frequency','total_memory','architecture']:
+            if key in results: del results[key]
         return results
-        
     except Exception as e:
         add_log('error', f"SNMP query for IP {ip} failed: {e}", device_ip=ip)
-        return {
-            'identity': 'N/A',
-            'uptime': 'N/A',
-            'version': 'N/A',
-            'board_name': 'N/A',
-            'cpu_load': 'N/A',
-            'temperature': 'N/A',
-            'free_memory': 'N/A'
-        }
+        return {k: 'N/A' for k in ['identity','uptime','version','board_name','cpu_load','temperature','free_memory']}
 
 def upload_to_ftp(local_path):
     try:
@@ -343,10 +285,156 @@ def send_pushover_notification(message, title="MikroTik Manager"):
         add_log('info', f"Pushover notifikácia odoslaná: {message}")
     except Exception as e: add_log('error', f"Odoslanie Pushover notifikácie zlyhalo: {e}")
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if g.get('user_exists', True):
+        return redirect(url_for('login'))
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        password_confirm = request.form.get('password_confirm')
+        if not username or not password:
+            error = 'Meno a heslo sú povinné.'
+        elif len(password) < 8:
+            error = 'Heslo musí mať aspoň 8 znakov.'
+        elif password != password_confirm:
+            error = 'Heslá sa nezhodujú.'
+        else:
+            with get_db_connection() as conn:
+                password_hash = generate_password_hash(password)
+                totp_secret = pyotp.random_base32()
+                cursor = conn.cursor()
+                cursor.execute('INSERT INTO users (username, password, totp_secret, totp_enabled) VALUES (?, ?, ?, ?)',
+                             (username, password_hash, totp_secret, 0))
+                user_id = cursor.lastrowid
+                conn.commit()
+                user = load_user(user_id)
+                login_user(user)
+                return redirect(url_for('setup_2fa'))
+    return render_template('register.html', error=error)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        with get_db_connection() as conn:
+            user_data = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        if user_data and check_password_hash(user_data['password'], password):
+            user = load_user(user_data['id'])
+            if user.totp_enabled:
+                session['2fa_user_id'] = user.id
+                return redirect(url_for('login_2fa'))
+            else:
+                login_user(user)
+                return redirect(url_for('setup_2fa'))
+        else:
+            error = 'Neplatné meno alebo heslo.'
+            time.sleep(1)
+    return render_template('login.html', error=error)
+
+@app.route('/login/2fa', methods=['GET', 'POST'])
+def login_2fa():
+    if '2fa_user_id' not in session:
+        return redirect(url_for('login'))
+    error = None
+    if request.method == 'POST':
+        user = load_user(session['2fa_user_id'])
+        totp_code = request.form.get('totp_code', '').strip()
+        if pyotp.TOTP(user.totp_secret).verify(totp_code):
+            login_user(user, remember=True)
+            session.pop('2fa_user_id', None)
+            return redirect(request.args.get('next') or url_for('index'))
+        else:
+            error = 'Neplatný overovací kód.'
+    return render_template('login_2fa.html', error=error)
+
+@app.route('/setup-2fa')
+@login_required
+def setup_2fa():
+    if current_user.totp_enabled:
+        return redirect(url_for('index'))
+    secret = current_user.totp_secret
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.username, issuer_name="MikroTik Manager")
+    img = qrcode.make(uri)
+    buf = BytesIO()
+    img.save(buf)
+    qr_code_data = base64.b64encode(buf.getvalue()).decode('ascii')
+    return render_template('setup_2fa.html', qr_code=qr_code_data)
+
+@app.route('/verify-2fa', methods=['POST'])
+@login_required
+def verify_2fa():
+    totp_code = request.form.get('totp_code', '').strip()
+    if pyotp.TOTP(current_user.totp_secret).verify(totp_code):
+        with get_db_connection() as conn:
+            conn.execute('UPDATE users SET totp_enabled = 1 WHERE id = ?', (current_user.id,))
+            conn.commit()
+        return redirect(url_for('index'))
+    else:
+        secret = current_user.totp_secret
+        uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.username, issuer_name="MikroTik Manager")
+        img = qrcode.make(uri)
+        buf = BytesIO()
+        img.save(buf)
+        qr_code_data = base64.b64encode(buf.getvalue()).decode('ascii')
+        return render_template('setup_2fa.html', qr_code=qr_code_data, error="Neplatný kód, skúste to znova.")
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
 @app.route('/')
-def index(): return send_from_directory('.', 'index.html')
+@login_required
+def index():
+    if not current_user.totp_enabled:
+        return redirect(url_for('setup_2fa'))
+    return send_from_directory('.', 'index.html')
+
+@app.route('/api/user/status')
+@login_required
+def user_status():
+    return jsonify({'username': current_user.username})
+
+@app.route('/api/user/change-password', methods=['POST'])
+@login_required
+def change_password():
+    data = request.json
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    new_password_confirm = data.get('new_password_confirm')
+
+    if not all([old_password, new_password, new_password_confirm]):
+        return jsonify({'status': 'error', 'message': 'Všetky polia sú povinné.'}), 400
+
+    with get_db_connection() as conn:
+        user_data = conn.execute('SELECT password FROM users WHERE id = ?', (current_user.id,)).fetchone()
+
+    if not user_data or not check_password_hash(user_data['password'], old_password):
+        return jsonify({'status': 'error', 'message': 'Staré heslo nie je správne.'}), 400
+
+    if new_password != new_password_confirm:
+        return jsonify({'status': 'error', 'message': 'Nové heslá sa nezhodujú.'}), 400
+    
+    if len(new_password) < 8:
+        return jsonify({'status': 'error', 'message': 'Nové heslo musí mať aspoň 8 znakov.'}), 400
+
+    new_password_hash = generate_password_hash(new_password)
+    with get_db_connection() as conn:
+        conn.execute('UPDATE users SET password = ? WHERE id = ?', (new_password_hash, current_user.id))
+        conn.commit()
+    
+    add_log('info', f"Používateľ '{current_user.username}' si zmenil heslo.")
+    return jsonify({'status': 'success', 'message': 'Heslo bolo úspešne zmenené.'})
 
 @app.route('/api/devices', methods=['GET', 'POST'])
+@login_required
 def handle_devices():
     with get_db_connection() as conn:
         if request.method == 'GET': return jsonify([dict(row) for row in conn.execute('SELECT * FROM devices ORDER BY name').fetchall()])
@@ -363,6 +451,7 @@ def handle_devices():
             except sqlite3.IntegrityError: return jsonify({'status': 'error', 'message': 'Zariadenie s touto IP už existuje'}), 409
 
 @app.route('/api/devices/<int:device_id>', methods=['DELETE'])
+@login_required
 def delete_device(device_id):
     with get_db_connection() as conn:
         conn.execute("DELETE FROM devices WHERE id = ?", (device_id,))
@@ -371,6 +460,7 @@ def delete_device(device_id):
     return jsonify({'status': 'success'})
 
 @app.route('/api/backup/<int:device_id>', methods=['POST'])
+@login_required
 def backup_device(device_id):
     with get_db_connection() as conn:
         device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
@@ -381,6 +471,7 @@ def backup_device(device_id):
     return jsonify({'status': 'success', 'message': 'Záloha spustená.'})
 
 @app.route('/api/backup/all', methods=['POST'])
+@login_required
 def backup_all_devices():
     with get_db_connection() as conn:
         devices = [dict(row) for row in conn.execute('SELECT * FROM devices').fetchall()]
@@ -389,6 +480,7 @@ def backup_all_devices():
     return jsonify({'status': 'success', 'message': f'Hromadná záloha spustená pre {count} zariadení.'})
 
 @app.route('/api/snmp/<int:device_id>', methods=['GET'])
+@login_required
 def check_snmp(device_id):
     with get_db_connection() as conn:
         device = conn.execute('SELECT ip, snmp_community FROM devices WHERE id = ?', (device_id,)).fetchone()
@@ -402,6 +494,7 @@ def check_snmp(device_id):
     return jsonify(snmp_data)
 
 @app.route('/api/settings', methods=['GET', 'POST'])
+@login_required
 def handle_settings():
     with get_db_connection() as conn:
         if request.method == 'GET': return jsonify({row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()})
@@ -414,17 +507,17 @@ def handle_settings():
             return jsonify({'status': 'success'})
 
 @app.route('/api/notifications/test', methods=['POST'])
+@login_required
 def test_notification():
     send_pushover_notification("Toto je testovacia správa z MikroTik Backup Manager.")
     return jsonify({'status': 'success'})
 
 def scheduled_backup_job():
-    add_log('info', "Spúšťam naplánovanú úlohu zálohovania...")
-    socketio.emit('log_update', {'level': 'info', 'message': 'Spúšťa sa automatická úloha zálohovania...'})
-    backup_all_devices()
+    with app.app_context():
+        add_log('info', "Spúšťam naplánovanú úlohu zálohovania...")
+        backup_all_devices()
 
 def setup_scheduler():
-    schedule.clear()
     with get_db_connection() as conn:
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     if settings.get('backup_schedule_enabled', 'false').lower() != 'true':
@@ -443,14 +536,13 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(60)
 
-# Inicializácia, ktorá sa musí spustiť vždy (aj pod Gunicornom)
-init_environment()
-init_database()
-setup_scheduler()
+with app.app_context():
+    init_database()
+    setup_scheduler()
+
 threading.Thread(target=run_scheduler, daemon=True).start()
 logger.info("Aplikácia MikroTik Backup Manager sa spúšťa...")
 
-# Tento blok sa použije len pre lokálny vývoj
 if __name__ == '__main__':
     logger.info("Server sa spúšťa v režime pre vývoj na http://0.0.0.0:5000")
     socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)

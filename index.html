@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MikroTik Backup Manager v2.2</title>
+    <title>MikroTik Backup Manager v2.7</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
@@ -38,9 +38,13 @@
     </style>
 </head>
 <body class="p-4 md:p-8">
-    <div id="app" class="container mx-auto">
-        <header class="mb-8 text-center">
-            <h1 class="text-4xl font-bold text-white mb-2">🛡️ MikroTik Backup Manager v2.2</h1>
+    <div id="app" class="container mx-auto relative">
+        <div id="userStatus" class="absolute top-0 right-0 text-right p-4">
+            <!-- Táto časť sa naplní dynamicky cez JavaScript -->
+        </div>
+
+        <header class="mb-8 text-center pt-12 md:pt-8">
+            <h1 class="text-4xl font-bold text-white mb-2">🛡️ MikroTik Backup Manager v2.7</h1>
             <p class="text-lg text-gray-400">Správa, zálohovanie a monitoring vašich MikroTik zariadení.</p>
         </header>
 
@@ -125,6 +129,31 @@
         </div>
     </div>
 
+    <div id="changePasswordModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="card p-8 rounded-lg w-full max-w-md modal-content">
+            <h2 class="text-2xl font-bold text-white mb-6">Zmeniť heslo</h2>
+            <div id="passwordChangeMessage" class="hidden p-3 rounded-md mb-4 text-sm"></div>
+            <form id="changePasswordForm" class="space-y-4">
+                <div>
+                    <label for="oldPassword" class="block mb-1 font-semibold">Staré heslo</label>
+                    <input type="password" id="oldPassword" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required>
+                </div>
+                <div>
+                    <label for="newPassword" class="block mb-1 font-semibold">Nové heslo</label>
+                    <input type="password" id="newPassword" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required>
+                </div>
+                <div>
+                    <label for="newPasswordConfirm" class="block mb-1 font-semibold">Potvrdenie nového hesla</label>
+                    <input type="password" id="newPasswordConfirm" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required>
+                </div>
+                <div class="flex justify-end gap-4 mt-6">
+                    <button type="button" id="cancelPasswordChangeBtn" class="btn bg-gray-600 hover:bg-gray-700 py-2 px-4 rounded-lg">Zrušiť</button>
+                    <button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Uložiť zmeny</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const API_URL = '';
@@ -132,8 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsContainer = document.getElementById('logsContainer');
     const deviceModal = document.getElementById('deviceModal');
     const settingsModal = document.getElementById('settingsModal');
+    const changePasswordModal = document.getElementById('changePasswordModal');
     const deviceForm = document.getElementById('deviceForm');
     const settingsForm = document.getElementById('settingsForm');
+    const changePasswordForm = document.getElementById('changePasswordForm');
     const notificationTypes = {
         notify_device_offline: "🔴 Zariadenie offline", notify_device_online: "✅ Zariadenie online",
         notify_high_temperature: "🌡️ Vysoká teplota", notify_high_cpu: "⚡ Vysoké CPU",
@@ -141,10 +172,46 @@ document.addEventListener('DOMContentLoaded', () => {
         notify_reboot_detected: "🔄 Reboot detekovaný", notify_version_change: "🆕 Zmena verzie OS",
     };
 
+    // --- OPRAVENÉ: Štandardizovaný pomocník pre API volania ---
     const api = {
-        get: (endpoint) => fetch(`${API_URL}/api/${endpoint}`).then(res => res.json()),
-        post: (endpoint, body) => fetch(`${API_URL}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(res => res.json()),
-        delete: (endpoint) => fetch(`${API_URL}/api/${endpoint}`, { method: 'DELETE' }).then(res => res.json()),
+        _handleResponse: (res) => {
+            if (res.status === 401) window.location.href = '/login';
+            return res.json().catch(() => ({})); // Vráti prázdny objekt, ak JSON zlyhá
+        },
+        get: function(endpoint) {
+            return fetch(`${API_URL}/api/${endpoint}`).then(this._handleResponse);
+        },
+        post: function(endpoint, body) {
+            return fetch(`${API_URL}/api/${endpoint}`, { 
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(body) 
+            }).then(this._handleResponse);
+        },
+        delete: function(endpoint) {
+            return fetch(`${API_URL}/api/${endpoint}`, { method: 'DELETE' }).then(this._handleResponse);
+        },
+    };
+
+    const loadUserStatus = async () => {
+        try {
+            const data = await api.get('user/status');
+            if (data.username) {
+                document.getElementById('userStatus').innerHTML = `
+                    <p class="text-sm text-gray-400">Prihlásený ako: <strong class="font-semibold text-gray-200">${data.username}</strong></p>
+                    <div>
+                        <a href="#" id="changePasswordLink" class="text-sm text-sky-500 hover:text-sky-400 hover:underline">Zmeniť heslo</a>
+                        <span class="text-gray-600 mx-1">|</span>
+                        <a href="/logout" class="text-sm text-sky-500 hover:text-sky-400 hover:underline">Odhlásiť sa</a>
+                    </div>
+                `;
+                document.getElementById('changePasswordLink').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    changePasswordModal.classList.remove('hidden');
+                });
+            }
+        } catch (error) {
+            console.error('Chyba pri načítaní stavu používateľa:', error);
+        }
     };
 
     const socket = io();
@@ -253,19 +320,47 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeModal = () => {
         deviceModal.classList.add('hidden');
         settingsModal.classList.add('hidden');
+        changePasswordModal.classList.add('hidden');
     };
 
     const loadDevices = async () => {
         const devices = await api.get('devices');
+        if (!devices) return;
         devicesGrid.innerHTML = '';
         devices.forEach(device => devicesGrid.appendChild(createDeviceCard(device)));
     };
 
     const deleteDevice = async (id, ip) => {
-        if (confirm(`Naozaj chcete odstrániť zariadenie ${ip}?`)) {
+        const confirmation = await showConfirmation(`Naozaj chcete odstrániť zariadenie ${ip}?`);
+        if (confirmation) {
             await api.delete(`devices/${id}`);
             loadDevices();
         }
+    };
+    
+    const showConfirmation = (message) => {
+        return new Promise((resolve) => {
+            const confirmModal = document.createElement('div');
+            confirmModal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+            confirmModal.innerHTML = `
+                <div class="card p-8 rounded-lg w-full max-w-sm modal-content text-center">
+                    <p class="text-lg mb-6">${message}</p>
+                    <div class="flex justify-center gap-4">
+                        <button class="btn-cancel btn bg-gray-600 hover:bg-gray-700 py-2 px-6 rounded-lg">Zrušiť</button>
+                        <button class="btn-confirm btn btn-primary font-bold py-2 px-6 rounded-lg">Potvrdiť</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(confirmModal);
+            confirmModal.querySelector('.btn-confirm').onclick = () => {
+                resolve(true);
+                document.body.removeChild(confirmModal);
+            };
+            confirmModal.querySelector('.btn-cancel').onclick = () => {
+                resolve(false);
+                document.body.removeChild(confirmModal);
+            };
+        });
     };
 
     const toggleWeeklySettings = () => {
@@ -281,11 +376,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`).join('');
     };
 
-    // --- Event Listeners ---
     document.getElementById('addDeviceBtn').addEventListener('click', () => openDeviceModal());
     document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
     document.getElementById('cancelDeviceBtn').addEventListener('click', closeModal);
     document.getElementById('cancelSettingsBtn').addEventListener('click', closeModal);
+    document.getElementById('cancelPasswordChangeBtn').addEventListener('click', closeModal);
     document.getElementById('backupAllBtn').addEventListener('click', () => api.post('backup/all'));
     document.getElementById('refreshAllSnmpBtn').addEventListener('click', () => document.querySelectorAll('[data-id]').forEach(card => api.get(`snmp/${card.dataset.id}`)));
     document.getElementById('backupScheduleType').addEventListener('change', toggleWeeklySettings);
@@ -314,13 +409,36 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsForm.querySelectorAll('input[type="checkbox"]').forEach(cb => body[cb.id] = cb.checked.toString());
         await api.post('settings', body);
         closeModal();
-        addLog('success', 'Nastavenia boli uložené.');
+        add_log('success', 'Nastavenia boli uložené.');
     });
 
-    // --- Inicializácia ---
+    changePasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const messageDiv = document.getElementById('passwordChangeMessage');
+        const body = {
+            old_password: document.getElementById('oldPassword').value,
+            new_password: document.getElementById('newPassword').value,
+            new_password_confirm: document.getElementById('newPasswordConfirm').value,
+        };
+        const result = await api.post('user/change-password', body);
+        messageDiv.textContent = result.message;
+        messageDiv.classList.remove('hidden', 'bg-green-900/50', 'text-green-300', 'bg-red-900/50', 'text-red-300');
+        if (result.status === 'success') {
+            messageDiv.classList.add('bg-green-900/50', 'text-green-300');
+            changePasswordForm.reset();
+            setTimeout(() => {
+                closeModal();
+                messageDiv.classList.add('hidden');
+            }, 2000);
+        } else {
+            messageDiv.classList.add('bg-red-900/50', 'text-red-300');
+        }
+    });
+
+    loadUserStatus();
     populateNotificationTypes();
     loadDevices();
-    addLog('info', 'Vitajte v MikroTik Backup Manager v2.2!');
+    addLog('info', 'Vitajte v MikroTik Backup Manager v2.7!');
 });
 </script>
 </body>

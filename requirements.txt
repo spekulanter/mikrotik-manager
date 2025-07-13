@@ -7,3 +7,7 @@ pyasn1==0.4.8
 schedule
 gunicorn
 eventlet
+Flask-Login
+pyotp
+qrcode[pil]
+werkzeug

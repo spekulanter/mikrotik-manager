@@ -16,7 +16,7 @@
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
     <div class="card p-8 rounded-lg w-full max-w-sm shadow-2xl">
-        <h1 class="text-xl font-bold text-white mb-6 text-center">Zadajte overovací kód</h1>
+        <h1 class="text-xl font-bold text-white mb-6 text-center">Dvojfaktorové overenie</h1>
         
         {% if error %}
             <div class="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-md mb-4 text-sm" role="alert">
@@ -24,18 +24,82 @@
             </div>
         {% endif %}
 
-        <form method="post" action="{{ url_for('login_2fa') }}" class="space-y-6">
-            <div>
-                <label for="totp_code" class="block mb-2 font-semibold text-gray-300">Kód z aplikácie (2FA)</label>
-                <input type="text" id="totp_code" name="totp_code" class="input w-full p-2.5 rounded-md text-center tracking-[0.5em]" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" required autofocus>
-            </div>
-            
-            <div class="pt-2">
-                <button type="submit" class="w-full btn-primary font-bold py-2.5 px-4 rounded-lg">
-                    Overiť a prihlásiť sa
-                </button>
-            </div>
-        </form>
+        <!-- Tab Navigation -->
+        <div class="flex mb-6 bg-gray-800 rounded-lg p-1">
+            <button type="button" id="totpTab" class="flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors bg-blue-600 text-white" onclick="showTotpForm()">
+                📱 Aplikácia
+            </button>
+            <button type="button" id="backupTab" class="flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200" onclick="showBackupForm()">
+                🔑 Záložný kód
+            </button>
+        </div>
+
+        <!-- TOTP Form -->
+        <div id="totpForm">
+            <form method="post" action="{{ url_for('login_2fa') }}" class="space-y-6">
+                <div>
+                    <label for="totp_code" class="block mb-2 font-semibold text-gray-300">Kód z aplikácie (6 číslic)</label>
+                    <input type="text" id="totp_code" name="totp_code" class="input w-full p-2.5 rounded-md text-center tracking-[0.5em]" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" autofocus>
+                </div>
+                
+                <div class="pt-2">
+                    <button type="submit" class="w-full btn-primary font-bold py-2.5 px-4 rounded-lg">
+                        Overiť a prihlásiť sa
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Backup Code Form -->
+        <div id="backupForm" class="hidden">
+            <form method="post" action="{{ url_for('login_2fa') }}" class="space-y-6">
+                <div>
+                    <label for="backup_code" class="block mb-2 font-semibold text-gray-300">Záložný kód</label>
+                    <input type="text" id="backup_code" name="backup_code" class="input w-full p-2.5 rounded-md text-center font-mono" placeholder="XXX123-YYY456" autocomplete="off">
+                    <p class="text-xs text-gray-400 mt-2">Zadajte jeden z vašich 8 záložných kódov</p>
+                </div>
+                
+                <div class="pt-2">
+                    <button type="submit" class="w-full btn-primary font-bold py-2.5 px-4 rounded-lg">
+                        Overiť záložný kód
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="mt-6 text-center">
+            <p class="text-xs text-gray-400">
+                Ak nemáte prístup k telefónu ani k záložným kódom,<br>
+                kontaktujte administrátora systému.
+            </p>
+        </div>
     </div>
+
+    <script>
+        function showTotpForm() {
+            document.getElementById('totpForm').classList.remove('hidden');
+            document.getElementById('backupForm').classList.add('hidden');
+            document.getElementById('totpTab').className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors bg-blue-600 text-white';
+            document.getElementById('backupTab').className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200';
+            document.getElementById('totp_code').focus();
+        }
+
+        function showBackupForm() {
+            document.getElementById('totpForm').classList.add('hidden');
+            document.getElementById('backupForm').classList.remove('hidden');
+            document.getElementById('totpTab').className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200';
+            document.getElementById('backupTab').className = 'flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors bg-blue-600 text-white';
+            document.getElementById('backup_code').focus();
+        }
+
+        // Auto-format backup code input
+        document.getElementById('backup_code').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/[^A-Z0-9]/g, '').toUpperCase();
+            if (value.length > 6) {
+                value = value.slice(0, 6) + '-' + value.slice(6, 12);
+            }
+            e.target.value = value;
+        });
+    </script>
 </body>
 </html>

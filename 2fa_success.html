@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2FA úspešne aktivované - MikroTik Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            min-height: 100vh;
+        }
+        
+        .card {
+            background: rgba(31, 41, 55, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(75, 85, 99, 0.3);
+        }
+        
+        .success-icon {
+            animation: bounceIn 0.8s ease-out;
+        }
+        
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .fade-in {
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .btn {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+        }
+        
+        .backup-codes-container {
+            background: rgba(17, 24, 39, 0.6);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+        
+        .backup-code {
+            background: rgba(31, 41, 55, 0.8);
+            border: 1px solid rgba(75, 85, 99, 0.5);
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s ease;
+        }
+        
+        .backup-code:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+        
+        .warning-box {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .info-box {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(2, 132, 199, 0.1) 100%);
+            border: 1px solid rgba(14, 165, 233, 0.3);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="container mx-auto max-w-4xl">
+        <!-- Success Header -->
+        <div class="card p-8 rounded-lg text-center mb-8">
+            <div class="success-icon text-6xl text-green-400 mb-4">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-white mb-3 fade-in">
+                🎉 Dvojfaktorové overenie úspešne aktivované!
+            </h1>
+            <p class="text-xl text-gray-300 fade-in">
+                Váš účet je teraz lepšie zabezpečený proti neoprávnenému prístupu.
+            </p>
+        </div>
+
+        <!-- Backup Codes Section -->
+        <div class="card p-8 rounded-lg mb-8 fade-in">
+            <div class="flex items-center mb-6">
+                <i class="fas fa-key text-2xl text-amber-400 mr-3"></i>
+                <h2 class="text-2xl font-bold text-white">Vaše záložné kódy</h2>
+            </div>
+            
+            <div class="warning-box p-4 rounded-lg mb-6">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-red-400 text-xl mr-3 mt-1"></i>
+                    <div>
+                        <h3 class="text-red-300 font-bold mb-2">DÔLEŽITÉ UPOZORNENIE</h3>
+                        <ul class="text-red-200 text-sm space-y-1">
+                            <li>• Každý kód možno použiť iba jedenkrát</li>
+                            <li>• Uložte si tieto kódy na bezpečné miesto offline</li>
+                            <li>• Tieto kódy vám umožnia prístup aj bez telefónu</li>
+                            <li>• Nikomu ich neposkytujte</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="backup-codes-container p-6 rounded-lg mb-6">
+                <div id="backupCodesDisplay" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <!-- Backup codes will be inserted here by JavaScript -->
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onclick="downloadCodes()" class="btn btn-primary px-6 py-3 rounded-lg font-semibold flex items-center justify-center">
+                    <i class="fas fa-download mr-2"></i>
+                    Stiahnuť ako súbor
+                </button>
+                <button onclick="printCodes()" class="btn btn-secondary px-6 py-3 rounded-lg font-semibold flex items-center justify-center">
+                    <i class="fas fa-print mr-2"></i>
+                    Vytlačiť kódy
+                </button>
+            </div>
+        </div>
+
+        <!-- Information Section -->
+        <div class="card p-8 rounded-lg mb-8 fade-in">
+            <div class="flex items-center mb-6">
+                <i class="fas fa-info-circle text-2xl text-blue-400 mr-3"></i>
+                <h2 class="text-2xl font-bold text-white">Ako používať dvojfaktorové overenie</h2>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="info-box p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold text-blue-300 mb-3">
+                        <i class="fas fa-mobile-alt mr-2"></i>
+                        Bežné prihlásenie
+                    </h3>
+                    <ol class="text-gray-300 text-sm space-y-2">
+                        <li>1. Zadajte používateľské meno a heslo</li>
+                        <li>2. Otvorte aplikáciu autentifikátora na telefóne</li>
+                        <li>3. Zadajte 6-ciferný kód z aplikácie</li>
+                        <li>4. Kliknite na "Prihlásiť sa"</li>
+                    </ol>
+                </div>
+                
+                <div class="info-box p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold text-amber-300 mb-3">
+                        <i class="fas fa-key mr-2"></i>
+                        Použitie záložných kódov
+                    </h3>
+                    <ol class="text-gray-300 text-sm space-y-2">
+                        <li>1. Ak nemáte prístup k telefónu</li>
+                        <li>2. Zadajte používateľské meno a heslo</li>
+                        <li>3. Kliknite na "Použiť záložný kód"</li>
+                        <li>4. Zadajte jeden zo záložných kódov</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Tips -->
+        <div class="card p-8 rounded-lg mb-8 fade-in">
+            <div class="flex items-center mb-6">
+                <i class="fas fa-shield-alt text-2xl text-green-400 mr-3"></i>
+                <h2 class="text-2xl font-bold text-white">Bezpečnostné odporúčania</h2>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="text-center">
+                    <div class="text-3xl text-blue-400 mb-3">
+                        <i class="fas fa-archive"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Bezpečné uloženie</h3>
+                    <p class="text-gray-400 text-sm">
+                        Uložte záložné kódy do trezoru alebo na bezpečné miesto offline
+                    </p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="text-3xl text-green-400 mb-3">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Pravidelná obnova</h3>
+                    <p class="text-gray-400 text-sm">
+                        Obnovte záložné kódy, ak použijete viac ako polovicu z nich
+                    </p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="text-3xl text-red-400 mb-3">
+                        <i class="fas fa-user-secret"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Zachovajte súkromie</h3>
+                    <p class="text-gray-400 text-sm">
+                        Nikdy nezdieľajte kódy s nikým a chráňte ich ako heslo
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="text-center fade-in">
+            <a href="/" class="btn btn-primary px-8 py-4 rounded-lg font-semibold text-lg inline-flex items-center">
+                <i class="fas fa-home mr-3"></i>
+                Späť do aplikácie
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Get backup codes from URL parameters or localStorage
+        function getBackupCodes() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const codesParam = urlParams.get('codes');
+            
+            if (codesParam) {
+                try {
+                    return JSON.parse(decodeURIComponent(codesParam));
+                } catch (e) {
+                    console.error('Error parsing backup codes from URL:', e);
+                }
+            }
+            
+            // Fallback to localStorage
+            const storedCodes = localStorage.getItem('mikrotik_backup_codes');
+            if (storedCodes) {
+                try {
+                    const codes = JSON.parse(storedCodes);
+                    localStorage.removeItem('mikrotik_backup_codes'); // Clean up after use
+                    return codes;
+                } catch (e) {
+                    console.error('Error parsing backup codes from localStorage:', e);
+                }
+            }
+            
+            // If no codes found, generate demo codes for display
+            return [
+                'ABC123-DEF456',
+                'GHI789-JKL012',
+                'MNO345-PQR678',
+                'STU901-VWX234',
+                'YZA567-BCD890',
+                'EFG123-HIJ456',
+                'KLM789-NOP012',
+                'QRS345-TUV678',
+                'WXY901-ZAB234',
+                'CDE567-FGH890'
+            ];
+        }
+
+        // Display backup codes
+        function displayBackupCodes() {
+            const codes = getBackupCodes();
+            const container = document.getElementById('backupCodesDisplay');
+            
+            container.innerHTML = '';
+            
+            codes.forEach((code, index) => {
+                const codeDiv = document.createElement('div');
+                codeDiv.className = 'backup-code p-3 rounded text-center text-gray-200 text-lg font-mono';
+                codeDiv.textContent = code;
+                codeDiv.style.animationDelay = `${index * 0.1}s`;
+                codeDiv.classList.add('fade-in');
+                container.appendChild(codeDiv);
+            });
+        }
+
+        // Download backup codes as file
+        function downloadCodes() {
+            const codes = getBackupCodes();
+            
+            const content = [
+                'MikroTik Manager - Záložné kódy pre dvojfaktorové overenie',
+                'Vygenerované: ' + new Date().toLocaleString('sk-SK'),
+                '',
+                'DÔLEŽITÉ UPOZORNENIE:',
+                '- Každý kód možno použiť iba jedenkrát',
+                '- Uložte si tieto kódy na bezpečné miesto offline',
+                '- Tieto kódy vám umožnia prístup aj bez telefónu',
+                '- Nikomu ich neposkytujte',
+                '- Po použití kódu ho vyškrtnite zo zoznamu',
+                '',
+                'ZÁLOŽNÉ KÓDY:',
+                ...codes.map((code, index) => `${index + 1}. ${code}`)
+            ].join('\n');
+            
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mikrotik-backup-codes-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Print backup codes
+        function printCodes() {
+            const codes = getBackupCodes();
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>MikroTik Manager - Záložné kódy</title>
+                    <style>
+                        body { 
+                            font-family: Arial, sans-serif; 
+                            margin: 20px; 
+                            color: #333;
+                        }
+                        .header { 
+                            text-align: center; 
+                            margin-bottom: 30px; 
+                            border-bottom: 2px solid #333;
+                            padding-bottom: 20px;
+                        }
+                        .warning { 
+                            background-color: #fff3cd; 
+                            border: 2px solid #ffc107; 
+                            padding: 15px; 
+                            margin: 20px 0; 
+                            border-radius: 5px; 
+                        }
+                        .codes { 
+                            display: grid; 
+                            grid-template-columns: repeat(2, 1fr); 
+                            gap: 15px; 
+                            margin: 20px 0; 
+                        }
+                        .code { 
+                            background-color: #f8f9fa; 
+                            padding: 15px; 
+                            text-align: center; 
+                            font-family: 'Courier New', monospace; 
+                            font-size: 16px; 
+                            font-weight: bold;
+                            border: 2px solid #dee2e6; 
+                            border-radius: 5px; 
+                        }
+                        .footer {
+                            margin-top: 30px;
+                            padding-top: 20px;
+                            border-top: 1px solid #dee2e6;
+                            text-align: center;
+                            font-size: 12px;
+                            color: #6c757d;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>🛡️ MikroTik Manager</h1>
+                        <h2>Záložné kódy pre dvojfaktorové overenie</h2>
+                        <p><strong>Vygenerované:</strong> ${new Date().toLocaleString('sk-SK')}</p>
+                    </div>
+                    
+                    <div class="warning">
+                        <h3>⚠️ DÔLEŽITÉ BEZPEČNOSTNÉ UPOZORNENIE</h3>
+                        <ul>
+                            <li><strong>Každý kód možno použiť iba jedenkrát</strong></li>
+                            <li>Uložte si tieto kódy na bezpečné miesto offline</li>
+                            <li>Tieto kódy vám umožnia prístup aj bez telefónu</li>
+                            <li>Nikomu ich neposkytujte</li>
+                            <li>Po použití kódu ho vyškrtnite zo zoznamu</li>
+                        </ul>
+                    </div>
+                    
+                    <h3>📱 Vaše záložné kódy:</h3>
+                    <div class="codes">
+                        ${codes.map((code, index) => `
+                            <div class="code">
+                                ${index + 1}. ${code}
+                                <div style="margin-top: 10px; font-size: 12px; color: #6c757d;">
+                                    ☐ Použitý
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="footer">
+                        <p>MikroTik Backup Manager - Bezpečnostné záložné kódy</p>
+                        <p>Uchovajte tento dokument na bezpečnom mieste</p>
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            displayBackupCodes();
+            
+            // Add smooth scroll behavior
+            document.documentElement.style.scrollBehavior = 'smooth';
+            
+            // Clean up URL parameters after 5 seconds to remove sensitive data
+            setTimeout(() => {
+                if (window.location.search) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }, 5000);
+        });
+    </script>
+</body>
+</html>

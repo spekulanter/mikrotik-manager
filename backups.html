@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zálohy - MikroTik Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --main-bg: #111827; 
+            --card-bg: #1f2937; 
+            --border-color: #374151; 
+            --text-color: #d1d5db; 
+            --accent-color: #38bdf8; 
+            --accent-color-hover: #0ea5e9;
+            --success-color: #4ade80;
+            --warning-color: #facc15;
+        }
+        
+        body { 
+            background-color: var(--main-bg); 
+            color: var(--text-color); 
+            font-family: 'Inter', sans-serif; 
+            min-height: 100vh;
+        }
+        
+        .main-container {
+            margin: 20px auto;
+            max-width: 1400px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+        }
+        
+        .page-header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: var(--text-color);
+        }
+        
+        .page-header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--accent-color);
+        }
+        
+        .page-header p {
+            color: #9ca3af;
+            font-size: 1.1rem;
+        }
+        
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 25px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .search-sort-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            flex-grow: 1;
+        }
+        
+        .search-box {
+            flex-grow: 1;
+            min-width: 250px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: #111827;
+            color: var(--text-color);
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+        }
+        
+        .sort-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-container {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background-color: #111827;
+            color: var(--text-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .filter-btn:hover {
+            border-color: var(--accent-color);
+            background-color: rgba(56, 189, 248, 0.1);
+        }
+        
+        .filter-btn.active {
+            border-color: var(--success-color);
+            background-color: var(--success-color);
+            color: #000;
+        }
+        
+        .table-container {
+            background-color: #111827;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+        }
+        
+        .table thead th {
+            background-color: var(--card-bg);
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--border-color);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 18px 15px;
+            text-align: left;
+            font-size: 13px;
+        }
+        
+        .table tbody tr {
+            transition: all 0.3s ease;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .table tbody tr:hover {
+            background-color: rgba(56, 189, 248, 0.05);
+        }
+        
+        .table tbody tr:last-child {
+            border-bottom: none;
+        }
+        
+        .table tbody td {
+            padding: 15px;
+            vertical-align: middle;
+            color: var(--text-color);
+        }
+        
+        .btn-download {
+            background: linear-gradient(135deg, var(--success-color), #22c55e);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: #000;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .btn-download:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
+            color: #000;
+            text-decoration: none;
+        }
+        
+        .btn-back {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .btn-back:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+        
+        .file-icon {
+            font-size: 1.2rem;
+            margin-right: 10px;
+        }
+        
+        .file-backup {
+            color: var(--accent-color);
+        }
+        
+        .file-rsc {
+            color: var(--success-color);
+        }
+        
+        .file-size {
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #6b7280;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #374151;
+        }
+        
+        .info-badge {
+            background-color: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            color: var(--text-color);
+            font-size: 14px;
+        }
+        
+        .path-info {
+            background-color: #111827;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            color: var(--accent-color);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            background-color: #111827;
+            color: var(--text-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--accent-color);
+            background-color: rgba(56, 189, 248, 0.1);
+        }
+        
+        .pagination button.active {
+            border-color: var(--accent-color);
+            background-color: var(--accent-color);
+            color: #000;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination-info {
+            color: #9ca3af;
+            font-size: 14px;
+            margin: 0 15px;
+        }
+        
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 18px;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .theme-toggle:hover {
+            border-color: var(--accent-color);
+            background-color: rgba(56, 189, 248, 0.1);
+        }
+        
+        .table thead th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .table thead th.sortable:hover {
+            background-color: rgba(56, 189, 248, 0.1);
+            color: var(--accent-color);
+        }
+        
+        .table thead th.sortable.active {
+            background-color: rgba(56, 189, 248, 0.2);
+            color: var(--accent-color);
+        }
+        
+        .table thead th.sortable .sort-icon {
+            margin-left: 8px;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+        
+        .table thead th.sortable:hover .sort-icon,
+        .table thead th.sortable.active .sort-icon {
+            opacity: 1;
+        }
+
+        /* Svetlá téma */
+        body.light-theme {
+            --main-bg: #f1f5f9;
+            --card-bg: #f8fafc;
+            --border-color: #cbd5e1;
+            --text-color: #334155;
+            --accent-color: #0369a1;
+            --accent-color-hover: #0284c7;
+            --success-color: #059669;
+            --warning-color: #d97706;
+        }
+        
+        body.light-theme .table-container {
+            background-color: #f8fafc;
+        }
+        
+        body.light-theme .search-box input,
+        body.light-theme .filter-btn,
+        body.light-theme .pagination button {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+        }
+        
+        body.light-theme .path-info {
+            background-color: #e2e8f0;
+        }
+        
+        /* Tlačidlo "Späť" v svetlej téme */
+        body.light-theme .btn-back {
+            background: linear-gradient(135deg, #e2e8f0, #cbd5e1) !important;
+            color: var(--text-color) !important;
+            border: 1px solid var(--border-color) !important;
+        }
+        
+        body.light-theme .btn-back:hover {
+            background: linear-gradient(135deg, #cbd5e1, #94a3b8) !important;
+            color: var(--text-color) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }
+        
+        @media (max-width: 768px) {
+            .controls-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-sort-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .sort-container {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Prepínač témy -->
+    <button class="theme-toggle" onclick="toggleTheme()" title="Prepnúť tému">
+        <i class="fas fa-sun" id="theme-icon"></i>
+    </button>
+    
+    <div class="main-container">
+        <a href="/" class="btn-back">
+            <i class="fas fa-arrow-left"></i>
+            Späť na hlavnú stránku
+        </a>
+        
+        <div class="page-header">
+            <h1><i class="fas fa-archive"></i> Zálohy MikroTik</h1>
+            <p>Zoznam všetkých uložených záloh zariadení</p>
+        </div>
+        
+        <!-- Informácia o ceste k zálohám -->
+        <div class="path-info">
+            <i class="fas fa-folder"></i>
+            <span>Umiestnenie záloh: <strong>/var/lib/mikrotik-manager/data/backups</strong></span>
+        </div>
+        
+        {% if files %}
+        <!-- Ovládacie prvky - vyhľadávanie, filtrovanie a zoraďovanie -->
+        <div class="controls-row">
+            <div class="search-sort-container">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="🔍 Hľadať súbory..." onkeyup="filterAndPaginate()">
+                </div>
+                
+                <div class="filter-container">
+                    <span style="color: #9ca3af; font-weight: 500;">Filter:</span>
+                    <button class="filter-btn active" onclick="filterByType('all')" id="filter-all">
+                        <i class="fas fa-list"></i> Všetky
+                    </button>
+                    <button class="filter-btn" onclick="filterByType('backup')" id="filter-backup">
+                        <i class="fas fa-database"></i> .backup
+                    </button>
+                    <button class="filter-btn" onclick="filterByType('rsc')" id="filter-rsc">
+                        <i class="fas fa-code"></i> .rsc
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <table class="table" id="filesTable">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortTable('name')" id="sort-name">
+                            <i class="fas fa-file"></i> Názov súboru
+                            <i class="fas fa-sort sort-icon"></i>
+                        </th>
+                        <th class="sortable" onclick="sortTable('size')" id="sort-size">
+                            <i class="fas fa-hdd"></i> Veľkosť
+                            <i class="fas fa-sort sort-icon"></i>
+                        </th>
+                        <th class="sortable" onclick="sortTable('date')" id="sort-date">
+                            <i class="fas fa-calendar"></i> Dátum vytvorenia
+                            <i class="fas fa-sort sort-icon"></i>
+                        </th>
+                        <th><i class="fas fa-download"></i> Akcie</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    {% for file in files %}
+                    <tr data-filename="{{ file.name }}" data-size="{{ file.size }}" data-date="{{ file.modified.timestamp() }}">
+                        <td>
+                            {% if file.name.endswith('.backup') %}
+                                <i class="fas fa-database file-icon file-backup"></i>
+                            {% elif file.name.endswith('.rsc') %}
+                                <i class="fas fa-code file-icon file-rsc"></i>
+                            {% else %}
+                                <i class="fas fa-file file-icon"></i>
+                            {% endif %}
+                            <span class="filename">{{ file.name }}</span>
+                        </td>
+                        <td class="file-size">{{ "%.2f"|format(file.size / 1024 / 1024) }} MB</td>
+                        <td>{{ file.modified.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <td>
+                            <a href="/download_backup/{{ file.name }}" class="btn-download">
+                                <i class="fas fa-download"></i>
+                                Stiahnuť
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Stránkovanie -->
+        <div class="pagination" id="pagination">
+            <!-- Bude generované JavaScriptom -->
+        </div>
+        
+        <div class="info-badge">
+            <i class="fas fa-info-circle"></i>
+            <strong>Celkom súborov:</strong> <span id="totalFiles">{{ files|length }}</span> | 
+            <strong>Zobrazených:</strong> <span id="visibleFiles">0</span> | 
+            <span class="file-backup">■</span> .backup súbory (binárne zálohy) |
+            <span class="file-rsc">■</span> .rsc súbory (textové konfigurácie)
+        </div>
+        
+        {% else %}
+        <div class="path-info">
+            <i class="fas fa-folder"></i>
+            <span>Umiestnenie záloh: <strong>/var/lib/mikrotik-manager/data/backups</strong></span>
+        </div>
+        
+        <div class="empty-state">
+            <i class="fas fa-folder-open"></i>
+            <h3 style="color: var(--text-color);">Žiadne zálohy</h3>
+            <p>V priečinku záloh sa nenachádzajú žiadne súbory.</p>
+            <a href="/" class="btn-download">
+                <i class="fas fa-plus"></i>
+                Vytvoriť prvú zálohu
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    
+    <script>
+        let currentSort = 'name';
+        let sortDirection = 'asc';
+        let currentFilter = 'all';
+        let currentPage = 1;
+        const itemsPerPage = 50;
+        let allRows = [];
+        let filteredRows = [];
+        
+        // Inicializácia témy
+        function initTheme() {
+            const savedTheme = localStorage.getItem('mikrotik-theme') || 'dark';
+            document.body.className = savedTheme === 'light' ? 'light-theme' : '';
+            updateThemeIcon();
+        }
+        
+        function toggleTheme() {
+            const isLight = document.body.classList.contains('light-theme');
+            document.body.classList.toggle('light-theme');
+            const newTheme = isLight ? 'dark' : 'light';
+            localStorage.setItem('mikrotik-theme', newTheme);
+            updateThemeIcon();
+        }
+        
+        function updateThemeIcon() {
+            const icon = document.getElementById('theme-icon');
+            const isLight = document.body.classList.contains('light-theme');
+            icon.className = isLight ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        
+        function filterByType(type) {
+            currentFilter = type;
+            currentPage = 1;
+            
+            // Aktualizuj filter tlačidlá
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`filter-${type}`).classList.add('active');
+            
+            filterAndPaginate();
+        }
+        
+        function filterAndPaginate() {
+            const searchValue = document.getElementById('searchInput').value.toLowerCase();
+            const tbody = document.getElementById('filesTableBody');
+            
+            // Filtruj riadky podľa typu a vyhľadávania
+            filteredRows = allRows.filter(row => {
+                const filename = row.querySelector('.filename').textContent.toLowerCase();
+                const matchesSearch = filename.includes(searchValue);
+                
+                let matchesType = true;
+                if (currentFilter === 'backup') {
+                    matchesType = filename.endsWith('.backup');
+                } else if (currentFilter === 'rsc') {
+                    matchesType = filename.endsWith('.rsc');
+                }
+                
+                return matchesSearch && matchesType;
+            });
+            
+            // Aktualizuj počítadlá
+            document.getElementById('visibleFiles').textContent = filteredRows.length;
+            
+            // Stránkovanie
+            const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            
+            // Skry všetky riadky
+            allRows.forEach(row => row.style.display = 'none');
+            
+            // Zobraz len aktuálnu stránku
+            filteredRows.slice(startIndex, endIndex).forEach(row => {
+                row.style.display = '';
+            });
+            
+            updatePagination(totalPages);
+        }
+        
+        function updatePagination(totalPages) {
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.style.display = 'none';
+                return;
+            }
+            
+            pagination.style.display = 'flex';
+            pagination.innerHTML = '';
+            
+            // Predchádzajúca stránka
+            const prevBtn = document.createElement('button');
+            prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.onclick = () => changePage(currentPage - 1);
+            pagination.appendChild(prevBtn);
+            
+            // Čísla stránok
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            if (startPage > 1) {
+                const firstBtn = document.createElement('button');
+                firstBtn.textContent = '1';
+                firstBtn.onclick = () => changePage(1);
+                pagination.appendChild(firstBtn);
+                
+                if (startPage > 2) {
+                    const dots = document.createElement('span');
+                    dots.textContent = '...';
+                    dots.className = 'pagination-info';
+                    pagination.appendChild(dots);
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.textContent = i;
+                pageBtn.className = i === currentPage ? 'active' : '';
+                pageBtn.onclick = () => changePage(i);
+                pagination.appendChild(pageBtn);
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const dots = document.createElement('span');
+                    dots.textContent = '...';
+                    dots.className = 'pagination-info';
+                    pagination.appendChild(dots);
+                }
+                
+                const lastBtn = document.createElement('button');
+                lastBtn.textContent = totalPages;
+                lastBtn.onclick = () => changePage(totalPages);
+                pagination.appendChild(lastBtn);
+            }
+            
+            // Nasledujúca stránka
+            const nextBtn = document.createElement('button');
+            nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.onclick = () => changePage(currentPage + 1);
+            pagination.appendChild(nextBtn);
+            
+            // Info o stránkach
+            const info = document.createElement('span');
+            info.className = 'pagination-info';
+            info.textContent = `Stránka ${currentPage} z ${totalPages}`;
+            pagination.appendChild(info);
+        }
+        
+        function changePage(newPage) {
+            currentPage = newPage;
+            filterAndPaginate();
+        }
+        
+        function sortTable(sortBy) {
+            // Aktualizuj stav zoradenia
+            if (currentSort === sortBy) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort = sortBy;
+                sortDirection = 'asc';
+            }
+            
+            currentPage = 1; // Reset na prvú stránku po zoradení
+            
+            // Aktualizuj vizuálny stav hlavičiek
+            updateSortHeaders();
+            
+            // Zoradi všetky riadky
+            const tbody = document.getElementById('filesTableBody');
+            allRows.sort((a, b) => {
+                let valA, valB;
+                
+                switch (sortBy) {
+                    case 'name':
+                        valA = a.querySelector('.filename').textContent.toLowerCase();
+                        valB = b.querySelector('.filename').textContent.toLowerCase();
+                        break;
+                    case 'size':
+                        valA = parseFloat(a.getAttribute('data-size'));
+                        valB = parseFloat(b.getAttribute('data-size'));
+                        break;
+                    case 'date':
+                        valA = parseFloat(a.getAttribute('data-date'));
+                        valB = parseFloat(b.getAttribute('data-date'));
+                        break;
+                }
+                
+                if (sortDirection === 'asc') {
+                    return valA > valB ? 1 : valA < valB ? -1 : 0;
+                } else {
+                    return valA < valB ? 1 : valA > valB ? -1 : 0;
+                }
+            });
+            
+            // Vyčisti tbody a pridaj zoradené riadky
+            tbody.innerHTML = '';
+            allRows.forEach(row => tbody.appendChild(row));
+            
+            filterAndPaginate();
+        }
+        
+        function updateSortHeaders() {
+            // Odstráň aktívny stav zo všetkých hlavičiek
+            document.querySelectorAll('.sortable').forEach(th => {
+                th.classList.remove('active');
+                const icon = th.querySelector('.sort-icon');
+                icon.className = 'fas fa-sort sort-icon';
+            });
+            
+            // Pridaj aktívny stav k aktuálnej hlavičke
+            const activeHeader = document.getElementById(`sort-${currentSort}`);
+            if (activeHeader) {
+                activeHeader.classList.add('active');
+                
+                // Aktualizuj ikonu podľa smeru zoradenia
+                const icon = activeHeader.querySelector('.sort-icon');
+                
+                switch (currentSort) {
+                    case 'name':
+                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-alpha-down' : 'fa-sort-alpha-up'} sort-icon`;
+                        break;
+                    case 'size':
+                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-amount-down' : 'fa-sort-amount-up'} sort-icon`;
+                        break;
+                    case 'date':
+                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-numeric-down' : 'fa-sort-numeric-up'} sort-icon`;
+                        break;
+                }
+            }
+        }
+        
+        // Inicializácia pri načítaní stránky
+        document.addEventListener('DOMContentLoaded', function() {
+            // Inicializuj tému
+            initTheme();
+            
+            // Ulož všetky riadky
+            const tbody = document.getElementById('filesTableBody');
+            if (tbody) {
+                allRows = Array.from(tbody.getElementsByTagName('tr'));
+                
+                // Animácie pri načítaní
+                allRows.forEach((row, index) => {
+                    row.style.opacity = '0';
+                    row.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        row.style.transition = 'all 0.5s ease';
+                        row.style.opacity = '1';
+                        row.style.transform = 'translateY(0)';
+                    }, index * 50);
+                });
+                
+                // Inicializuj zobrazenie
+                setTimeout(() => {
+                    // Nastav počiatočné zoradenie na názov
+                    currentSort = 'name';
+                    sortDirection = 'asc';
+                    updateSortHeaders();
+                    filterAndPaginate();
+                }, allRows.length * 50 + 200);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -45,9 +45,51 @@ if [ -d "${APP_DIR}" ] && [ -f "${SERVICE_FILE}" ] && systemctl is-enabled mikro
     deactivate
     msg_ok "Závislosti aktualizované."
     
+    # Aktualizácia systemd service súboru (možné zmeny)
+    msg_info "Kontrolujem systemd službu..."
+    cat << EOF > ${SERVICE_FILE}
+[Unit]
+Description=MikroTik Backup Manager
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=${APP_DIR}
+ExecStart=/opt/mikrotik-manager/venv/bin/gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 "app:app"
+Restart=always
+RestartSec=10
+Environment="DATA_DIR=${DATA_DIR}/data"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    msg_ok "Systemd služba skontrolovaná."
+    
+    # Aktualizácia Cordova projektu ak existuje
+    if [ -d "/opt/mikrotik-manager-app" ]; then
+        msg_info "Aktualizujem Cordova projekt..."
+        cd /opt/mikrotik-manager-app
+        npm update &>/dev/null || true
+        cordova platform update android &>/dev/null || true
+        cd ${APP_DIR}
+        msg_ok "Cordova projekt aktualizovaný."
+    fi
+    
+    # Vymazanie Python cache pre zaručené načítanie nového kódu
+    msg_info "Čistím Python cache..."
+    find ${APP_DIR} -name "*.pyc" -delete 2>/dev/null || true
+    find ${APP_DIR} -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    msg_ok "Cache vymazaná."
+    
     msg_info "Spúšťam službu..."
     systemctl start mikrotik-manager.service &>/dev/null
-    msg_ok "Služba spustená."
+    sleep 2
+    # Vynúť reload aplikácie pre istotu
+    systemctl restart mikrotik-manager.service &>/dev/null
+    msg_ok "Služba spustená a reštartovaná."
     
     echo "✅ Aktualizácia dokončená!"
     echo "🌐 Aplikácia je dostupná na: http://$(hostname -I | awk '{print $1}'):5000"

@@ -52,7 +52,7 @@ if [ -d "${APP_DIR}/.git" ]; then
     
     msg_info "Aktualizujem Python závislosti..."
     source ${APP_DIR}/venv/bin/activate
-    pip install -r ${APP_DIR}/requirements.txt 2>/dev/null || true
+    pip install -r ${APP_DIR}/requirements.txt >/dev/null 2>&1
     deactivate
     msg_ok "Závislosti aktualizované."
     
@@ -62,13 +62,13 @@ if [ -d "${APP_DIR}/.git" ]; then
     # Node.js check & update
     if ! command -v node &> /dev/null || [[ "$(node -v)" != "v18."* ]]; then
         msg_info "Aktualizujem Node.js na verziu 18.x..."
-        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - >/dev/null 2>&1 || true
-        apt-get install -y nodejs >/dev/null 2>&1 || true
+        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - >/dev/null 2>&1
+        apt-get install -y nodejs >/dev/null 2>&1
     fi
     
     # Cordova CLI update
     if command -v npm &> /dev/null; then
-        npm install -g cordova@latest >/dev/null 2>&1 || true
+        npm install -g cordova@latest >/dev/null 2>&1
     fi
     
     # Refresh environment setup files

@@ -210,8 +210,15 @@ EOF
         export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
         export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
         
-        # Pokus o build APK s lepším error handlingom
-        if cordova build android >/dev/null 2>&1; then
+        # Pokus o build APK s diagnostikou
+        msg_info "Diagnostika pred APK buildingom..."
+        echo "   ANDROID_HOME: ${ANDROID_HOME:-'nie je nastavené'}"
+        echo "   Java: $(java -version 2>&1 | head -n1 | cut -d'"' -f2 2>/dev/null || echo 'nenájdená')"
+        echo "   Cordova: $(cordova -v 2>/dev/null || echo 'nenájdená')"
+        echo "   Gradle: $(gradle -v 2>/dev/null | head -n1 | awk '{print $2}' 2>/dev/null || echo 'nenájdený')"
+        
+        # Pokus o build s logovaním chýb
+        if cordova build android 2>/tmp/cordova-build.log; then
             if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
                 cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
                 msg_ok "APK vytvorený z buildu: /opt/MikroTikManager.apk"
@@ -220,6 +227,10 @@ EOF
             fi
         else
             msg_warn "APK build zlyhal, používam pre-built verziu..."
+            echo "   📋 Posledné 10 riadkov z build logu:"
+            tail -n 10 /tmp/cordova-build.log 2>/dev/null || echo "   Log súbor neexistuje"
+            echo "   📄 Úplný log: /tmp/cordova-build.log"
+            
             # Fallback: skopíruj pre-built APK z repozitára
             if [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
                 cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk
@@ -391,8 +402,15 @@ PROFEOF
     export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
     export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
     
-    # Pokus o build APK s lepším error handlingom
-    if cordova build android >/dev/null 2>&1; then
+    # Diagnostika pred APK buildingom
+    msg_info "Diagnostika pred APK buildingom..."
+    echo "   ANDROID_HOME: ${ANDROID_HOME:-'nie je nastavené'}"
+    echo "   Java: $(java -version 2>&1 | head -n1 | cut -d'"' -f2 2>/dev/null || echo 'nenájdená')"
+    echo "   Cordova: $(cordova -v 2>/dev/null || echo 'nenájdená')"
+    echo "   Gradle: $(gradle -v 2>/dev/null | head -n1 | awk '{print $2}' 2>/dev/null || echo 'nenájdený')"
+    
+    # Pokus o build s logovaním chýb
+    if cordova build android 2>/tmp/cordova-build.log; then
         if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
             cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
             msg_ok "APK vytvorený z buildu: /opt/MikroTikManager.apk"
@@ -401,6 +419,10 @@ PROFEOF
         fi
     else
         msg_warn "APK build zlyhal, používam pre-built verziu..."
+        echo "   📋 Posledné 10 riadkov z build logu:"
+        tail -n 10 /tmp/cordova-build.log 2>/dev/null || echo "   Log súbor neexistuje"
+        echo "   📄 Úplný log: /tmp/cordova-build.log"
+        
         # Fallback: skopíruj pre-built APK z repozitára
         if [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
             cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk

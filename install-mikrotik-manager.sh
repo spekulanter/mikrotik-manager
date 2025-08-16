@@ -209,6 +209,29 @@ PROFEOF
     git clone ${REPO_URL} ${APP_DIR} >/dev/null 2>&1
     msg_ok "Aplikácia stiahnutá."
     
+    # Vytvorenie Cordova projektu pre Android APK
+    msg_info "Vytváram Cordova projekt pre Android APK..."
+    if [ ! -d "/opt/mikrotik-manager-app" ]; then
+        # Načítať Android environment
+        source /etc/profile.d/android-dev.sh 2>/dev/null || true
+        export ANDROID_HOME=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
+        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+        
+        cd /opt
+        cordova create mikrotik-manager-app com.mikrotik.manager "MikroTik Manager" >/dev/null 2>&1
+        cd mikrotik-manager-app
+        cordova platform add android >/dev/null 2>&1
+        cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1
+        
+        # Kopírovanie index.html z repozitára ak existuje
+        if [ -f "/opt/mikrotik-manager/mikrotik-manager-app/www/index.html" ]; then
+            cp /opt/mikrotik-manager/mikrotik-manager-app/www/index.html /opt/mikrotik-manager-app/www/
+        fi
+    fi
+    msg_ok "Cordova projekt vytvorený."
+    
     # Vytvorenie Python Virtual Environment
     msg_info "Vytváram izolované Python prostredie (venv)..."
     python3 -m venv ${APP_DIR}/venv

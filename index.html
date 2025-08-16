@@ -11,26 +11,191 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* GLOBÁLNY ZÁKAZ VŠETKÝCH ANIMÁCIÍ A HOVER EFEKTOV NA KARTÁCH */
+        * {
+            --tw-scale-x: 1 !important;
+            --tw-scale-y: 1 !important;
+        }
+        
+        /* Zakázať všetky možné transform efekty - ale NIE na tlačidlách */
+        .card:not(.btn),
+        .card *:not(.btn),
+        .p-6:not(.btn),
+        .rounded-lg:not(.btn),
+        [class*="card"]:not(.btn) {
+            transform: none !important;
+            scale: 1 !important;
+            transition: none !important;
+            animation: none !important;
+        }
+        
+        /* Zrušiť všetky hover efekty - ale NIE na tlačidlách */
+        .card:hover:not(.btn),
+        .card:focus:not(.btn),
+        .card:active:not(.btn),
+        .card *:hover:not(.btn),
+        .card *:focus:not(.btn),
+        .card *:active:not(.btn) {
+            transform: none !important;
+            scale: 1 !important;
+            transition: none !important;
+            animation: none !important;
+        }
+        
         :root { 
             --main-bg: #111827; --card-bg: #1f2937; --border-color: #374151; 
             --text-color: #d1d5db; --accent-color: #38bdf8; --accent-color-hover: #0ea5e9;
         }
         body { background-color: var(--main-bg); color: var(--text-color); font-family: 'Inter', sans-serif; }
         .card { background-color: var(--card-bg); border: 1px solid var(--border-color); transition: all 0.3s ease; }
-        .card:hover { box-shadow: 0 0 15px rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); }
-        .btn { transition: all 0.2s ease-in-out; }
-        .btn-primary { background-color: var(--accent-color); color: #ffffff; }
-        .btn-primary:hover { background-color: var(--accent-color-hover); }
+        /* ÚPLNE zakázané hover efekty na kartách - žiadne animácie */
+        .card {
+            transition: none !important;
+        }
         
-        /* Hover animácie pre hlavné tlačidlá */
+        .card:hover {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.1) !important;
+            border-color: rgba(56, 189, 248, 0.3) !important;
+            transform: none !important;
+            transition: none !important;
+            animation: none !important;
+        }
+        
+        /* Úplný zákaz scale/transform animácií na kartách (NIE na tlačidlách) */
+        .card:not(.btn),
+        .card *:not(.btn),
+        .card:hover:not(.btn),
+        .card:focus:not(.btn),
+        .card:active:not(.btn) {
+            transform: none !important;
+            scale: none !important;
+            animation: none !important;
+            transition: none !important;
+        }
+        
+        /* Ale POVOLENÉ hover efekty na tlačidlách v kartách */
+        .card .btn {
+            font-weight: 600 !important;
+            letter-spacing: 0.025em !important;
+            /* Len jednoduché hover efekty bez fancy shadow */
+        }
+        
+        .card .btn:hover {
+            /* Animácia zo starej verzie - presne ako bola */
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Disabled stav pre tlačidlá */
+        .card .btn:disabled {
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+        }
+        
+        /* GLOBÁLNE pravidlá pre všetky tlačidlá - ako v starej verzii */
+        .btn { 
+            transition: all 0.2s ease-in-out; 
+        }
         .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
         }
         
+        /* Zakázať hover efekty počas refresh operácií */
+        .card.refreshing:hover { box-shadow: none !important; border-color: var(--border-color) !important; transform: none !important; }
+        body.refreshing .card:hover { box-shadow: none !important; border-color: var(--border-color) !important; transform: none !important; }
+        
+        /* Zakázať transitions len na kartách (NIE na tlačidlách) počas refresh */
+        body.refreshing .card:not(.btn) {
+            transition: none !important;
+            animation: none !important;
+        }
+        
+        /* Zakázať hover animácie pre tlačidlá počas refresh operácií */
+        body.refreshing .btn:hover {
+            transform: none !important;
+            box-shadow: none !important;
+            transition-duration: 0s !important;
+        }
+        
+        /* Základné pravidlá pre tlačidlá */
+        .btn { transition: all 0.2s ease-in-out; }
+        .btn-primary { background-color: var(--accent-color); color: #ffffff; }
+        .btn-primary:hover { background-color: var(--accent-color-hover); }
+        
+        /* Hover animácie pre hlavné tlačidlá */
+        #addDeviceBtn:hover, #backupAllBtn:hover, #stopAllBackupsBtn:hover, 
+        #refreshAllSnmpBtn:hover, #snmpStatusBtn:hover, #monitoringBtn:hover, 
+        #viewBackupsBtn:hover, #settingsBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Pridané: Line clamp pre konzistentné zobrazenie názvov zariadení */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Vlastná veľkosť písma pre tlačidlá zariadení - medzi xs a sm */
+        .device-btn-text {
+            font-size: 0.8125rem !important; /* 13px - medzi text-xs (12px) a text-sm (14px) */
+        }
+        .device-btn-icon {
+            font-size: 0.8125rem !important; /* 13px - rovnaká veľkosť pre ikony */
+        }
+        
         /* Animácie pre svetlú tému */
         body.light-theme .btn:hover {
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        
+        /* Zakázať hover animácie pre tlačidlá počas refresh operácií - svetlá téma */
+        body.light-theme.refreshing .btn:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        
+        /* Zakázať hover efekty na kartách počas refresh operácií - svetlá téma */
+        body.light-theme.refreshing .card:hover {
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+            border-color: var(--border-color) !important;
+        }
+        
+        /* Zakázať všetky transitions v svetlej téme počas refresh */
+        body.light-theme.refreshing .card,
+        body.light-theme.refreshing .card *,
+        body.light-theme.refreshing .btn,
+        body.light-theme.refreshing .btn * {
+            transition: none !important;
+            animation: none !important;
+        }
+        
+        /* Globálne potlačenie animácií v svetlej téme počas refresh */
+        body.light-theme.refreshing *,
+        body.light-theme.refreshing *:before,
+        body.light-theme.refreshing *:after {
+            animation-duration: 0s !important;
+            animation-delay: 0s !important;
+            transition-duration: 0s !important;
+            transition-delay: 0s !important;
+            transform: none !important;
+        }
+        
+        /* Extra potlačenie pre svetlú tému */
+        body.light-theme.refreshing .card,
+        body.light-theme.refreshing .card *,
+        body.light-theme.refreshing .card:hover,
+        body.light-theme.refreshing .card *:hover {
+            transition: none !important;
+            animation: none !important;
+            transform: none !important;
+            opacity: 1 !important;
         }
         .status-online { color: #4ade80; }
         .status-offline { color: #f87171; }
@@ -115,29 +280,71 @@
         
         /* Tlačidlo prepínača témy */
         .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            padding: 10px;
+            padding: 0.5rem;
             border: 1px solid var(--border-color);
             background-color: var(--card-bg);
             color: var(--text-color);
-            border-radius: 50%;
+            border-radius: 0.5rem;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 18px;
-            width: 50px;
-            height: 50px;
+            font-size: 16px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
         
         .theme-toggle:hover {
             border-color: var(--accent-color);
             background-color: rgba(56, 189, 248, 0.1);
+        }
+        
+        /* Responsive nastavenia pre theme toggle */
+        @media (max-width: 768px) {
+            .theme-toggle {
+                width: 36px;
+                height: 36px;
+                font-size: 14px;
+            }
+        }
+        
+        /* Header responsive nastavenia */
+        @media (max-width: 768px) {
+            .flex.justify-between.items-center h1 {
+                font-size: 1.125rem;
+            }
+            .flex.justify-between.items-center h1 .fas {
+                font-size: 1rem;
+            }
+            .hidden.sm\\:inline {
+                display: none !important;
+            }
+        }
+        
+        /* Action buttons responsive nastavenia */
+        @media (max-width: 640px) {
+            .flex.flex-wrap.gap-3 {
+                gap: 0.5rem;
+            }
+            .flex.flex-wrap.gap-3 button {
+                padding: 0.375rem 0.75rem;
+                font-size: 0.75rem;
+            }
+            .flex.flex-wrap.gap-3 button i {
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Activity log resize capability */
+        .right-sidebar .card.resize-y {
+            resize: vertical;
+            overflow: hidden;
+        }
+        
+        .right-sidebar .card.resize-y::-webkit-resizer {
+            background: var(--accent-color);
+            border-radius: 0 0 8px 0;
         }
 
         /* Svetlá téma */
@@ -519,35 +726,299 @@
         body.light-theme #snmpStatusModal .bg-gray-600 {
             background-color: #ffffff !important;
         }
+
+        /* Debug Panel Styles */
+        .debug-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 400px;
+            max-height: 60vh;
+            background: rgba(31, 41, 55, 0.95);
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+        }
+        
+        .debug-panel.visible {
+            display: flex;
+        }
+        
+        .debug-panel-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #4b5563;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(55, 65, 81, 0.8);
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .debug-panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f3f4f6;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .debug-panel-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .debug-panel-btn {
+            background: transparent;
+            border: 1px solid #6b7280;
+            color: #d1d5db;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .debug-panel-btn:hover {
+            background: rgba(75, 85, 99, 0.5);
+            border-color: #9ca3af;
+            color: #ffffff;
+        }
+        
+        .debug-panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            background: rgba(17, 24, 39, 0.9);
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .debug-log-entry {
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            border-left: 3px solid #6b7280;
+            background: rgba(31, 41, 55, 0.6);
+            word-break: break-word;
+        }
+        
+        .debug-log-entry.debug-chart_operations {
+            border-left-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .debug-log-entry.debug-api_calls {
+            border-left-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .debug-log-entry.debug-websocket_frontend {
+            border-left-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+        
+        .debug-log-entry.debug-device_operations {
+            border-left-color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.1);
+        }
+        
+        .debug-log-entry .debug-timestamp {
+            color: #9ca3af;
+            font-size: 11px;
+            margin-right: 8px;
+        }
+        
+        .debug-log-entry .debug-type {
+            color: #60a5fa;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        
+        .debug-log-entry .debug-message {
+            color: #e5e7eb;
+        }
+        
+        .debug-log-entry .debug-args {
+            color: #d1d5db;
+            font-style: italic;
+            margin-top: 4px;
+            padding-left: 16px;
+            border-left: 2px solid #4b5563;
+        }
+        
+        /* Light theme debug panel */
+        body.light-theme .debug-panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: #d1d5db;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        body.light-theme .debug-panel-header {
+            background: rgba(248, 250, 252, 0.9);
+            border-bottom-color: #d1d5db;
+        }
+        
+        body.light-theme .debug-panel-title {
+            color: #374151;
+        }
+        
+        body.light-theme .debug-panel-btn {
+            border-color: #9ca3af;
+            color: #6b7280;
+        }
+        
+        body.light-theme .debug-panel-btn:hover {
+            background: rgba(229, 231, 235, 0.5);
+            border-color: #6b7280;
+            color: #374151;
+        }
+        
+        body.light-theme .debug-panel-content {
+            background: rgba(249, 250, 251, 0.9);
+        }
+        
+        body.light-theme .debug-log-entry {
+            background: rgba(255, 255, 255, 0.7);
+            border-left-color: #9ca3af;
+        }
+        
+        body.light-theme .debug-log-entry.debug-chart_operations {
+            border-left-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        
+        body.light-theme .debug-log-entry.debug-api_calls {
+            border-left-color: #10b981;
+            background: rgba(16, 185, 129, 0.05);
+        }
+        
+        body.light-theme .debug-log-entry.debug-websocket_frontend {
+            border-left-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.05);
+        }
+        
+        body.light-theme .debug-log-entry.debug-device_operations {
+            border-left-color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.05);
+        }
+        
+        body.light-theme .debug-log-entry .debug-timestamp {
+            color: #6b7280;
+        }
+        
+        body.light-theme .debug-log-entry .debug-type {
+            color: #2563eb;
+        }
+        
+        body.light-theme .debug-log-entry .debug-message {
+            color: #374151;
+        }
+        
+        body.light-theme .debug-log-entry .debug-args {
+            color: #6b7280;
+            border-left-color: #d1d5db;
+        }
+        
+        /* Mobile responsive debug panel */
+        @media (max-width: 768px) {
+            .debug-panel {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                width: auto;
+                max-height: 50vh;
+            }
+            
+            .debug-panel-header {
+                padding: 8px 12px;
+            }
+            
+            .debug-panel-title {
+                font-size: 13px;
+            }
+            
+            .debug-panel-btn {
+                padding: 3px 6px;
+                font-size: 11px;
+            }
+            
+            .debug-panel-content {
+                padding: 8px;
+            }
+            
+            .debug-log-entry {
+                margin-bottom: 6px;
+                padding: 4px 6px;
+                font-size: 11px;
+            }
+            
+            .debug-log-entry .debug-timestamp,
+            .debug-log-entry .debug-type {
+                font-size: 10px;
+            }
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
-    <!-- Prepínač témy -->
-    <button class="theme-toggle" id="themeToggleBtn" title="Prepnúť tému">
-        <i class="fas fa-sun" id="theme-icon"></i>
-    </button>
-    
-    <div id="app" class="container mx-auto relative">
-        <!-- User info -->
-        <div id="userStatus" class="text-right p-4 mb-4">
-            <!-- Táto časť sa naplní dynamicky cez JavaScript -->
+    <div id="app" class="w-full max-w-none mx-auto relative" style="max-width: 1600px;">
+        <!-- Header with user info -->
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-4">
+                <h1 class="text-xl font-bold text-white flex items-center">
+                    <i class="fas fa-network-wired text-sky-400 mr-2"></i>
+                    MikroTik Manager
+                </h1>
+                <span class="text-gray-400 text-sm hidden sm:inline">Správa, zálohovanie a monitoring vašich zariadení</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="theme-toggle" id="themeToggleBtn" title="Prepnúť tému">
+                    <i class="fas fa-sun" id="theme-icon"></i>
+                </button>
+                <div id="userStatus" class="flex items-center gap-2">
+                    <!-- Táto časť sa naplní dynamicky cez JavaScript -->
+                </div>
+            </div>
         </div>
-
-        <header class="mb-8 text-center">
-            <h1 class="text-4xl font-bold text-white mb-2">🛡️ MikroTik Backup Manager v2.8</h1>
-            <p class="text-lg text-gray-400">Správa, zálohovanie a monitoring vašich MikroTik zariadení.</p>
-        </header>
 
         <div class="main-content-wrapper">
             <div class="left-content">
-                <div class="card p-4 rounded-lg mb-8 flex flex-wrap gap-4 items-center justify-center">
-                    <button id="addDeviceBtn" class="btn btn-primary font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-plus"></i> Pridať zariadenie</button>
-                    <button id="backupAllBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-save"></i> Zálohovať všetky</button>
-                    <button id="stopAllBackupsBtn" class="btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 hidden"><i class="fas fa-stop"></i> Zastaviť zálohy</button>
-                    <button id="refreshAllSnmpBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-sync"></i> Refresh SNMP</button>
-                    <button id="snmpStatusBtn" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-info-circle"></i> SNMP Stav</button>
-                    <button id="viewBackupsBtn" class="btn bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2" onclick="window.location.href='/backups'"><i class="fas fa-archive"></i> Zálohy</button>
-                    <button id="settingsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><i class="fas fa-cog"></i> Nastavenia</button>
+                <!-- Action buttons -->
+                <div class="card p-4 rounded-lg mb-6">
+                    <div class="flex flex-wrap gap-3 items-center justify-start">
+                        <button id="addDeviceBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                            <i class="fas fa-plus"></i> Pridať zariadenie
+                        </button>
+                        <button id="backupAllBtn" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                            <i class="fas fa-save"></i> Zálohovať všetky
+                        </button>
+                        <button id="stopAllBackupsBtn" class="btn bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm hidden">
+                            <i class="fas fa-stop"></i> Zastaviť zálohy
+                        </button>
+                        <button id="refreshAllSnmpBtn" class="btn bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                            <i class="fas fa-sync"></i> Refresh SNMP
+                        </button>
+                        <button id="snmpStatusBtn" class="btn bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                            <i class="fas fa-info-circle"></i> SNMP Stav
+                        </button>
+                        <button id="monitoringBtn" class="btn bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                            <i class="fas fa-chart-line"></i> Monitoring
+                        </button>
+                        <button id="viewBackupsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm" onclick="window.location.href='/backups'">
+                            <i class="fas fa-archive"></i> Zálohy
+                        </button>
+                        <button id="settingsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                            <i class="fas fa-cog"></i> Nastavenia
+                        </button>
+                    </div>
                 </div>
 
                 <div id="devicesGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8"></div>
@@ -555,12 +1026,15 @@
 
             <div class="right-sidebar lg:block hidden">
                 <!-- Activity log - integrovaný do layoutu -->
-                <div class="card p-4 rounded-lg flex flex-col sticky top-4" style="max-height: calc(100vh - 120px);">
+                <div class="card p-4 rounded-lg flex flex-col sticky top-4 resize-y min-h-96" style="max-height: calc(100vh - 80px); height: calc(100vh - 160px);">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-white">📋 Aktivita</h2>
                         <div class="flex gap-1">
                             <button id="refreshLogsBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
                                 <i class="fas fa-sync-alt"></i>
+                            </button>
+                            <button id="exportLogsBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
+                                <i class="fas fa-download"></i>
                             </button>
                             <button id="logsFilterBtn" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
                                 <i class="fas fa-filter"></i>
@@ -585,15 +1059,12 @@
                         <div class="grid grid-cols-4 gap-1">
                             <button id="levelAll" class="filter-level-btn active p-1 rounded text-xs bg-gray-700 hover:bg-gray-600">Všetky</button>
                             <button id="levelInfo" class="filter-level-btn p-1 rounded text-xs bg-blue-700 hover:bg-blue-600">Info</button>
-                            <button id="levelSuccess" class="filter-level-btn p-1 rounded text-xs bg-green-700 hover:bg-green-600">OK</button>
                             <button id="levelWarning" class="filter-level-btn p-1 rounded text-xs bg-yellow-700 hover:bg-yellow-600">Warn</button>
-                        </div>
-                        <div class="grid grid-cols-1 gap-1">
                             <button id="levelError" class="filter-level-btn p-1 rounded text-xs bg-red-700 hover:bg-red-600">Error</button>
                         </div>
                     </div>
                     
-                    <div id="logsContainer" class="flex-1 overflow-y-auto space-y-1 pr-2 text-xs" style="max-height: calc(100vh - 320px);"></div>
+                    <div id="logsContainer" class="flex-1 overflow-y-auto space-y-1 pr-2 text-xs" style="min-height: 200px;"></div>
                 </div>
             </div>
         </div>
@@ -606,6 +1077,9 @@
                     <div class="flex gap-1">
                         <button id="refreshLogsBtnMobile" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
                             <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button id="exportLogsBtnMobile" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
+                            <i class="fas fa-download"></i>
                         </button>
                         <button id="logsFilterBtnMobile" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
                             <i class="fas fa-filter"></i>
@@ -627,10 +1101,9 @@
                             <option value="system">Systém</option>
                         </select>
                     </div>
-                    <div class="grid grid-cols-3 gap-1">
+                    <div class="grid grid-cols-2 gap-1">
                         <button id="levelAllMobile" class="filter-level-btn-mobile active p-2 rounded text-sm bg-gray-700 hover:bg-gray-600">Všetky</button>
                         <button id="levelInfoMobile" class="filter-level-btn-mobile p-2 rounded text-sm bg-blue-700 hover:bg-blue-600">Info</button>
-                        <button id="levelSuccessMobile" class="filter-level-btn-mobile p-2 rounded text-sm bg-green-700 hover:bg-green-600">OK</button>
                     </div>
                     <div class="grid grid-cols-2 gap-1">
                         <button id="levelWarningMobile" class="filter-level-btn-mobile p-2 rounded text-sm bg-yellow-700 hover:bg-yellow-600">Warn</button>
@@ -653,7 +1126,7 @@
                 <div><label for="deviceIp" class="block mb-1 font-semibold">IP Adresa</label><input type="text" id="deviceIp" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required></div>
                 <div><label for="deviceUsername" class="block mb-1 font-semibold">Používateľské meno</label><input type="text" id="deviceUsername" class="w-full p-2 rounded bg-gray-800 border border-gray-600" required></div>
                 <div><label for="devicePassword" class="block mb-1 font-semibold">Heslo</label><input type="password" id="devicePassword" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Zadajte heslo pre SSH pripojenie"></div>
-                <div><label for="deviceSnmpCommunity" class="block mb-1 font-semibold">SNMP Community</label><input type="text" id="deviceSnmpCommunity" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="public"></div>
+                <div><label for="deviceSnmpCommunity" class="block mb-1 font-semibold">SNMP Community</label><input type="text" id="deviceSnmpCommunity" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="public"></div>
                 <div><label for="deviceSnmpInterval" class="block mb-1 font-semibold">SNMP monitoring interval (minúty)</label><input type="number" id="deviceSnmpInterval" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="0" min="0" max="1440"><small class="text-gray-400 block mt-1">0 = použiť globálne nastavenie, 1-1440 = vlastný interval v minútach</small></div>
                 <div class="flex items-center"><input type="checkbox" id="deviceLowMemory" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500"><label for="deviceLowMemory" class="ml-2">Zariadenie s nízkou pamäťou (16MB)</label></div>
                 <div class="flex justify-end gap-4 mt-6"><button type="button" id="cancelDeviceBtn" class="btn bg-gray-600 hover:bg-gray-700 py-2 px-4 rounded-lg">Zrušiť</button><button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Uložiť</button></div>
@@ -692,14 +1165,32 @@
                         <div>
                             <h3 class="text-lg md:text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">📊 SNMP Monitoring</h3>
                             <div class="space-y-4">
-                                <div><label for="snmp_check_interval_minutes" class="block mb-1 font-semibold">Globálny interval SNMP kontroly (minúty)</label><input type="number" id="snmp_check_interval_minutes" name="snmp_check_interval_minutes" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="10" min="1" max="1440"><small class="text-gray-400 block mt-1">Predvolený interval pre zariadenia, ktoré nemajú nastavený vlastný interval. Rozsah: 1-1440 minút</small></div>
+                                <div><label for="snmp_check_interval_minutes" class="block mb-1 font-semibold">Globálny interval SNMP kontroly (minúty)</label><input type="number" id="snmp_check_interval_minutes" name="snmp_check_interval_minutes" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="10" min="1" max="1440"><small class="text-gray-400 block mt-1">Predvolený interval pre zariadenia, ktoré nemajú nastavený vlastný interval. Rozsah: 1-1440 minút</small>
+                                <div class="mt-2 p-3 bg-blue-900/30 border border-blue-500/50 rounded-lg">
+                                    <div class="flex items-start gap-2">
+                                        <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
+                                        <div class="text-sm text-blue-200">
+                                            <strong>📱 Pushover notifikácie:</strong> Notifikácie o online/offline stave zariadení sú založené na <strong>SNMP monitoringu</strong> a tomto intervale, nie na ICMP ping monitoringu z detailnej monitoring stránky.
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
                             </div>
                         </div>
                         <div>
-                            <h3 class="text-lg md:text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">📋 Správa logov</h3>
+                            <h3 class="text-lg md:text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">🏓 ICMP Ping Monitoring</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center"><input type="checkbox" id="ping_monitor_enabled" name="ping_monitor_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500"><label for="ping_monitor_enabled" class="ml-2">Povoliť ICMP ping monitoring</label><small class="text-gray-400 block mt-1">Ak je vypnuté, ping monitoring sa nezachytáva</small></div>
+                                <div><label for="ping_check_interval_seconds" class="block mb-1 font-semibold">Interval ping kontroly (sekundy)</label><input type="number" id="ping_check_interval_seconds" name="ping_check_interval_seconds" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="120" min="1" max="86400"><small class="text-gray-400 block mt-1">Interval medzi ping kontrolami. Rozsah: 1 sekunda až 24 hodín (86400 sekúnd). Odporúčané: 30-300 sekúnd.</small></div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-lg md:text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">📋 Správa logov a dát</h3>
                             <div class="space-y-4">
                                 <div class="flex items-center"><input type="checkbox" id="backup_detailed_logging" name="backup_detailed_logging" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500"><label for="backup_detailed_logging" class="ml-2">Detailné logovanie zálohového procesu</label><small class="text-gray-400 block mt-1">Ak je vypnuté, zobrazujú sa len základné správy o spustení a dokončení zálohy</small></div>
                                 <div><label for="log_retention_days" class="block mb-1 font-semibold">Počet dní uchovávania logov</label><input type="number" id="log_retention_days" name="log_retention_days" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="30" min="1" max="365"><small class="text-gray-400 block mt-1">Logy staršie ako tento počet dní budú automaticky vymazané. Rozsah: 1-365 dní</small></div>
+                                <div><label for="ping_retention_days" class="block mb-1 font-semibold">Počet dní uchovávania ping dát</label><input type="number" id="ping_retention_days" name="ping_retention_days" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="30" min="1" max="365"><small class="text-gray-400 block mt-1">Ping história pre grafy. Viac dní = väčšia databáza. Rozsah: 1-365 dní</small></div>
+                                <div><label for="snmp_retention_days" class="block mb-1 font-semibold">Počet dní uchovávania SNMP dát</label><input type="number" id="snmp_retention_days" name="snmp_retention_days" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="30" min="1" max="365"><small class="text-gray-400 block mt-1">SNMP história (CPU, teplota, pamäť). Viac dní = väčšia databáza. Rozsah: 1-365 dní</small></div>
                                 <div><label for="log_max_entries" class="block mb-1 font-semibold">Maximum logov v pamäti</label><input type="number" id="log_max_entries" name="log_max_entries" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="1000" min="100" max="5000"><small class="text-gray-400 block mt-1">Maximálny počet logov načítaných do prehliadača. Vyššie číslo = viac RAM. Rozsah: 100-5000</small></div>
                             </div>
                         </div>
@@ -718,6 +1209,14 @@
                         </div>
                         <div>
                             <h3 class="text-lg md:text-xl font-semibold border-b border-gray-600 pb-2 mb-4 text-sky-400">📱 Inteligentné Notifikácie (Pushover)</h3>
+                            <div class="mb-4 p-3 bg-amber-900/30 border border-amber-500/50 rounded-lg">
+                                <div class="flex items-start gap-2">
+                                    <i class="fas fa-exclamation-triangle text-amber-400 mt-0.5"></i>
+                                    <div class="text-sm text-amber-200">
+                                        <strong>Dôležité:</strong> Notifikácie o online/offline stave zariadení sú spúšťané <strong>SNMP monitoringom</strong> (viď sekcia "📊 SNMP Monitoring"), nie ICMP ping testami z monitoring stránky.
+                                    </div>
+                                </div>
+                            </div>
                             <div class="space-y-4">
                                 <div><label for="pushover_app_key" class="block mb-1 font-semibold">Pushover App Key/Token</label><input type="text" id="pushover_app_key" name="pushover_app_key" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Váš App Key z Pushover"></div>
                                 <div><label for="pushover_user_key" class="block mb-1 font-semibold">Pushover User Key</label><input type="text" id="pushover_user_key" name="pushover_user_key" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Váš User Key z Pushover"></div>
@@ -867,7 +1366,24 @@
     </div>
 
 <script>
+// Funkcie pre správu refresh stavu
+const setRefreshingState = (enable = true) => {
+    if (enable) {
+        document.body.classList.add('refreshing');
+    } else {
+        document.body.classList.remove('refreshing');
+    }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Optimalizovaný startup - minimálny loading overlay
+    setRefreshingState(true);
+    
+    // Veľmi rýchlo vypneme - umožníme používateľovi interakciu čo najskôr
+    setTimeout(() => {
+        setRefreshingState(false);
+    }, 300); // Ešte kratšie - len 300ms
+    
     const API_URL = '';
     const devicesGrid = document.getElementById('devicesGrid');
     const logsContainer = document.getElementById('logsContainer');
@@ -938,13 +1454,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await api.get('user/status');
             if (data.username) {
                 document.getElementById('userStatus').innerHTML = `
-                    <p class="text-sm text-gray-400">Prihlásený ako: <strong class="font-semibold text-gray-200">${data.username}</strong></p>
-                    <div>
-                        <a href="#" id="changePasswordLink" class="text-sm text-sky-500 hover:text-sky-400 hover:underline">Zmeniť heslo</a>
-                        <span class="text-gray-600 mx-1">|</span>
-                        <a href="#" id="manage2faLink" class="text-sm text-sky-500 hover:text-sky-400 hover:underline">Správa 2FA</a>
-                        <span class="text-gray-600 mx-1">|</span>
-                        <a href="/logout" class="text-sm text-sky-500 hover:text-sky-400 hover:underline">Odhlásiť sa</a>
+                    <span class="text-sm text-gray-400 mr-4 hidden md:inline">Prihlásený ako: <strong class="font-semibold text-gray-200">${data.username}</strong></span>
+                    <div class="flex items-center gap-2 text-sm">
+                        <a href="#" id="changePasswordLink" class="text-sky-500 hover:text-sky-400 hover:underline">Heslo</a>
+                        <span class="text-gray-600">|</span>
+                        <a href="#" id="manage2faLink" class="text-sky-500 hover:text-sky-400 hover:underline">2FA</a>
+                        <span class="text-gray-600">|</span>
+                        <a href="/logout" class="text-sky-500 hover:text-sky-400 hover:underline">Odhlásiť</a>
                     </div>
                 `;
                 document.getElementById('changePasswordLink').addEventListener('click', (e) => {
@@ -960,6 +1476,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Chyba pri načítaní stavu používateľa:', error);
+        }
+    };
+
+    // === WebSocket SNMP Refresh Progress Handler ===
+    let isSnmpRefreshRunning = false;
+    
+    const updateSnmpRefreshButton = (status, current = 0, total = 0, message = '') => {
+        const btn = document.getElementById('refreshAllSnmpBtn');
+        const icon = btn.querySelector('i');
+        
+        switch (status) {
+            case 'started':
+            case 'processing':
+                isSnmpRefreshRunning = true;
+                icon.classList.add('fa-spin');
+                btn.disabled = true;
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${current}/${total}`;
+                break;
+                
+            case 'completed':
+            case 'stopped':
+            case 'error':
+                isSnmpRefreshRunning = false;
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync"></i> Refresh SNMP';
+                break;
         }
     };
 
@@ -986,7 +1529,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    socket.on('snmp_update', ({ id, data, status }) => updateDeviceCard(id, { last_snmp_data: JSON.stringify(data), status }));
+    socket.on('snmp_update', ({ id, data, status }) => {
+        // Zastavíme spinning efekt na SNMP tlačidle po update
+        const card = document.querySelector(`[data-id="${id}"]`);
+        if (card) {
+            const snmpBtn = card.querySelector('.snmp-btn');
+            if (snmpBtn) {
+                const icon = snmpBtn.querySelector('i');
+                if (icon) {
+                    icon.classList.remove('fa-spin');
+                }
+                snmpBtn.disabled = false;
+            }
+        }
+        updateDeviceCard(id, { last_snmp_data: JSON.stringify(data), status });
+    });
+    
+    socket.on('snmp_refresh_progress', (progressData) => {
+        console.log('SNMP refresh progress:', progressData);
+        updateSnmpRefreshButton(progressData.status, progressData.current, progressData.total, progressData.message);
+        
+        // Ak máme informácie o aktuálnom zariadení, zobrazíme spinning efekt
+        if (progressData.status === 'processing' && progressData.current_device) {
+            const card = document.querySelector(`[data-id="${progressData.current_device.id}"]`);
+            if (card) {
+                const snmpBtn = card.querySelector('.snmp-btn');
+                const snmpIcon = snmpBtn?.querySelector('i');
+                if (snmpIcon) {
+                    snmpIcon.classList.add('fa-spin');
+                }
+                if (snmpBtn) {
+                    snmpBtn.disabled = true;
+                }
+            }
+        }
+    });
     socket.on('backup_status', ({ ip, id, status, last_backup }) => {
         const card = document.querySelector(`[data-id="${id}"]`);
         if (card) {
@@ -1002,18 +1579,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const createDeviceCard = (device) => {
         const snmpData = device.last_snmp_data ? JSON.parse(device.last_snmp_data) : {};
-        const statusClass = device.status === 'online' ? 'status-online' : 'status-offline';
+        const deviceStatus = device.status || 'unknown';
+        const statusClass = deviceStatus === 'online' ? 'status-online' : 
+                           deviceStatus === 'offline' ? 'status-offline' : 'status-unknown';
         const card = document.createElement('div');
         card.className = 'card p-6 rounded-lg flex flex-col gap-4';
         card.dataset.id = device.id;
         card.dataset.ip = device.ip;
         card.innerHTML = `
-            <div>
-                <div class="flex justify-between items-center mb-2">
-                    <h3 class="text-xl font-bold text-white">${device.name}</h3>
-                    <span class="font-mono text-sm font-semibold ${statusClass}"><i class="fas fa-circle mr-2"></i>${device.status}</span>
+            <div class="h-20 flex flex-col justify-between">
+                <div class="grid grid-cols-[1fr_auto] gap-4 items-start">
+                    <h3 class="text-xl font-bold text-white leading-tight line-clamp-2">${device.name}</h3>
+                    <span class="font-mono text-sm font-semibold ${statusClass} whitespace-nowrap flex items-center flex-shrink-0"><i class="fas fa-circle mr-2"></i>${deviceStatus}</span>
                 </div>
-                <p class="font-mono text-gray-400">${device.ip}</p>
+                <p class="font-mono text-gray-400 mt-auto">${device.ip}</p>
             </div>
             <div class="grid grid-cols-2 gap-2 text-sm">
                 <p><strong>Verzia:</strong> <span class="font-mono text-gray-300">${snmpData.version || 'N/A'}</span></p>
@@ -1023,16 +1602,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><strong>Teplota:</strong> <span class="font-mono text-gray-300">${snmpData.temperature || 'N/A'} °C</span></p>
                 <p><strong>CPU jadrá:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_count || 'N/A'}</span></p>
                 <p><strong>SNMP interval:</strong> <span class="font-mono text-gray-300">${device.snmp_interval_minutes ? device.snmp_interval_minutes + 'min' : 'globálny'}</span></p>
-                <p><strong>Posl. záloha:</strong> <span class="font-mono text-gray-300 last-backup-val">${device.last_backup ? new Date(device.last_backup).toLocaleString('sk-SK') : 'Nikdy'}</span></p>
+                <div><strong>Posl. záloha:</strong><br><span class="font-mono text-gray-300 last-backup-val">${device.last_backup ? new Date(device.last_backup).toLocaleString('sk-SK') : 'Nikdy'}</span></div>
             </div>
             <div class="flex gap-2 mt-auto pt-4 border-t border-gray-700">
-                <button class="backup-btn btn flex-grow bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"><i class="fas fa-save"></i> Zálohovať</button>
-                <button class="snmp-btn btn flex-grow bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2"><i class="fas fa-sync"></i> SNMP</button>
-                <button class="edit-btn btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg text-sm"><i class="fas fa-pencil-alt"></i></button>
-                <button class="delete-btn btn bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg text-sm"><i class="fas fa-trash"></i></button>
+                <button class="backup-btn btn flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1 px-1.5 rounded-lg device-btn-text flex items-center justify-center gap-1.5"><i class="fas fa-save device-btn-icon"></i> Zálohovať</button>
+                <button class="snmp-btn btn flex-grow bg-sky-600 hover:bg-sky-700 text-white font-semibold py-1 px-1.5 rounded-lg device-btn-text flex items-center justify-center gap-1.5"><i class="fas fa-sync device-btn-icon"></i> SNMP</button>
+                <button class="edit-btn btn bg-amber-500 hover:bg-amber-600 text-white font-semibold py-1 px-1.5 rounded-lg text-xs"><i class="fas fa-pencil-alt text-xs"></i></button>
+                <button class="delete-btn btn bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-1.5 rounded-lg text-xs"><i class="fas fa-trash text-xs"></i></button>
             </div>`;
         card.querySelector('.backup-btn').addEventListener('click', (e) => { e.currentTarget.querySelector('i').classList.add('spinning'); api.post(`backup/${device.id}`); });
-        card.querySelector('.snmp-btn').addEventListener('click', () => api.get(`snmp/${device.id}`));
+        card.querySelector('.snmp-btn').addEventListener('click', (e) => { 
+            const btn = e.currentTarget;
+            const icon = btn.querySelector('i');
+            icon.classList.add('fa-spin');
+            btn.disabled = true;
+            api.get(`snmp/${device.id}`).catch(error => {
+                // Pri chybe zastavíme spinning manuálne
+                console.log(`SNMP chyba pre zariadenie ${device.id}:`, error);
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
+            });
+            // Socket handler automaticky zastaví spinning pri úspešnom update
+        });
         card.querySelector('.edit-btn').addEventListener('click', () => openDeviceModal(device));
         card.querySelector('.delete-btn').addEventListener('click', () => deleteDevice(device.id, device.ip));
         return card;
@@ -1042,63 +1633,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.querySelector(`[data-id="${id}"]`);
         if (!card) return;
         
-        // Pridáme subtle updating animáciu
-        card.style.transition = 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out';
-        card.style.opacity = '0.8';
-        card.style.transform = 'scale(0.98)';
-        
-        // Po krátkom oneskorení aktualizujeme údaje
-        setTimeout(() => {
-            if (data.last_snmp_data) {
-                const snmpData = JSON.parse(data.last_snmp_data);
-                const statusEl = card.querySelector('.font-mono.text-sm.font-semibold');
-                
-                // Plynulá zmena statusu
-                statusEl.style.transition = 'color 0.3s ease-in-out';
-                statusEl.innerHTML = `<i class="fas fa-circle mr-2"></i>${data.status}`;
-                statusEl.className = `font-mono text-sm font-semibold status-${data.status}`;
-                
-                // Aktualizujeme hodnoty s plynulou animáciou
-                const updateValueWithAnimation = (selector, newValue) => {
-                    const element = card.querySelector(selector);
-                    if (element && element.textContent !== newValue) {
-                        element.style.transition = 'opacity 0.2s ease-in-out';
-                        element.style.opacity = '0.5';
-                        setTimeout(() => {
-                            element.textContent = newValue;
-                            element.style.opacity = '1';
-                        }, 100);
-                    } else if (element) {
-                        element.textContent = newValue;
-                    }
-                };
-                
-                updateValueWithAnimation('p:nth-child(1) span', snmpData.version || 'N/A');
-                updateValueWithAnimation('p:nth-child(2) span', snmpData.board_name || 'N/A');
-                updateValueWithAnimation('p:nth-child(3) span', snmpData.uptime || 'N/A');
-                updateValueWithAnimation('p:nth-child(4) span', (snmpData.cpu_load || 'N/A') + '%');
-                updateValueWithAnimation('p:nth-child(5) span', (snmpData.temperature || 'N/A') + ' °C');
-                updateValueWithAnimation('p:nth-child(6) span', snmpData.cpu_count || 'N/A');
-            }
+        // Aktualizujeme údaje PRIAMO bez akýchkoľvek vizuálnych efektov
+        if (data.last_snmp_data) {
+            const snmpData = JSON.parse(data.last_snmp_data);
+            const statusEl = card.querySelector('.font-mono.text-sm.font-semibold.whitespace-nowrap');
             
-            if (data.last_backup) {
-                const backupEl = card.querySelector('.last-backup-val');
-                if (backupEl) {
-                    backupEl.style.transition = 'opacity 0.2s ease-in-out';
-                    backupEl.style.opacity = '0.5';
-                    setTimeout(() => {
-                        backupEl.textContent = new Date(data.last_backup).toLocaleString('sk-SK');
-                        backupEl.style.opacity = '1';
-                    }, 100);
+            // Priama aktualizácia statusu bez animácií
+            statusEl.innerHTML = `<i class="fas fa-circle mr-2"></i>${data.status}`;
+            statusEl.className = `font-mono text-sm font-semibold status-${data.status} whitespace-nowrap flex items-center flex-shrink-0`;
+            
+            // Priama aktualizácia hodnôt bez animácií
+            const updateValueDirect = (selector, newValue) => {
+                const element = card.querySelector(selector);
+                if (element) {
+                    element.textContent = newValue;
                 }
-            }
+            };
             
-            // Vrátime kartu do normálneho stavu
-            setTimeout(() => {
-                card.style.opacity = '1';
-                card.style.transform = 'scale(1)';
-            }, 150);
-        }, 100);
+            updateValueDirect('p:nth-child(1) span', snmpData.version || 'N/A');
+            updateValueDirect('p:nth-child(2) span', snmpData.board_name || 'N/A');
+            updateValueDirect('p:nth-child(3) span', snmpData.uptime || 'N/A');
+            updateValueDirect('p:nth-child(4) span', (snmpData.cpu_load || 'N/A') + '%');
+            updateValueDirect('p:nth-child(5) span', (snmpData.temperature || 'N/A') + ' °C');
+            updateValueDirect('p:nth-child(6) span', snmpData.cpu_count || 'N/A');
+        }
+        
+        if (data.last_backup) {
+            const backupEl = card.querySelector('.last-backup-val');
+            if (backupEl) {
+                backupEl.textContent = new Date(data.last_backup).toLocaleString('sk-SK');
+            }
+        }
     };
 
     // Filtrovanie logov
@@ -1108,28 +1673,40 @@ document.addEventListener('DOMContentLoaded', () => {
         level: 'all'
     };
     
+    // Flag pre potlačenie automatického skrolovania počas refresh operácie
+    let suppressAutoScroll = false;
+    
+    // Globálne nastavenia načítané zo servera
+    let globalSettings = {
+        log_retention_days: 30, // default hodnota
+        ping_retention_days: 30, // default hodnota  
+        snmp_retention_days: 30 // default hodnota
+    };
+    
     // Funkcia na kategorizáciu logov podľa typu
     const categorizeLogMessage = (message) => {
         const msgLower = message.toLowerCase();
-        // Najprv kontrolujeme notifikácie (má prioritu pred backup)
+        // Pushover notifikácie majú prioritu a zostávajú v kategórii notification
         if (msgLower.includes('notifikácia') || msgLower.includes('notification') || msgLower.includes('pushover')) return 'notification';
-        // Všetky zálohovacie správy vrátane "spúšťam pokročilú zálohu"
+        // Všetky zálohovacie správy vrátane "spúšťam pokročilú zálohu" (okrem Pushover)
         if (msgLower.includes('záloha') || msgLower.includes('backup') || msgLower.includes('spúšťam pokročilú zálohu')) return 'backup';
+        // Online/Offline správy (okrem Pushover notifikácií)
         if (msgLower.includes('online') || msgLower.includes('offline') || msgLower.includes('pripojené') || msgLower.includes('nedostupné')) return 'status';
         return 'system';
     };
 
-    const addLogToContainer = (level, message, device_ip = '', timestamp = new Date().toISOString(), isSticky = false) => {
+    const addLogToContainer = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
         // Upravíme level pre zelené správy
-        if (message.includes('Automatické zálohovanie je aktívne:')) {
-            level = 'success'; // Zelená farba
-            isSticky = true; // Automaticky označíme ako sticky
+        if (message.includes('Automatické zálohovanie je aktívne:') || 
+            message.includes('Automatické zálohovanie je v nastaveniach vypnuté.') ||
+            message.includes('Nastavenia boli uložené.')) {
+            level = 'info'; // Zmena z 'success' na 'info'
         }
-        if (message.includes('Nastavenia boli uložené.')) {
-            level = 'success'; // Zelená farba
-            isSticky = true; // Automaticky označíme ako sticky
+        
+        // Offline správy budú warning
+        if (message.toLowerCase().includes('offline') || message.toLowerCase().includes('nedostupné')) {
+            level = 'warning';
         }
-        // Startup správu už nezobrazujeme
         
         const logType = categorizeLogMessage(message);
         const createLogEntry = () => {
@@ -1140,83 +1717,35 @@ document.addEventListener('DOMContentLoaded', () => {
             logEntry.setAttribute('data-type', logType);
             logEntry.setAttribute('data-timestamp', timestamp);
             
-            // Pre sticky správy pridáme špeciálny atribút
-            if (isSticky) {
-                if (message.includes('Automatické zálohovanie je aktívne:')) {
-                    logEntry.setAttribute('data-sticky', 'backup_schedule');
-                } else if (message.includes('Nastavenia boli uložené.')) {
-                    logEntry.setAttribute('data-sticky', 'settings_saved');
-                }
-            }
-            
-            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleTimeString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${message}</p>`;
+            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${message}</p>`;
             return logEntry;
         };
         
-        // Desktop logs - pridávame na začiatok rovnako ako v addLog
+        // Desktop logs - pridávame na začiatok
         const desktopLogEntry = createLogEntry();
         logsContainer.prepend(desktopLogEntry);
         
-        // Mobile logs - pridávame na začiatok rovnako ako v addLog
+        // Mobile logs - pridávame na začiatok
         const mobileLogsContainer = document.getElementById('logsContainerMobile');
         if (mobileLogsContainer) {
             const mobileLogEntry = createLogEntry();
             mobileLogsContainer.prepend(mobileLogEntry);
             
-            // Udržujeme maximálne 200 logov v mobile UI, ale chránime sticky správy
-            while (mobileLogsContainer.children.length > 200) {
-                const lastChild = mobileLogsContainer.lastChild;
-                if (!lastChild.getAttribute('data-sticky')) {
-                    lastChild.remove();
-                } else {
-                    break;
-                }
+            // Udržujeme maximálne počet logov podľa nastavení (default 1000 ak nie je nastavené)
+            const maxLogs = globalSettings.log_retention_days ? Math.min(globalSettings.log_retention_days * 50, 5000) : 1000;
+            while (mobileLogsContainer.children.length > maxLogs) {
+                mobileLogsContainer.lastChild.remove();
             }
         }
         
-        // Udržujeme maximálne 200 logov v desktop UI, ale chránime sticky správy
-        while (logsContainer.children.length > 200) {
-            const lastChild = logsContainer.lastChild;
-            if (!lastChild.getAttribute('data-sticky')) {
-                lastChild.remove();
-            } else {
-                break;
-            }
+        // Udržujeme maximálne počet logov podľa nastavení (default 1000 ak nie je nastavené)
+        const maxLogs = globalSettings.log_retention_days ? Math.min(globalSettings.log_retention_days * 50, 5000) : 1000;
+        while (logsContainer.children.length > maxLogs) {
+            logsContainer.lastChild.remove();
         }
     };
 
-    // Globálna pamäť pre dôležité správy - načítaj z localStorage ak existuje
-    let stickyMessages = new Map();
-    
-    // Funkcia na uloženie sticky správ do localStorage
-    const saveStickyMessages = () => {
-        const stickyArray = Array.from(stickyMessages.entries());
-        localStorage.setItem('mikrotik_sticky_messages', JSON.stringify(stickyArray));
-    };
-    
-    // Funkcia na načítanie sticky správ z localStorage
-    const loadStickyMessages = () => {
-        try {
-            const saved = localStorage.getItem('mikrotik_sticky_messages');
-            if (saved) {
-                const stickyArray = JSON.parse(saved);
-                stickyMessages = new Map(stickyArray);
-                console.log(`Načítané sticky správy z localStorage: ${stickyMessages.size}`);
-            }
-        } catch (error) {
-            console.warn('Chyba pri načítaní sticky správ z localStorage:', error);
-            stickyMessages = new Map();
-        }
-    };
-    
-    // Načítaj sticky správy pri štarte
-    loadStickyMessages();
-    
-    // Odstráň startup správu ak existuje
-    if (stickyMessages.has('startup_message')) {
-        stickyMessages.delete('startup_message');
-        saveStickyMessages();
-    }
+    // Globálna pamäť pre dôležité správy - ODSTRÁNENÁ (zjednodušujeme logging)
     
     const addLog = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
         // Úplne ignorujeme startup správy
@@ -1225,116 +1754,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Upravíme level pre zelené správy
-        if (message.includes('Automatické zálohovanie je aktívne:')) {
-            level = 'success'; // Zelená farba
-            // Uložíme si túto dôležitú správu
-            stickyMessages.set('backup_schedule', { level, message, device_ip, timestamp });
-            saveStickyMessages(); // Uložíme do localStorage
+        if (message.includes('Automatické zálohovanie je aktívne:') || 
+            message.includes('Automatické zálohovanie je v nastaveniach vypnuté.') ||
+            message.includes('Nastavenia boli uložené.')) {
+            level = 'info'; // Zmena z 'success' na 'info'
         }
         
-        // Uložíme si aj "Nastavenia boli uložené" ako sticky správu
-        if (message.includes('Nastavenia boli uložené.')) {
-            level = 'success'; // Zelená farba
-            stickyMessages.set('settings_saved', { level, message, device_ip, timestamp });
-            saveStickyMessages(); // Uložíme do localStorage
-        }
-        
-        // Filtruj len menej dôležité duplicitné správy
-        const duplicateMessages = [
-            { pattern: 'Nastavenia boli aktualizované.', timeWindow: 30 } // 30 minút
-        ];
-        
-        // Pre backup schedule správy - len aktualizuj existujúcu, ale neodstraňuj
-        if (message.includes('Automatické zálohovanie je aktívne:')) {
-            const existingEntries = logsContainer.querySelectorAll('.log-entry');
-            for (let entry of existingEntries) {
-                const entryMessage = entry.textContent || '';
-                if (entryMessage.includes('Automatické zálohovanie je aktívne:')) {
-                    // Aktualizuj čas v existujúcej správe
-                    const timeElement = entry.querySelector('strong');
-                    if (timeElement) {
-                        timeElement.textContent = new Date(timestamp).toLocaleTimeString('sk-SK');
-                        entry.setAttribute('data-timestamp', timestamp);
-                    }
-                    // Aktualizuj aj v mobile kontajneri
-                    const mobileContainer = document.getElementById('logsContainerMobile');
-                    if (mobileContainer) {
-                        const mobileEntries = mobileContainer.querySelectorAll('.log-entry');
-                        mobileEntries.forEach(mobileEntry => {
-                            const mobileMessage = mobileEntry.textContent || '';
-                            if (mobileMessage.includes('Automatické zálohovanie je aktívne:')) {
-                                const mobileTimeElement = mobileEntry.querySelector('strong');
-                                if (mobileTimeElement) {
-                                    mobileTimeElement.textContent = new Date(timestamp).toLocaleTimeString('sk-SK');
-                                    mobileEntry.setAttribute('data-timestamp', timestamp);
-                                }
-                            }
-                        });
-                    }
-                    return; // Ukončíme, správa je už aktualizovaná
-                }
-            }
-        }
-        
-        // Pre "Nastavenia boli uložené" - tiež len aktualizuj existujúcu
-        if (message.includes('Nastavenia boli uložené.')) {
-            const existingEntries = logsContainer.querySelectorAll('.log-entry');
-            for (let entry of existingEntries) {
-                const entryMessage = entry.textContent || '';
-                if (entryMessage.includes('Nastavenia boli uložené.')) {
-                    // Aktualizuj čas v existujúcej správe
-                    const timeElement = entry.querySelector('strong');
-                    if (timeElement) {
-                        timeElement.textContent = new Date(timestamp).toLocaleTimeString('sk-SK');
-                        entry.setAttribute('data-timestamp', timestamp);
-                    }
-                    // Aktualizuj aj v mobile kontajneri
-                    const mobileContainer = document.getElementById('logsContainerMobile');
-                    if (mobileContainer) {
-                        const mobileEntries = mobileContainer.querySelectorAll('.log-entry');
-                        mobileEntries.forEach(mobileEntry => {
-                            const mobileMessage = mobileEntry.textContent || '';
-                            if (mobileMessage.includes('Nastavenia boli uložené.')) {
-                                const mobileTimeElement = mobileEntry.querySelector('strong');
-                                if (mobileTimeElement) {
-                                    mobileTimeElement.textContent = new Date(timestamp).toLocaleTimeString('sk-SK');
-                                    mobileEntry.setAttribute('data-timestamp', timestamp);
-                                }
-                            }
-                        });
-                    }
-                    return; // Ukončíme, správa je už aktualizovaná
-                }
-            }
-        }
-        
-        // Standardné duplikátové filtrovanie pre ostatné správy
-        for (let duplicateInfo of duplicateMessages) {
-            if (message.includes(duplicateInfo.pattern)) {
-                const existingEntries = logsContainer.querySelectorAll('.log-entry');
-                const timeWindowAgo = Date.now() - (duplicateInfo.timeWindow * 60 * 1000);
-                
-                for (let entry of existingEntries) {
-                    const entryTime = new Date(entry.getAttribute('data-timestamp')).getTime();
-                    const entryMessage = entry.textContent || '';
-                    
-                    if (entryTime > timeWindowAgo && entryMessage.includes(duplicateInfo.pattern)) {
-                        entry.remove();
-                        const mobileContainer = document.getElementById('logsContainerMobile');
-                        if (mobileContainer) {
-                            const mobileEntries = mobileContainer.querySelectorAll('.log-entry');
-                            mobileEntries.forEach(mobileEntry => {
-                                const mobileMessage = mobileEntry.textContent || '';
-                                if (mobileMessage.includes(duplicateInfo.pattern)) {
-                                    mobileEntry.remove();
-                                }
-                            });
-                        }
-                        break;
-                    }
-                }
-                break;
-            }
+        // Offline správy budú warning
+        if (message.toLowerCase().includes('offline') || message.toLowerCase().includes('nedostupné')) {
+            level = 'warning';
         }
         
         const logType = categorizeLogMessage(message);
@@ -1346,16 +1774,7 @@ document.addEventListener('DOMContentLoaded', () => {
             logEntry.setAttribute('data-type', logType);
             logEntry.setAttribute('data-timestamp', timestamp);
             
-            // Pre dôležité správy pridáme špeciálny atribút
-            if (message.includes('Automatické zálohovanie je aktívne:')) {
-                logEntry.setAttribute('data-sticky', 'backup_schedule');
-            }
-            if (message.includes('Nastavenia boli uložené.')) {
-                logEntry.setAttribute('data-sticky', 'settings_saved');
-            }
-            // Startup správu už nezobrazujeme
-            
-            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleTimeString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${message}</p>`;
+            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${message}</p>`;
             return logEntry;
         };
         
@@ -1369,35 +1788,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const mobileLogEntry = createLogEntry();
             mobileLogsContainer.prepend(mobileLogEntry);
             
-            // Udržujeme maximálne 200 logov v mobile UI, ale chránime sticky správy
-            while (mobileLogsContainer.children.length > 200) {
-                const lastChild = mobileLogsContainer.lastChild;
-                if (!lastChild.getAttribute('data-sticky')) {
-                    lastChild.remove();
-                } else {
-                    break; // Ak je posledný element sticky, zastavíme mazanie
-                }
+            // Udržujeme maximálne počet logov podľa nastavení (default 1000 ak nie je nastavené)
+            const maxLogs = globalSettings.log_retention_days ? Math.min(globalSettings.log_retention_days * 50, 5000) : 1000;
+            while (mobileLogsContainer.children.length > maxLogs) {
+                mobileLogsContainer.lastChild.remove();
             }
         }
         
-        // Udržujeme maximálne 200 logov v desktop UI, ale chránime sticky správy
-        while (logsContainer.children.length > 200) {
-            const lastChild = logsContainer.lastChild;
-            if (!lastChild.getAttribute('data-sticky')) {
-                lastChild.remove();
-            } else {
-                break; // Ak je posledný element sticky, zastavíme mazanie
-            }
+        // Udržujeme maximálne počet logov podľa nastavení (default 1000 ak nie je nastavené)
+        const maxLogs = globalSettings.log_retention_days ? Math.min(globalSettings.log_retention_days * 50, 5000) : 1000;
+        while (logsContainer.children.length > maxLogs) {
+            logsContainer.lastChild.remove();
         }
         
         // Aplikujeme filtre na nové logy
         applyLogFilters();
         
-        // Automatické skrolovanie k najnovšiemu logu (len ak je log viditeľný)
-        if (!desktopLogEntry.classList.contains('filtered')) {
+        // Automatické skrolovanie k najnovšiemu logu (len ak je log viditeľný a nie je potlačené)
+        if (!desktopLogEntry.classList.contains('filtered') && !suppressAutoScroll) {
             desktopLogEntry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     };
+    
+
 
     const openDeviceModal = (device = null) => {
         deviceForm.reset();
@@ -1405,7 +1818,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('deviceName').value = device ? device.name : '';
         document.getElementById('deviceIp').value = device ? device.ip : '';
         document.getElementById('deviceUsername').value = device ? device.username : ''; 
-        document.getElementById('deviceSnmpCommunity').value = device ? device.snmp_community : 'public';
+        document.getElementById('deviceSnmpCommunity').value = device ? (device.snmp_community || '') : '';
         document.getElementById('deviceSnmpInterval').value = device ? (device.snmp_interval_minutes || 0) : 0;
         document.getElementById('deviceLowMemory').checked = device ? device.low_memory : false;
         // Heslo sa nikdy neposiela späť na frontend, takže ho nevyplňujeme
@@ -1418,6 +1831,16 @@ document.addEventListener('DOMContentLoaded', () => {
             passwordField.placeholder = '●●●●●●●●';
         } else {
             passwordField.placeholder = 'Zadajte heslo pre SSH pripojenie';
+        }
+        
+        // Dynamický placeholder text pre SNMP Community
+        const snmpCommunityField = document.getElementById('deviceSnmpCommunity');
+        if (device && device.snmp_community) {
+            snmpCommunityField.value = device.snmp_community;
+            snmpCommunityField.placeholder = '';
+        } else {
+            snmpCommunityField.value = '';
+            snmpCommunityField.placeholder = 'public';
         }
         
         deviceModal.classList.remove('hidden');
@@ -1445,16 +1868,23 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const loadDevices = async () => {
-        const devices = await api.get('devices');
-        if (!devices) return;
-        devicesGrid.innerHTML = '';
-        devices.forEach(device => devicesGrid.appendChild(createDeviceCard(device)));
-        // Aktualizuj device filtre po načítaní zariadení
-        await updateDeviceFilters();
+        try {
+            const devices = await api.get('devices');
+            if (!devices) return;
+            devicesGrid.innerHTML = '';
+            devices.forEach(device => devicesGrid.appendChild(createDeviceCard(device)));
+            // Aktualizuj device filtre po načítaní zariadení
+            await updateDeviceFilters();
+        } catch (error) {
+            console.error('Chyba pri načítaní zariadení:', error);
+        }
     };
 
     const loadLogs = async () => {
         try {
+            // Potlačíme automatické skrolovanie počas načítavania logov
+            suppressAutoScroll = true;
+            
             // Pridáme timeout pre API request
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 sekúnd timeout
@@ -1471,178 +1901,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            // Vyčistíme existujúce logy len ak máme nové dáta
+            // Vyčistíme existujúce logy
             logsContainer.innerHTML = '';
             const mobileLogsContainer = document.getElementById('logsContainerMobile');
             if (mobileLogsContainer) {
                 mobileLogsContainer.innerHTML = '';
             }
             
-            // Prefiltrujeme duplicitné logy pred pridaním
-            const filteredLogs = [];
-            const seenMessages = new Map();
-            
-            // Ideme od najnovších k najstarším
+            // Jednoducho pridáme všetky logy chronologicky (najnovšie prvé)
             const reversedLogs = logs.reverse();
             
-            for (let log of reversedLogs) {
-                let shouldAdd = true;
-                
-                // Špeciálne spracovanie pre sticky správy - aktualizuj v Map-ke ale nepridal do filteredLogs
-                if (log.message.includes('Automatické zálohovanie je aktívne:')) {
-                    // Aktualizuj sticky správu v Map-ke
-                    stickyMessages.set('backup_schedule', {
-                        level: 'success',
-                        message: log.message,
-                        device_ip: log.device_ip,
-                        timestamp: log.timestamp
-                    });
-                    saveStickyMessages(); // Uložíme do localStorage
-                    shouldAdd = false; // Nepridal do bežných logov
-                } else if (log.message.includes('Nastavenia boli uložené.')) {
-                    // Aktualizuj sticky správu v Map-ke
-                    stickyMessages.set('settings_saved', {
-                        level: 'success',
-                        message: log.message,
-                        device_ip: log.device_ip,
-                        timestamp: log.timestamp
-                    });
-                    saveStickyMessages(); // Uložíme do localStorage
-                    shouldAdd = false; // Nepridal do bežných logov
-                } else if (log.message.includes('MikroTik Backup Manager') && log.message.includes('úspešne načítaný!')) {
-                    // Startup správu už vôbec nezobrazujeme ani neukladáme
-                    shouldAdd = false; // Nepridal do bežných logov
-                } else {
-                    // Kontrolujeme duplicitné správy pre ostatné typy (nie sticky správy)
-                    const duplicatePatterns = [
-                        'Nastavenia boli aktualizované.'
-                    ];
-                    
-                    for (let pattern of duplicatePatterns) {
-                        if (log.message.includes(pattern)) {
-                            const logTime = new Date(log.timestamp).getTime();
-                            
-                            // Skontrolujeme či už máme podobnú správu
-                            if (seenMessages.has(pattern)) {
-                                const existingTime = seenMessages.get(pattern);
-                                const timeDiff = Math.abs(logTime - existingTime) / (1000 * 60); // v minútach
-                                
-                                // Ak je rozdiel menší ako 30 minút, preskočíme
-                                if (timeDiff < 30) {
-                                    shouldAdd = false;
-                                    break;
-                                }
-                            }
-                            
-                            // Zapamätáme si čas tejto správy
-                            seenMessages.set(pattern, logTime);
-                            break;
-                        }
-                    }
-                }
-                
-                if (shouldAdd) {
-                    filteredLogs.push(log);
-                }
-            }
-            
-            // Najprv pridáme zvyšné filtrované logy (v obrátenom poradí)
-            const batchSize = 50;
-            for (let i = 0; i < filteredLogs.length; i += batchSize) {
-                const batch = filteredLogs.slice(i, i + batchSize);
-                batch.forEach(log => {
-                    // Pridáme všetky filtrované logy (sticky správy už nie sú vo filteredLogs)
+            reversedLogs.forEach(log => {
+                // Ignorujeme len startup správy
+                if (!(log.message.includes('MikroTik Backup Manager') && log.message.includes('úspešne načítaný!'))) {
                     addLogToContainer(log.level, log.message, log.device_ip, log.timestamp);
-                });
-                
-                // Malé oneskorenie medzi batch-mi aby neblokoval UI
-                if (i + batchSize < filteredLogs.length) {
-                    await new Promise(resolve => setTimeout(resolve, 10));
                 }
-            }
-            
-            // NAMIESTO pridávania sticky správ na koniec, vložíme ich do správneho chronologického poradia
-            // Získame všetky existujúce logy s ich časmi
-            const allLogEntries = Array.from(logsContainer.children);
-            const stickyMessagesToInsert = Array.from(stickyMessages.entries());
-            
-            // Pre každú sticky správu nájdeme správne miesto podľa času
-            for (let [key, stickyMsg] of stickyMessagesToInsert) {
-                const stickyTime = new Date(stickyMsg.timestamp).getTime();
-                let insertIndex = 0;
-                
-                // Nájdeme pozíciu kde vložiť sticky log (hľadáme prvý log čo je starší)
-                for (let i = 0; i < allLogEntries.length; i++) {
-                    const entryTime = new Date(allLogEntries[i].getAttribute('data-timestamp')).getTime();
-                    if (stickyTime > entryTime) {
-                        insertIndex = i;
-                        break;
-                    }
-                    insertIndex = i + 1;
-                }
-                
-                // Vytvoríme sticky log element
-                const stickyElement = document.createElement('div');
-                stickyElement.className = `log-entry p-2 border-l-4 log-success bg-gray-800 text-sm`;
-                stickyElement.setAttribute('data-level', stickyMsg.level);
-                stickyElement.setAttribute('data-device', stickyMsg.device_ip || '');
-                stickyElement.setAttribute('data-type', 'system');
-                stickyElement.setAttribute('data-timestamp', stickyMsg.timestamp);
-                stickyElement.setAttribute('data-sticky', key);
-                stickyElement.innerHTML = `<p><strong class="text-gray-400">${new Date(stickyMsg.timestamp).toLocaleTimeString('sk-SK')}</strong> ${stickyMsg.device_ip ? `<span class="font-mono text-sky-400">${stickyMsg.device_ip}</span>` : ''}: ${stickyMsg.message}</p>`;
-                
-                // Vložíme na správne miesto
-                if (insertIndex >= allLogEntries.length) {
-                    logsContainer.appendChild(stickyElement);
-                } else {
-                    logsContainer.insertBefore(stickyElement, allLogEntries[insertIndex]);
-                }
-                
-                // Aktualizujeme pole pre ďalšie iterácie
-                allLogEntries.splice(insertIndex, 0, stickyElement);
-            }
-            
-            // Spravíme to isté pre mobile kontajner
-            const mobileLogs = document.getElementById('logsContainerMobile');
-            if (mobileLogs) {
-                const allMobileLogEntries = Array.from(mobileLogs.children);
-                
-                for (let [key, stickyMsg] of stickyMessagesToInsert) {
-                    const stickyTime = new Date(stickyMsg.timestamp).getTime();
-                    let insertIndex = 0;
-                    
-                    for (let i = 0; i < allMobileLogEntries.length; i++) {
-                        const entryTime = new Date(allMobileLogEntries[i].getAttribute('data-timestamp')).getTime();
-                        if (stickyTime > entryTime) {
-                            insertIndex = i;
-                            break;
-                        }
-                        insertIndex = i + 1;
-                    }
-                    
-                    const stickyMobileElement = document.createElement('div');
-                    stickyMobileElement.className = `log-entry p-2 border-l-4 log-success bg-gray-800 text-sm`;
-                    stickyMobileElement.setAttribute('data-level', stickyMsg.level);
-                    stickyMobileElement.setAttribute('data-device', stickyMsg.device_ip || '');
-                    stickyMobileElement.setAttribute('data-type', 'system');
-                    stickyMobileElement.setAttribute('data-timestamp', stickyMsg.timestamp);
-                    stickyMobileElement.setAttribute('data-sticky', key);
-                    stickyMobileElement.innerHTML = `<p><strong class="text-gray-400">${new Date(stickyMsg.timestamp).toLocaleTimeString('sk-SK')}</strong> ${stickyMsg.device_ip ? `<span class="font-mono text-sky-400">${stickyMsg.device_ip}</span>` : ''}: ${stickyMsg.message}</p>`;
-                    
-                    if (insertIndex >= allMobileLogEntries.length) {
-                        mobileLogs.appendChild(stickyMobileElement);
-                    } else {
-                        mobileLogs.insertBefore(stickyMobileElement, allMobileLogEntries[insertIndex]);
-                    }
-                    
-                    allMobileLogEntries.splice(insertIndex, 0, stickyMobileElement);
-                }
-            }
+            });
             
             // Po načítaní logov aplikujeme aktuálne filtre
             applyLogFilters();
             
-            console.log(`Načítaných ${filteredLogs.length} z ${logs.length} logov (${logs.length - filteredLogs.length} duplicitných odfiltrovaných), sticky: ${stickyMessages.size}`);
+            console.log(`Načítaných ${logs.length} logov`);
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.warn('Načítanie logov bolo prerušené kvôli timeout');
@@ -1651,6 +1930,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Chyba pri načítaní logov:', error);
                 addLogToContainer('error', 'Chyba pri načítaní logov zo servera', '', new Date().toISOString());
             }
+        } finally {
+            // Obnovíme automatické skrolovanie po dokončení načítavania (vrátane error stavov)
+            suppressAutoScroll = false;
         }
     };
 
@@ -1735,7 +2017,16 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Filter by type
             if (currentFilters.type && typeFilter !== currentFilters.type) {
-                visible = false;
+                const msgLower = messageText.toLowerCase();
+                
+                // Špeciálne pravidlo: Pushover správy o online/offline stave sú viditeľné aj v "status" filtri
+                if (currentFilters.type === 'status' && typeFilter === 'notification') {
+                    if (!(msgLower.includes('pushover') && (msgLower.includes('online') || msgLower.includes('offline')))) {
+                        visible = false;
+                    }
+                } else {
+                    visible = false;
+                }
             }
             
             // Filter by level
@@ -1796,10 +2087,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     document.getElementById('addDeviceBtn').addEventListener('click', () => openDeviceModal());
-    document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
+    document.getElementById('settingsBtn').addEventListener('click', () => window.location.href = '/settings.html');
     document.getElementById('cancelDeviceBtn').addEventListener('click', closeModal);
     document.getElementById('cancelSettingsBtn').addEventListener('click', closeModal);
-    document.getElementById('closeSettingsBtn').addEventListener('click', closeModal);
     document.getElementById('cancelPasswordChangeBtn').addEventListener('click', closeModal);
     document.getElementById('closeSnmpStatusBtn').addEventListener('click', closeModal);
     document.getElementById('refreshSnmpStatusBtn').addEventListener('click', async () => {
@@ -1930,70 +2220,36 @@ document.addEventListener('DOMContentLoaded', () => {
             stopBtn.disabled = false;
         }
     });
-    document.getElementById('refreshAllSnmpBtn').addEventListener('click', () => {
+    document.getElementById('refreshAllSnmpBtn').addEventListener('click', async () => {
+        // Skontrolujeme či už prebieha refresh
+        if (isSnmpRefreshRunning) {
+            console.log('SNMP refresh už prebieha, ignorujem klik');
+            return;
+        }
+        
         const btn = document.getElementById('refreshAllSnmpBtn');
         const icon = btn.querySelector('i');
-        const originalText = btn.innerHTML;
         
-        // Animácia tlačidla
-        icon.classList.add('fa-spin');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aktualizujem...';
-        
-        // Postupný refresh všetkých SNMP namiesto súčasného
-        const cards = document.querySelectorAll('[data-id]');
-        let completedRequests = 0;
-        
-        cards.forEach((card, index) => {
-            // Pridáme visual feedback pre každú kartu
-            setTimeout(() => {
-                // Subtle loading indikátor na kartu
-                card.style.opacity = '0.7';
-                card.style.transition = 'opacity 0.3s ease-in-out';
-                
-                api.get(`snmp/${card.dataset.id}`).then(() => {
-                    // Po dokončení requesto vrátime kartu do normálneho stavu
-                    setTimeout(() => {
-                        card.style.opacity = '1';
-                    }, 200);
-                    
-                    completedRequests++;
-                    
-                    // Ak sú všetky requesty dokončené, vrátime tlačidlo do normálneho stavu
-                    if (completedRequests === cards.length) {
-                        setTimeout(() => {
-                            icon.classList.remove('fa-spin');
-                            btn.disabled = false;
-                            btn.innerHTML = originalText;
-                        }, 500); // Malé oneskorenie pre lepší UX
-                    }
-                }).catch(() => {
-                    // Aj pri chybe vrátime kartu do normálneho stavu
-                    card.style.opacity = '1';
-                    completedRequests++;
-                    
-                    if (completedRequests === cards.length) {
-                        setTimeout(() => {
-                            icon.classList.remove('fa-spin');
-                            btn.disabled = false;
-                            btn.innerHTML = originalText;
-                        }, 500);
-                    }
-                });
-            }, index * 750); // Zvýšené na 750ms medzi každým requestom
-        });
-        
-        // Fallback timeout pre prípad, že niektoré requesty nezodpovedajú
-        setTimeout(() => {
+        try {
+            // Spustíme backend API pre hromadný refresh
+            const response = await api.post('snmp/refresh-all');
+            
+            if (response.status === 'success') {
+                // Backend API spustilo úlohu, progress bude riadený cez WebSocket
+                console.log('Hromadný SNMP refresh spustený:', response.message);
+            } else {
+                // Chyba zo servera
+                console.error('Chyba pri spustení SNMP refresh:', response.message);
+                addLog('error', response.message || 'Chyba pri spustení hromadného SNMP refresh');
+            }
+        } catch (error) {
+            console.error('Chyba pri API volaní pre SNMP refresh:', error);
+            addLog('error', 'Chyba komunikácie so serverom pri SNMP refresh');
+            
+            // Pri chybe vrátime tlačidlo do normálu
             icon.classList.remove('fa-spin');
             btn.disabled = false;
-            btn.innerHTML = originalText;
-            
-            // Vrátime všetky karty do normálneho stavu
-            cards.forEach(card => {
-                card.style.opacity = '1';
-            });
-        }, cards.length * 750 + 5000); // Počkáme na všetky requesty + 5 sekúnd buffer
+        }
     });
     document.getElementById('snmpStatusBtn').addEventListener('click', async () => {
         // Otvoríme modál s loading stavom
@@ -2061,6 +2317,10 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
     });
+    document.getElementById('monitoringBtn').addEventListener('click', () => {
+        // Otvoríme monitoring stránku v aktuálnej záložke
+        window.location.href = '/monitoring.html';
+    });
     document.getElementById('backup_schedule_type').addEventListener('change', toggleWeeklySettings);
     document.getElementById('testPushoverBtn').addEventListener('click', () => api.post('notifications/test'));
     
@@ -2068,81 +2328,19 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('refreshLogsBtn').addEventListener('click', async () => {
         const btn = document.getElementById('refreshLogsBtn');
         const icon = btn.querySelector('i');
-        const logsContainer = document.getElementById('logsContainer');
-        const mobileLogsContainer = document.getElementById('logsContainerMobile');
-        const originalText = btn.innerHTML;
         
         // Animácia refresh tlačidla
         icon.classList.add('fa-spin');
         btn.disabled = true;
         
-        // Pridáme velmi diskrétny loading overlay bez zmeny obsahu
-        const loadingOverlay = document.createElement('div');
-        loadingOverlay.id = 'logsLoadingOverlay';
-        loadingOverlay.className = 'absolute top-2 right-2 z-10 opacity-0';
-        loadingOverlay.style.transition = 'opacity 0.2s ease-in-out';
-        loadingOverlay.innerHTML = `
-            <div class="bg-gray-800/80 backdrop-blur-sm p-1 rounded border border-gray-600/40">
-                <i class="fas fa-spinner fa-spin text-xs text-sky-500"></i>
-            </div>
-        `;
-        
-        // Pre mobile logy - rovnako diskrétny
-        const mobileLoadingOverlay = document.createElement('div');
-        mobileLoadingOverlay.id = 'mobileLogsLoadingOverlay';
-        mobileLoadingOverlay.className = 'absolute top-2 right-2 z-10 opacity-0';
-        mobileLoadingOverlay.style.transition = 'opacity 0.2s ease-in-out';
-        mobileLoadingOverlay.innerHTML = `
-            <div class="bg-gray-800/80 backdrop-blur-sm p-1 rounded border border-gray-600/40">
-                <i class="fas fa-spinner fa-spin text-xs text-sky-500"></i>
-            </div>
-        `;
-        
-        // Nastavíme relatívnu pozíciu pre kontajnery ak ju nemajú
-        const logsCardParent = logsContainer.closest('.card');
-        const mobileLogsCardParent = mobileLogsContainer ? mobileLogsContainer.closest('.card') : null;
-        
-        if (logsCardParent) {
-            logsCardParent.style.position = 'relative';
-            logsCardParent.appendChild(loadingOverlay);
-            // Postupne zobrazíme overlay v rohu
-            setTimeout(() => loadingOverlay.style.opacity = '1', 50);
-        }
-        
-        if (mobileLogsCardParent) {
-            mobileLogsCardParent.style.position = 'relative';
-            mobileLogsCardParent.appendChild(mobileLoadingOverlay);
-            // Postupne zobrazíme overlay v rohu
-            setTimeout(() => mobileLoadingOverlay.style.opacity = '1', 50);
-        }
-        
         try {
-            // Zavoláme pôvodnú loadLogs funkciu - NEMENENÉ!
+            // Zavoláme pôvodnú loadLogs funkciu
             await loadLogs();
             
         } catch (error) {
-            // Pôvodná funkcionalita pre chyby - NEMENENÉ!
+            // Pôvodná funkcionalita pre chyby
             addLog('error', 'Chyba pri obnovovaní logov');
         } finally {
-            // Jemne odstránime loading overlay
-            if (loadingOverlay && loadingOverlay.parentNode) {
-                loadingOverlay.style.opacity = '0';
-                setTimeout(() => {
-                    if (loadingOverlay.parentNode) {
-                        loadingOverlay.remove();
-                    }
-                }, 150);
-            }
-            
-            if (mobileLoadingOverlay && mobileLoadingOverlay.parentNode) {
-                mobileLoadingOverlay.style.opacity = '0';
-                setTimeout(() => {
-                    if (mobileLoadingOverlay.parentNode) {
-                        mobileLoadingOverlay.remove();
-                    }
-                }, 150);
-            }
-            
             // Vrátime tlačidlo do normálneho stavu
             icon.classList.remove('fa-spin');
             btn.disabled = false;
@@ -2164,16 +2362,48 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('refreshLogsBtnMobile').addEventListener('click', () => {
         document.getElementById('refreshLogsBtn').click();
     });
+    
+    document.getElementById('exportLogsBtnMobile').addEventListener('click', () => {
+        document.getElementById('exportLogsBtn').click();
+    });
+    
+    // Export logov do CSV
+    document.getElementById('exportLogsBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('exportLogsBtn');
+        const icon = btn.querySelector('i');
+        
+        // Animácia export tlačidla
+        icon.classList.add('fa-spin');
+        btn.disabled = true;
+        
+        try {
+            // Vytvoríme skrytý link pre stiahnutie
+            const link = document.createElement('a');
+            link.href = '/api/logs/export';
+            link.download = `mikrotik_logy_${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '_')}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+        } catch (error) {
+            addLog('error', 'Chyba pri exporte logov');
+        } finally {
+            // Vrátime tlačidlo do normálneho stavu
+            icon.classList.remove('fa-spin');
+            btn.disabled = false;
+        }
+    });
 
     deviceForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const snmpCommunityValue = document.getElementById('deviceSnmpCommunity').value.trim();
         const body = {
             id: document.getElementById('deviceId').value,
             name: document.getElementById('deviceName').value,
             ip: document.getElementById('deviceIp').value,
             username: document.getElementById('deviceUsername').value,
             password: document.getElementById('devicePassword').value,
-            snmp_community: document.getElementById('deviceSnmpCommunity').value,
+            snmp_community: snmpCommunityValue || 'public', // Ak je prázdne, použije sa "public"
             snmp_interval_minutes: parseInt(document.getElementById('deviceSnmpInterval').value) || 0,
             low_memory: document.getElementById('deviceLowMemory').checked,
         };
@@ -2195,15 +2425,16 @@ document.addEventListener('DOMContentLoaded', () => {
         new FormData(settingsForm).forEach((value, key) => body[key] = value);
         settingsForm.querySelectorAll('input[type="checkbox"]').forEach(cb => body[cb.name] = cb.checked.toString());
         const result = await api.post('settings', body);
+        
+        // Aktualizujeme globálne nastavenia pre frontend
+        if (body.log_retention_days) {
+            globalSettings.log_retention_days = parseInt(body.log_retention_days);
+        }
+        
         closeModal();
         
-        // Zobrazíme úspešné uloženie nastavení
-        addLog('success', 'Nastavenia boli uložené.');
-        
-        // Ak máme informácie o pláne automatického zálohovania, zobrazíme ich
-        if (result && result.schedule_info) {
-            addLog('info', result.schedule_info);
-        }
+        // Správa "Nastavenia boli uložené." sa už odosiela zo servera
+        // addLog('success', 'Nastavenia boli uložené.');
     });
 
     changePasswordForm.addEventListener('submit', async (e) => {
@@ -2451,6 +2682,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicializácia aplikácie
     const initializeApp = async () => {
         try {
+            // Načítame globálne nastavenia pre frontend limity
+            try {
+                const settings = await api.get('settings');
+                if (settings && settings.log_retention_days) {
+                    globalSettings.log_retention_days = parseInt(settings.log_retention_days);
+                }
+            } catch (error) {
+                console.warn('Nepodarilo sa načítať nastavenia, používam predvolené hodnoty');
+            }
+            
             // Načítavame postupne, nie všetko naraz
             await loadUserStatus();
             populateNotificationTypes();
@@ -2467,6 +2708,23 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Načítanie logov bez startup správy
             await loadLogs();
+            
+            // Skontrolujeme stav SNMP refresh na backend-e
+            setTimeout(async () => {
+                try {
+                    const refreshStatus = await api.get('snmp/refresh-all/status');
+                    if (refreshStatus.is_running) {
+                        // Ak prebieha refresh, aktualizujeme UI
+                        updateSnmpRefreshButton('processing', 
+                            refreshStatus.progress.current, 
+                            refreshStatus.progress.total);
+                        isSnmpRefreshRunning = true;
+                        console.log('Obnovený stav prebiehajúceho SNMP refresh:', refreshStatus.progress);
+                    }
+                } catch (error) {
+                    console.warn('Nepodarilo sa načítať stav SNMP refresh:', error);
+                }
+            }, 500); // Malé oneskorenie aby sa všetko stihlo načítať
         } catch (error) {
             console.error('Chyba pri inicializácii aplikácie:', error);
             addLogToContainer('error', 'Chyba pri inicializácii aplikácie', '', new Date().toISOString());
@@ -2478,22 +2736,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Po načítaní stránky automaticky obnov SNMP pre všetky zariadenia - postupne
     window.addEventListener('DOMContentLoaded', function() {
-        // Oneskorenie pred SNMP refresh, aby sa stihla načítať aplikácia
+        // Dlhšie oneskorenie pred SNMP refresh, aby sa backend stiahol stabilizovať
         setTimeout(() => {
             fetch('/api/devices')
                 .then(resp => resp.json())
                 .then(devices => {
-                    // SNMP refresh pre každé zariadenie s oneskorením
-                    devices.forEach((device, index) => {
+                    // Ak je málo zariadení, nerobíme automatický refresh
+                    if (devices.length <= 2) {
+                        console.log('Preskakujem automatický SNMP refresh - málo zariadení');
+                        return;
+                    }
+                    
+                    // SNMP refresh len pre prvé 3 zariadenia s dlhším oneskorením
+                    const limitedDevices = devices.slice(0, 3);
+                    limitedDevices.forEach((device, index) => {
                         setTimeout(() => {
                             fetch(`/api/snmp/${device.id}`)
                                 .then(() => {/* SNMP refresh prebehol */})
                                 .catch(() => {/* Ignoruj chyby */});
-                        }, index * 1500); // Zvýšené na 1.5 sekundy medzi requestmi
+                        }, index * 3000); // 3 sekundy medzi requestmi
                     });
+                    
+                    console.log(`Spustený SNMP refresh pre ${limitedDevices.length} zariadení`);
                 })
                 .catch(error => console.error('Chyba pri automatickom SNMP refresh:', error));
-        }, 3000); // Zvýšené na 3 sekundy po načítaní aplikácie
+        }, 5000); // Zvýšené na 5 sekúnd po načítaní aplikácie
     });
     
     // Funkcie pre prepínanie témy
@@ -2528,5 +2795,190 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
 });
 </script>
+
+<!-- Debug Panel -->
+<div id="debugPanel" class="debug-panel">
+    <div class="debug-panel-header">
+        <div class="debug-panel-title">
+            <i class="fas fa-bug"></i>
+            Debug Logs
+        </div>
+        <div class="debug-panel-controls">
+            <button id="debugClearBtn" class="debug-panel-btn" title="Vymazať logy">
+                <i class="fas fa-trash"></i>
+            </button>
+            <button id="debugCopyBtn" class="debug-panel-btn" title="Kopírovať všetky logy">
+                <i class="fas fa-copy"></i>
+            </button>
+            <button id="debugMinimizeBtn" class="debug-panel-btn" title="Minimalizovať">
+                <i class="fas fa-minus"></i>
+            </button>
+            <button id="debugCloseBtn" class="debug-panel-btn" title="Zavrieť">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    <div id="debugPanelContent" class="debug-panel-content">
+        <!-- Debug logs will be inserted here -->
+    </div>
+</div>
+
+<script>
+// Debug Panel Implementation for index.html
+let debugSettings = {};
+let debugPanelLogs = [];
+let debugPanelVisible = false;
+
+// Load debug settings
+const loadDebugSettings = async () => {
+    try {
+        const response = await fetch('/api/settings');
+        const settings = await response.json();
+        debugSettings = settings;
+        
+        // Show debug panel automatically if enabled in settings
+        const showDebugPanel = settings.debug_chart_frontend_panel === 'true' || settings.debug_master_switch === 'true';
+        
+        if (showDebugPanel && !debugPanelVisible) {
+            document.getElementById('debugPanel').classList.add('visible');
+            debugPanelVisible = true;
+        } else if (!showDebugPanel && debugPanelVisible) {
+            document.getElementById('debugPanel').classList.remove('visible');
+            debugPanelVisible = false;
+        }
+    } catch (error) {
+        console.error('Failed to load debug settings:', error);
+    }
+};
+
+// Debug logging function
+function debugLog(debugType, message, ...args) {
+    // Check if any debug is enabled
+    if (debugSettings[debugType] !== 'true' && debugSettings['debug_master_switch'] !== 'true') {
+        return;
+    }
+    
+    // Always log to console
+    console.log(`[${debugType.toUpperCase()}]`, message, ...args);
+    
+    // If debug panel is enabled, also log to panel
+    if (debugSettings.debug_chart_frontend_panel === 'true' || debugSettings.debug_master_switch === 'true') {
+        addLogToPanel(debugType, message, args);
+    }
+}
+
+// Add log to debug panel
+function addLogToPanel(debugType, message, args) {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = {
+        timestamp,
+        type: debugType,
+        message,
+        args: args.length > 0 ? args : null
+    };
+    
+    debugPanelLogs.push(logEntry);
+    
+    // Limit to last 100 logs
+    if (debugPanelLogs.length > 100) {
+        debugPanelLogs.shift();
+    }
+    
+    updateDebugPanelContent();
+}
+
+// Update debug panel content
+function updateDebugPanelContent() {
+    const content = document.getElementById('debugPanelContent');
+    if (!content) return;
+    
+    content.innerHTML = debugPanelLogs.map(log => {
+        const argsHtml = log.args ? `<div class="debug-args">${JSON.stringify(log.args, null, 2)}</div>` : '';
+        return `
+            <div class="debug-log-entry ${log.type}">
+                <span class="debug-timestamp">${log.timestamp}</span>
+                <span class="debug-type">[${log.type.toUpperCase()}]</span>
+                <span class="debug-message">${log.message}</span>
+                ${argsHtml}
+            </div>
+        `;
+    }).join('');
+    
+    // Auto scroll to bottom
+    content.scrollTop = content.scrollHeight;
+}
+
+// Debug panel controls
+document.addEventListener('DOMContentLoaded', function() {
+    loadDebugSettings();
+    
+    // Check for debug settings changes when user returns to page
+    window.addEventListener('focus', function() {
+        if (!window._lastDebugCheck || Date.now() - window._lastDebugCheck > 5000) {
+            loadDebugSettings();
+            window._lastDebugCheck = Date.now();
+        }
+    });
+    
+    // Debug panel controls
+    document.getElementById('debugClearBtn')?.addEventListener('click', function() {
+        debugPanelLogs = [];
+        updateDebugPanelContent();
+        debugLog('debug_device_operations', 'Debug panel cleared');
+    });
+    
+    document.getElementById('debugCopyBtn')?.addEventListener('click', function() {
+        const logsText = debugPanelLogs.map(log => {
+            const argsText = log.args ? ` | ${JSON.stringify(log.args)}` : '';
+            return `${log.timestamp} [${log.type.toUpperCase()}] ${log.message}${argsText}`;
+        }).join('\n');
+        
+        navigator.clipboard.writeText(logsText).then(() => {
+            debugLog('debug_device_operations', 'Debug logs copied to clipboard');
+        });
+    });
+    
+    document.getElementById('debugMinimizeBtn')?.addEventListener('click', function() {
+        const panel = document.getElementById('debugPanel');
+        const content = panel.querySelector('.debug-panel-content');
+        const isMinimized = panel.style.height === '40px';
+        
+        if (isMinimized) {
+            panel.style.height = '';
+            content.style.display = 'flex';
+        } else {
+            panel.style.height = '40px';
+            content.style.display = 'none';
+        }
+    });
+    
+    document.getElementById('debugCloseBtn')?.addEventListener('click', function() {
+        document.getElementById('debugPanel').classList.remove('visible');
+        debugPanelVisible = false;
+    });
+    
+    // Keyboard shortcut Ctrl+D - only works if debug panel is enabled
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'd') {
+            e.preventDefault();
+            const showDebugPanel = debugSettings.debug_chart_frontend_panel === 'true' || debugSettings.debug_master_switch === 'true';
+            if (showDebugPanel) {
+                const panel = document.getElementById('debugPanel');
+                if (debugPanelVisible) {
+                    panel.classList.remove('visible');
+                    debugPanelVisible = false;
+                } else {
+                    panel.classList.add('visible');
+                    debugPanelVisible = true;
+                }
+            }
+        }
+    });
+});
+
+// Export debugLog to window scope for use in other scripts
+window.debugLog = debugLog;
+</script>
+
 </body>
 </html>

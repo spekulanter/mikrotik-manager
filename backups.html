@@ -204,15 +204,17 @@
             background: linear-gradient(135deg, #6b7280, #4b5563);
             border: none;
             border-radius: 6px;
-            padding: 10px 20px;
+            padding: 8px 16px;
             color: white;
             text-decoration: none;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             margin-bottom: 20px;
             font-weight: 500;
+            font-size: 14px;
+            float: right;
         }
         
         .btn-back:hover {
@@ -320,29 +322,24 @@
         }
         
         .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            padding: 10px;
-            border: 1px solid var(--border-color);
-            background-color: var(--card-bg);
-            color: var(--text-color);
-            border-radius: 50%;
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            border: none;
+            border-radius: 6px;
+            padding: 8px;
+            color: white;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 18px;
-            width: 50px;
-            height: 50px;
+            font-size: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            width: 36px;
+            height: 36px;
         }
         
         .theme-toggle:hover {
-            border-color: var(--accent-color);
-            background-color: rgba(56, 189, 248, 0.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
         }
         
         .table thead th.sortable {
@@ -413,6 +410,18 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }
         
+        /* Theme toggle v svetlej téme */
+        body.light-theme .theme-toggle {
+            background: linear-gradient(135deg, #e2e8f0, #cbd5e1) !important;
+            color: var(--text-color) !important;
+        }
+        
+        body.light-theme .theme-toggle:hover {
+            background: linear-gradient(135deg, #cbd5e1, #94a3b8) !important;
+            color: var(--text-color) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }
+        
         @media (max-width: 768px) {
             .controls-row {
                 flex-direction: column;
@@ -431,16 +440,20 @@
     </style>
 </head>
 <body>
-    <!-- Prepínač témy -->
-    <button class="theme-toggle" onclick="toggleTheme()" title="Prepnúť tému">
-        <i class="fas fa-sun" id="theme-icon"></i>
-    </button>
-    
     <div class="main-container">
-        <a href="/" class="btn-back">
-            <i class="fas fa-arrow-left"></i>
-            Späť na hlavnú stránku
-        </a>
+        <!-- Header s tlačidlami -->
+        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 20px;">
+            <button onclick="window.location.href='/settings.html'" class="btn-back" style="float: none; margin-bottom: 0;" title="Nastavenia">
+                <i class="fas fa-cog"></i> Nastavenia
+            </button>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Prepnúť tému">
+                <i class="fas fa-sun" id="theme-icon"></i>
+            </button>
+            <a href="/" class="btn-back" style="float: none; margin-bottom: 0;">
+                <i class="fas fa-arrow-left"></i>
+                Späť
+            </a>
+        </div>
         
         <div class="page-header">
             <h1><i class="fas fa-archive"></i> Zálohy MikroTik</h1>

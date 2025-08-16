@@ -1,0 +1,3262 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Monitoring - Grafy a Ping</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        .card {
+            background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+            border: 1px solid #374151;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .ping-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .ping-status.online {
+            color: #10b981;
+        }
+        
+        .ping-status.offline {
+            color: #ef4444;
+        }
+        
+        .ping-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        /* Light Theme */
+        body.light-theme {
+            --main-bg: #f1f5f9;
+            --card-bg: #f8fafc;
+            --border-color: #cbd5e1;
+            --text-color: #334155;
+            --accent-color: #0369a1;
+            --accent-color-hover: #0284c7;
+            background-color: var(--main-bg) !important;
+        }
+        
+        /* Cards v svetlej téme */
+        body.light-theme .card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+            border: 1px solid var(--border-color) !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        }
+        
+        /* Texty v svetlej téme - modré nadpisy */
+        body.light-theme h1,
+        body.light-theme h2,
+        body.light-theme h3 {
+            color: var(--accent-color) !important;
+        }
+        
+        body.light-theme .text-white {
+            color: var(--text-color) !important;
+        }
+        
+        body.light-theme .text-gray-400,
+        body.light-theme .text-gray-300 {
+            color: #64748b !important;
+        }
+        
+        body.light-theme .text-gray-200 {
+            color: var(--text-color) !important;
+        }
+        
+        body.light-theme .text-sky-400,
+        body.light-theme .text-sky-500 {
+            color: var(--accent-color) !important;
+        }
+        
+        /* Špecifické bg-gray tlačidlá pre monitoring */
+        body.light-theme .btn.bg-gray-600 {
+            background-color: #e2e8f0 !important;
+            color: var(--text-color) !important;
+            border: 1px solid var(--border-color) !important;
+        }
+        
+        body.light-theme .btn.bg-gray-600:hover {
+            background-color: #cbd5e1 !important;
+            color: var(--text-color) !important;
+        }
+        
+        /* Blue buttons zostanú modré */
+        body.light-theme .btn.bg-blue-600,
+        body.light-theme button.btn.bg-blue-600 {
+            background-color: var(--accent-color) !important;
+            color: #ffffff !important;
+        }
+        
+        body.light-theme .btn.bg-blue-600:hover,
+        body.light-theme button.btn.bg-blue-600:hover {
+            background-color: var(--accent-color-hover) !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        body.light-theme .btn.bg-gray-600:hover,
+        body.light-theme button.bg-gray-600:hover,
+        body.light-theme #themeToggle:hover,
+        body.light-theme button[onclick*="/"]:hover,
+        body.light-theme button[onclick*="settings.html"]:hover {
+            background-color: #cbd5e1 !important;
+            color: var(--text-color) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Všeobecné tlačidlá - musí byť na konci kvôli priorite */
+        body.light-theme .btn:not(.bg-blue-600):not(.bg-gray-600) {
+            color: #ffffff !important;
+        }
+        
+        /* Input fields a select v svetlej téme */
+        body.light-theme input,
+        body.light-theme select,
+        body.light-theme textarea {
+            background-color: #ffffff !important;
+            border-color: var(--border-color) !important;
+            color: var(--text-color) !important;
+        }
+        
+        body.light-theme input:focus,
+        body.light-theme select:focus,
+        body.light-theme textarea:focus {
+            border-color: var(--accent-color) !important;
+            box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1) !important;
+        }
+        
+        /* Time range buttons container */
+        body.light-theme #timeRangeContainer > div {
+            background-color: #f8fafc !important;
+            border-color: var(--border-color) !important;
+        }
+        
+        /* Time range buttons */
+        body.light-theme .time-range-btn {
+            background-color: #ffffff !important;
+            color: var(--text-color) !important;
+            border: 1px solid var(--border-color) !important;
+        }
+        
+        body.light-theme .time-range-btn:hover {
+            background-color: #e2e8f0 !important;
+        }
+        
+        body.light-theme .time-range-btn.active {
+            background-color: var(--accent-color) !important;
+            color: #ffffff !important;
+            border-color: var(--accent-color) !important;
+        }
+        
+        /* Ping status v svetlej téme */
+        body.light-theme .ping-status {
+            color: var(--text-color) !important;
+        }
+        
+        /* Dark theme - zabezpečenie správnych farieb tlačidlí */
+        body:not(.light-theme) .btn.bg-blue-600,
+        body:not(.light-theme) button.btn.bg-blue-600,
+        body:not(.light-theme) .text-white {
+            color: #ffffff !important;
+        }
+        
+        body:not(.light-theme) .btn.bg-gray-600,
+        body:not(.light-theme) button.btn.bg-gray-600 {
+            color: #ffffff !important;
+        }
+        
+        /* Zabezpečenie že všetky tlačidlá v tmavej téme majú správne farby */
+        body:not(.light-theme) .btn {
+            color: #ffffff !important;
+        }
+        
+        /* Oprava hover efektov pre všetky tlačidlá */
+        .btn.bg-blue-600:hover,
+        button.bg-blue-600:hover {
+            background-color: #1d4ed8 !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .btn.bg-gray-600:hover,
+        button.bg-gray-600:hover,
+        #themeToggle:hover,
+        button[onclick*="/"]:hover,
+        button[onclick*="settings.html"]:hover {
+            background-color: #4b5563 !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Mega špecifické pravidlá pre problematické tlačidlá */
+        body:not(.light-theme) button[onclick*="settings.html"] {
+            background-color: #4b5563 !important;
+            color: #ffffff !important;
+        }
+        
+        body.light-theme button[onclick*="settings.html"] {
+            background-color: #e2e8f0 !important;
+            color: var(--text-color) !important;
+        }
+        
+        /* Mobile refresh button - skryť na desktop pre obe témy */
+        .mobile-refresh-btn {
+            display: none !important;
+        }
+        
+        /* Mobile refresh button v svetlej téme */
+        body.light-theme .mobile-refresh-btn {
+            background-color: var(--accent-color) !important;
+            color: #ffffff !important;
+        }
+        
+        body.light-theme .mobile-refresh-btn:hover {
+            background-color: var(--accent-color-hover) !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Show mobile refresh only on mobile for both themes */
+        @media (max-width: 768px) {
+            .mobile-refresh-btn {
+                display: flex !important;
+            }
+            
+            body.light-theme .mobile-refresh-btn {
+                display: flex !important;
+            }
+        }
+        
+        /* Modal v svetlej téme */
+        body.light-theme #deviceSettingsModal > div {
+            background-color: #ffffff !important;
+            color: var(--text-color) !important;
+        }
+        
+        body.light-theme #deviceSettingsModal h3 {
+            color: var(--accent-color) !important;
+        }
+        
+        body.light-theme #deviceSettingsModal label {
+            color: var(--text-color) !important;
+        }
+        
+        body.light-theme #deviceSettingsModal .text-gray-400 {
+            color: #64748b !important;
+        }
+        
+        /* Modal v tmavej téme - zabezpečenie správnych farieb */
+        body:not(.light-theme) #deviceSettingsModal h3,
+        body:not(.light-theme) #deviceSettingsModal label {
+            color: #ffffff !important;
+        }
+        
+        /* Tlačidlá v modálnom okne - správne farby textu pre obe témy */
+        body.light-theme #deviceSettingsModal button {
+            color: #ffffff !important;
+        }
+        
+        body:not(.light-theme) #deviceSettingsModal button {
+            color: #ffffff !important;
+        }
+        
+        .ping-indicator.online {
+            background-color: #10b981;
+        }
+        
+        .ping-indicator.offline {
+            background-color: #ef4444;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        
+        .loading-spinner {
+            border: 3px solid #374151;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Modern Time Range Buttons - Uptime Kuma style */
+        .time-range-btn {
+            background: transparent;
+            border: none;
+            color: #9ca3af;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            white-space: nowrap;
+        }
+        
+        .time-range-btn:hover {
+            background: rgba(59, 130, 246, 0.1);
+            color: #bfdbfe;
+        }
+        
+        .time-range-btn.active {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+        }
+        
+        .time-range-btn.loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 6px;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        /* Chart animation classes */
+        .chart-container.updating {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .chart-container.updating::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+            animation: loading-sweep 1.5s ease-in-out infinite;
+            z-index: 1;
+        }
+        
+        @keyframes loading-sweep {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+        
+        /* Device Info Panel Improvements */
+        .device-info-header {
+            transition: all 0.3s ease;
+        }
+        
+        .device-actions {
+            gap: 8px;
+        }
+        
+        .device-actions .btn {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .device-actions .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Responsive improvements */
+        @media (max-width: 640px) {
+            .device-info-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+            
+            .device-actions {
+                align-self: stretch;
+                justify-content: space-between;
+            }
+            
+            .device-actions .btn {
+                flex: 1;
+                justify-content: center;
+            }
+        }
+
+        /* Mobile responsive header */
+        @media (max-width: 1024px) {
+            .container {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+            
+            /* Header adjustments for tablet */
+            .flex.justify-between.items-center > div:first-child {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            #timeRangeContainer .bg-gray-700 {
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            
+            .time-range-btn {
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            /* Stack header vertically on mobile */
+            .flex.justify-between.items-center {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 16px;
+                margin-bottom: 20px;
+            }
+            
+            /* First row: Title and device selector */
+            .flex.justify-between.items-center > div:first-child {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            
+            /* Title row */
+            .flex.justify-between.items-center > div:first-child > h1 {
+                align-self: center;
+                margin-bottom: 8px;
+            }
+            
+            /* Controls row - device selector and time range */
+            .flex.justify-between.items-center > div:first-child > select,
+            .flex.justify-between.items-center > div:first-child > #timeRangeContainer {
+                width: 100%;
+            }
+            
+            /* Refresh button will be moved to action buttons row */
+            .flex.justify-between.items-center > div:first-child > #refreshBtn {
+                display: none;
+            }
+            
+            #timeRangeContainer .bg-gray-700 {
+                justify-content: center;
+                flex-wrap: wrap;
+                padding: 8px;
+            }
+            
+            /* Action buttons row - include refresh button */
+            .flex.justify-between.items-center > div:last-child {
+                flex-direction: row;
+                justify-content: space-between;
+                gap: 6px;
+                margin-left: 0 !important; /* Remove margin on mobile */
+            }
+            
+            .flex.justify-between.items-center > div:last-child > button {
+                flex: 1;
+                font-size: 14px;
+                padding: 8px 12px;
+                min-width: 0;
+                min-height: 42px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+            }
+            
+            .flex.justify-between.items-center > div:last-child > button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            }
+            
+            /* Hover effects for specific button types on mobile */
+            .flex.justify-between.items-center > div:last-child > button.bg-blue-600:hover {
+                background-color: var(--accent-color-hover) !important;
+                color: #ffffff !important;
+            }
+            
+            .flex.justify-between.items-center > div:last-child > button.bg-gray-600:hover,
+            .flex.justify-between.items-center > div:last-child > #themeToggle:hover,
+            .flex.justify-between.items-center > div:last-child > button[onclick*="/"]:hover,
+            .flex.justify-between.items-center > div:last-child > button[onclick*="settings.html"]:hover {
+                background-color: #cbd5e1 !important;
+                color: var(--text-color) !important;
+            }
+            
+            /* Create mobile refresh button - skryté na desktop */
+            .mobile-refresh-btn {
+                display: none !important;
+            }
+            
+            /* Show mobile refresh button only on mobile and hide desktop one */
+            @media (max-width: 768px) {
+                .mobile-refresh-btn {
+                    display: flex !important;
+                    flex: 1;
+                    font-size: 14px;
+                    padding: 8px 12px;
+                    min-width: 0;
+                    min-height: 42px;
+                    background-color: #2563eb !important;
+                    border: none;
+                    border-radius: 0.5rem;
+                    color: white;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 0.5rem;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                
+                .mobile-refresh-btn:hover {
+                    background-color: #1d4ed8 !important;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+                }
+                
+                /* Ensure desktop refresh button is completely hidden on mobile */
+                #refreshBtn {
+                    display: none !important;
+                }
+            }
+            
+            /* Hide text on smallest screens for action buttons */
+            @media (max-width: 480px) {
+                .flex.justify-between.items-center > div:last-child > button span:not(.sr-only) {
+                    display: none;
+                }
+                
+                .flex.justify-between.items-center > div:last-child > button,
+                .mobile-refresh-btn {
+                    justify-content: center;
+                    min-width: 44px;
+                }
+            }
+        }
+        
+        /* MOBILNÉ PING STATUS KARTY - 2x2 GRID LAYOUT */
+        @media (max-width: 768px) {
+            /* Zmeniť grid na 2 stĺpce na mobile (2x2 layout) - silnejší selektor */
+            .container #deviceInfoPanel .grid.grid-cols-1.md\\:grid-cols-4.gap-4.mb-6 {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 0.5rem !important;
+                margin-bottom: 1rem !important;
+                display: grid !important;
+            }
+            
+            /* Backup selektor pre ping karty */
+            #deviceInfoPanel div[class*="grid"][class*="grid-cols-1"] {
+                grid-template-columns: repeat(2, 1fr) !important;
+                display: grid !important;
+            }
+            
+            /* Výrazne zmenšiť karty na mobile */
+            #deviceInfoPanel .grid .card {
+                padding: 0.5rem !important;
+                min-height: auto !important;
+            }
+            
+            /* Zmenšiť nadpisy - ale nie tak veľmi */
+            #deviceInfoPanel .grid .card p.text-sm {
+                font-size: 0.75rem !important;
+                line-height: 1.1 !important;
+                margin-bottom: 0.25rem !important;
+                font-weight: 500 !important;
+            }
+            
+            /* Zväčšiť hodnoty pre lepšiu čitateľnosť */
+            #deviceInfoPanel .grid .card .text-lg {
+                font-size: 0.875rem !important;
+                line-height: 1.2 !important;
+                font-weight: 600 !important;
+            }
+            
+            /* Zobraziť ikony ale menšie a vpravo hore */
+            #deviceInfoPanel .grid .card i.text-2xl {
+                display: block !important;
+                font-size: 0.875rem !important;
+                color: #6b7280 !important;
+                opacity: 0.7 !important;
+                position: absolute !important;
+                top: 0.5rem !important;
+                right: 0.5rem !important;
+            }
+            
+            /* Zabezpečiť že karta má relative position pre absolute ikony */
+            #deviceInfoPanel .grid .card {
+                padding: 0.5rem !important;
+                min-height: auto !important;
+                position: relative !important;
+            }
+            
+            /* Upraviť padding vpravo pre obsah aby sa neprekrýval s ikonou */
+            #deviceInfoPanel .grid .card > div {
+                padding-right: 1.5rem !important;
+            }
+            
+            /* Menší ping indicator */
+            #deviceInfoPanel .grid .card .ping-indicator {
+                width: 6px !important;
+                height: 6px !important;
+            }
+            
+            /* Zmenšiť gap v ping status */
+            #deviceInfoPanel .grid .card .ping-status {
+                gap: 0.25rem !important;
+            }
+            
+            /* Zmenšiť celý content flex gap */
+            #deviceInfoPanel .grid .card .flex {
+                gap: 0.25rem !important;
+            }
+        }
+        
+        .chart-fade-in {
+            animation: chartFadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes chartFadeIn {
+            0% { 
+                opacity: 0; 
+                transform: translateY(20px);
+            }
+            100% { 
+                opacity: 1; 
+                transform: translateY(0);
+            }
+        }
+        
+        /* Time range container animation */
+        #timeRangeContainer {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            transform: translateX(-10px);
+        }
+        
+        #timeRangeContainer.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Utility classes */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Header button normalization */
+        .flex.justify-between.items-center .btn {
+            min-height: 42px;
+            padding: 8px 16px !important;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: none;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        /* Ensure refresh button matches others */
+        #refreshBtn {
+            min-height: 42px;
+            padding: 8px 16px !important;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Chart zoom controls */
+        .chart-zoom-controls {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            z-index: 10;
+        }
+
+        .zoom-btn {
+            background: rgba(55, 65, 81, 0.9);
+            border: 1px solid #4b5563;
+            color: #d1d5db;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
+        }
+
+        .zoom-btn:hover {
+            background: rgba(75, 85, 99, 0.9);
+            color: #ffffff;
+        }
+
+        .zoom-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Light theme zoom controls */
+        body.light-theme .zoom-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #cbd5e1;
+            color: #374151;
+        }
+
+        body.light-theme .zoom-btn:hover {
+            background: rgba(248, 250, 252, 0.95);
+            color: #1f2937;
+        }
+
+        /* Chart container positioning for zoom controls */
+        .chart-container {
+            position: relative;
+        }
+
+        /* Zoom selection overlay */
+        .chart-zoom-selection {
+            position: absolute;
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid #3b82f6;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl font-semibold text-white flex items-center leading-none">
+                    <i class="fas fa-chart-line text-orange-500 mr-4 text-lg"></i>
+                    <span class="text-lg">MikroTik Monitoring</span>
+                </h1>
+                <select id="deviceSelector" class="bg-gray-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-orange-500">
+                    <option value="">Vyberte zariadenie...</option>
+                </select>
+                <!-- Modern Time Range Selector - Uptime Kuma style -->
+                <div id="timeRangeContainer" class="hidden">
+                    <div class="bg-gray-700 border border-gray-600 rounded-lg p-1 flex gap-1">
+                        <button class="time-range-btn" data-range="30m">30m</button>
+                        <button class="time-range-btn" data-range="3h">3h</button>
+                        <button class="time-range-btn" data-range="6h">6h</button>
+                        <button class="time-range-btn" data-range="12h">12h</button>
+                        <button class="time-range-btn active" data-range="24h">24h</button>
+                        <button class="time-range-btn" data-range="7d">7d</button>
+                        <button class="time-range-btn" data-range="30d">30d</button>
+                        <button class="time-range-btn" data-range="90d">90d</button>
+                        <button class="time-range-btn" data-range="1y">1y</button>
+                    </div>
+                </div>
+                <button id="refreshBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 ml-3">
+                    <i class="fas fa-sync"></i> Obnoviť
+                </button>
+            </div>
+            <div class="flex items-center gap-3" style="margin-left: 20px;">
+                <!-- Mobile refresh button - umiestnený na začiatok pre mobile layout -->
+                <button class="mobile-refresh-btn" onclick="document.getElementById('refreshBtn').click()">
+                    <i class="fas fa-sync"></i> <span>Obnoviť</span>
+                </button>
+                <button onclick="window.location.href='/settings.html'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Nastavenia">
+                    <i class="fas fa-cog"></i> <span>Nastavenia</span>
+                </button>
+                <button id="themeToggle" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Prepnúť tému">
+                    <i class="fas fa-moon" id="themeIcon"></i> <span class="sr-only">Téma</span>
+                </button>
+                <button onclick="window.location.href='/'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                    <i class="fas fa-arrow-left"></i> <span>Späť</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Device Info Panel -->
+        <div id="deviceInfoPanel" class="card p-4 rounded-lg mb-4 hidden">
+            <div class="device-info-header flex justify-between items-center mb-3">
+                <div>
+                    <h2 class="text-xl font-bold text-white" id="deviceName">Zariadenie</h2>
+                    <p class="text-sm text-gray-400" id="deviceModel">Model: N/A</p>
+                </div>
+                <div class="device-actions flex items-center">
+                    <button id="pauseResumeBtn" class="btn bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 hidden transition-all duration-200">
+                        <i class="fas fa-pause" id="pauseResumeIcon"></i>
+                        <span id="pauseResumeText">Pozastaviť</span>
+                    </button>
+                    <button id="deviceSettingsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition-all duration-200">
+                        <i class="fas fa-clock"></i>
+                        <span class="hidden sm:inline">Intervaly</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Ping Status Cards - responzívne pre desktop a mobile -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                <div class="card p-3 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-400">Ping Status</p>
+                            <div id="pingStatus" class="ping-status text-lg font-bold">
+                                <div class="ping-indicator"></div>
+                                <span>Načítava...</span>
+                            </div>
+                        </div>
+                        <i class="fas fa-wifi text-2xl text-gray-500"></i>
+                    </div>
+                </div>
+                
+                <div class="card p-3 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-400">Priemerná latencia</p>
+                            <p id="avgLatency" class="text-lg font-bold text-blue-400">-</p>
+                        </div>
+                        <i class="fas fa-stopwatch text-2xl text-gray-500"></i>
+                    </div>
+                </div>
+                
+                <div class="card p-3 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-400">Packet Loss</p>
+                            <p id="packetLoss" class="text-lg font-bold text-yellow-400">-</p>
+                        </div>
+                        <i class="fas fa-exclamation-triangle text-2xl text-gray-500"></i>
+                    </div>
+                </div>
+                
+                <div class="card p-3 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-400">Posledný ping</p>
+                            <p id="lastPing" class="text-lg font-bold text-gray-300">-</p>
+                        </div>
+                        <i class="fas fa-clock text-2xl text-gray-500"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div id="chartsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6 hidden">
+            <!-- Ping Latency Chart -->
+            <div class="card p-6 rounded-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-white">
+                        <i class="fas fa-signal text-green-500 mr-2"></i>
+                        Ping Latencia (ms)
+                    </h3>
+                    <div class="text-sm text-gray-400">Posledných 24 hodín</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-zoom-controls">
+                        <button class="zoom-btn" onclick="resetZoomButton('pingChart')" title="Zoom out (alebo dvojité kliknutie)">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                    </div>
+                    <canvas id="pingChart"></canvas>
+                </div>
+            </div>
+
+            <!-- CPU Load Chart -->
+            <div class="card p-6 rounded-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-white">
+                        <i class="fas fa-microchip text-blue-500 mr-2"></i>
+                        CPU Load (%)
+                    </h3>
+                    <div class="text-sm text-gray-400">Posledných 24 hodín</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-zoom-controls">
+                        <button class="zoom-btn" onclick="resetZoomButton('cpuChart')" title="Zoom out (alebo dvojité kliknutie)">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                    </div>
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Temperature Chart -->
+            <div class="card p-6 rounded-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-white">
+                        <i class="fas fa-thermometer-half text-red-500 mr-2"></i>
+                        Teplota (°C)
+                    </h3>
+                    <div class="text-sm text-gray-400">Posledných 24 hodín</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-zoom-controls">
+                        <button class="zoom-btn" onclick="resetZoomButton('temperatureChart')" title="Zoom out (alebo dvojité kliknutie)">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                    </div>
+                    <canvas id="temperatureChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Memory Usage Chart -->
+            <div class="card p-6 rounded-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold text-white">
+                        <i class="fas fa-memory text-purple-500 mr-2"></i>
+                        Memory Usage (MB)
+                    </h3>
+                    <div class="text-sm text-gray-400">Posledných 24 hodín</div>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-zoom-controls">
+                        <button class="zoom-btn" onclick="resetZoomButton('memoryChart')" title="Zoom out (alebo dvojité kliknutie)">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                    </div>
+                    <canvas id="memoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- No Device Selected -->
+        <div id="noDeviceSelected" class="text-center py-12">
+            <i class="fas fa-chart-line text-6xl text-gray-600 mb-4"></i>
+            <h2 class="text-2xl font-bold text-gray-400 mb-2">Vyberte zariadenie</h2>
+            <p class="text-gray-500">Vyberte zariadenie z rozbaľovacieho menu pre zobrazenie grafov a ping štatistík.</p>
+        </div>
+
+        <!-- Loading -->
+        <div id="loadingIndicator" class="text-center py-12 hidden">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <h2 class="text-xl font-bold text-gray-400 mb-2">Načítavam dáta...</h2>
+            <p class="text-gray-500">Prosím čakajte, načítavajú sa monitoring dáta.</p>
+        </div>
+    </div>
+
+    <!-- Device Settings Modal -->
+    <div id="deviceSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Nastavenia monitoringu</h3>
+                <button id="closeSettingsModal" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="deviceSettingsForm">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Zariadenie:</label>
+                    <div id="settingsDeviceInfo" class="text-gray-400 text-sm"></div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="pingInterval" class="block text-sm font-medium mb-2">
+                        Ping interval (sekundy)
+                    </label>
+                    <input type="number" id="pingInterval" name="ping_interval_seconds" 
+                           min="0" max="86400" 
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                    <div class="text-xs text-gray-400 mt-1">
+                        0 = použiť globálne nastavenie, 1-86400 sekúnd (max 24 hodín)
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="snmpInterval" class="block text-sm font-medium mb-2">
+                        SNMP interval (minúty)
+                    </label>
+                    <input type="number" id="snmpInterval" name="snmp_interval_minutes" 
+                           min="0" max="1440" 
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                    <div class="text-xs text-gray-400 mt-1">
+                        0 = použiť globálne nastavenie, 1-1440 minút (max 24 hodín)
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-2">
+                    <button type="button" id="cancelSettings" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg">
+                        Zrušiť
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                        Uložiť
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Debug Terminal Panel -->
+    <div id="debugTerminal" style="position: fixed; bottom: 20px; right: 20px; width: 450px; max-height: 300px; background: rgba(0, 0, 0, 0.9); color: #00ff00; font-family: 'Courier New', monospace; font-size: 11px; border: 1px solid #333; border-radius: 5px; padding: 10px; z-index: 9999; display: none; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+            <span style="color: #ffff00; font-weight: bold;">DEBUG TERMINAL</span>
+            <div>
+                <button onclick="clearDebugLog()" style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; margin-right: 3px; cursor: pointer; font-size: 10px;">Clear</button>
+                <button onclick="copyDebugLog()" style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; margin-right: 3px; cursor: pointer; font-size: 10px;">Copy</button>
+                <button onclick="toggleDebugTerminal()" style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; cursor: pointer; font-size: 10px;">X</button>
+            </div>
+        </div>
+        <div id="debugContent" style="white-space: pre-wrap; word-wrap: break-word; max-height: 240px; overflow-y: auto;"></div>
+    </div>
+
+    <script src="/static/js/monitoring.js"></script>
+    <script>
+        // Debug Terminal Functions
+        let debugLogs = [];
+        
+        function addDebugLog(message) {
+            // Only log if debug terminal is enabled
+            if (!debugSettings || debugSettings['debug_terminal'] !== 'true') {
+                return;
+            }
+            
+            const timestamp = new Date().toLocaleTimeString('sk-SK');
+            const logEntry = `[${timestamp}] ${message}`;
+            debugLogs.push(logEntry);
+            
+            // Keep only last 100 entries
+            if (debugLogs.length > 100) {
+                debugLogs.shift();
+            }
+            
+            updateDebugDisplay();
+        }
+        
+        function updateDebugDisplay() {
+            const content = document.getElementById('debugContent');
+            if (content) {
+                content.textContent = debugLogs.join('\n');
+                content.scrollTop = content.scrollHeight;
+            }
+        }
+        
+        function clearDebugLog() {
+            debugLogs = [];
+            updateDebugDisplay();
+        }
+        
+        function copyDebugLog() {
+            const text = debugLogs.join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                addDebugLog('✓ Logy skopírované do schránky');
+            });
+        }
+        
+        function toggleDebugTerminal() {
+            const terminal = document.getElementById('debugTerminal');
+            if (debugSettings && debugSettings['debug_terminal'] === 'true') {
+                terminal.style.display = terminal.style.display === 'none' ? 'block' : 'none';
+            } else {
+                terminal.style.display = 'none';
+                console.log('Debug terminál je vypnutý v nastaveniach');
+            }
+        }
+        
+        function initializeDebugTerminal() {
+            const terminal = document.getElementById('debugTerminal');
+            if (debugSettings && debugSettings['debug_terminal'] === 'true') {
+                terminal.style.display = 'block';
+                addDebugLog('🔧 Debug terminál aktívny');
+            } else {
+                terminal.style.display = 'none';
+            }
+        }
+        
+        // Keyboard shortcut Ctrl+D to toggle
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                toggleDebugTerminal();
+            }
+        });
+
+        // Custom zoom functionality without plugin
+        let currentChart = null;
+
+        function resetZoom(chartId) {
+            addDebugLog(`🔍 resetZoom() zavolané pre chart: ${chartId}`);
+            debugLog('debug_chart_operations', `resetZoom called for chartId: ${chartId}`);
+            
+            // Check if this chart is permanently expanded and should not be reset
+            if (window._expandedCharts && window._expandedCharts.has(chartId)) {
+                addDebugLog(`⚠️ resetZoom blokované pre ${chartId} - chart je permanently expanded`);
+                debugLog('debug_chart_operations', `resetZoom blocked for ${chartId} - chart is permanently expanded, maintaining larger range`);
+                return;
+            }
+            
+            // Simple debouncing - prevent too frequent calls
+            const now = Date.now();
+            if (!window._lastResetZoomTimes) {
+                window._lastResetZoomTimes = {};
+            }
+            
+            const lastResetTime = window._lastResetZoomTimes[chartId] || 0;
+            const timeSinceLastReset = now - lastResetTime;
+            
+            if (timeSinceLastReset < 400) {
+                debugLog('debug_chart_operations', `resetZoom debounced for ${chartId} - last call was ${timeSinceLastReset}ms ago`);
+                return;
+            }
+            
+            window._lastResetZoomTimes[chartId] = now;
+            
+            // Get the chart
+            const chart = Chart.getChart(chartId);
+            if (!chart) {
+                debugLog('debug_chart_operations', `Chart ${chartId} not found`);
+                return;
+            }
+            
+            // Check if we have active zoom
+            const hasActiveZoom = chart.options.scales.x.min !== undefined && chart.options.scales.x.max !== undefined;
+            
+            // Initialize per-chart time range tracking
+            if (!window._chartTimeRanges) {
+                window._chartTimeRanges = new Map();
+            }
+            
+            // Check if this is a real zoom (user selected range) vs full time range display
+            // If we just loaded a larger time range, the chart will have min/max set but it's not a "zoom"
+            let currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
+            
+            // CRITICAL: For individual chart zoom-out, use per-chart time range instead of global
+            // Each chart has its own independent time range progression
+            if (window._chartTimeRanges.has(chartId)) {
+                currentTimeRange = window._chartTimeRanges.get(chartId);
+                addDebugLog(`📊 Použitý per-chart rozsah pre ${chartId}: ${currentTimeRange}`);
+            } else {
+                // First time this chart is being zoomed - use '30m' as starting point
+                currentTimeRange = '30m';
+                window._chartTimeRanges.set(chartId, currentTimeRange);
+                addDebugLog(`🆕 Prvé zoom pre ${chartId}, nastavený na: ${currentTimeRange}`);
+            }
+            
+            // CRITICAL: For individual chart zoom-out, we must detect the ACTUAL current range of THIS specific chart
+            // Do not use the global currentTimeRange as it may have been changed by other charts
+            if (hasActiveZoom) {
+                const currentMin = chart.options.scales.x.min;
+                const currentMax = chart.options.scales.x.max;
+                
+                if (typeof currentMin === 'number' && typeof currentMax === 'number' && 
+                    !isNaN(currentMin) && !isNaN(currentMax) && currentMin < currentMax) {
+                    // Get the range that was explicitly set for this chart
+                    const perChartRange = window._chartTimeRanges.get(chartId);
+                    
+                    if (perChartRange) {
+                        // Use the explicitly set per-chart range instead of detecting from data
+                        // This prevents loops when data range is smaller than requested range
+                        currentTimeRange = perChartRange;
+                        addDebugLog(`📊 Použitý per-chart rozsah pre ${chartId}: ${currentTimeRange}`);
+                        debugLog('debug_chart_operations', `Using explicit per-chart range for ${chartId}: ${currentTimeRange}`);
+                    } else {
+                        // Fallback: detect range from data only if no explicit range is set
+                        const actualRange = currentMax - currentMin;
+                        const detectedRange = getTimeRangeForMs(actualRange);
+                        currentTimeRange = detectedRange;
+                        // Update per-chart tracking with detected range
+                        window._chartTimeRanges.set(chartId, detectedRange);
+                        addDebugLog(`🔍 Detekovaný skutočný rozsah pre ${chartId}: ${currentTimeRange} (${(actualRange/1000/60/60).toFixed(1)}h)`);
+                        debugLog('debug_chart_operations', `Detected actual range for ${chartId}: ${currentTimeRange} (${(actualRange/1000/60/60).toFixed(1)}h)`);
+                    }
+                } else {
+                    addDebugLog(`⚠️ Neplatný rozsah pre ${chartId} - min: ${currentMin}, max: ${currentMax} - použijem globálny`);
+                    debugLog('debug_chart_operations', `Invalid chart range for ${chartId} - min: ${currentMin}, max: ${currentMax} - using global range`);
+                }
+            } else {
+                addDebugLog(`ℹ️ Žiadny aktívny zoom pre ${chartId} - použijem globálny rozsah: ${currentTimeRange}`);
+            }
+            
+            // For permanently expanded charts, use their actual range instead of global range
+            if ((window._expandedCharts && window._expandedCharts.has(chartId)) || 
+                (window._wasExpanded && window._wasExpanded.has(chartId))) {
+                if (!hasActiveZoom) {
+                    debugLog('debug_chart_operations', `No active zoom for expanded/was-expanded ${chartId} - clearing expanded state and using global range`);
+                    // Clear expanded state if there's no active zoom
+                    if (window._expandedCharts) {
+                        window._expandedCharts.delete(chartId);
+                    }
+                    if (window._wasExpanded) {
+                        window._wasExpanded.delete(chartId);
+                    }
+                }
+            }
+            
+            const timeRangeMs = getTimeRangeMs(currentTimeRange);
+            const currentTime = new Date().getTime();
+            
+            let isRealZoom = false;
+            if (hasActiveZoom) {
+                const currentMin = chart.options.scales.x.min;
+                const currentMax = chart.options.scales.x.max;
+                const currentRange = currentMax - currentMin;
+                
+                // Consider it a real zoom if the range is significantly smaller than the requested time range
+                // Allow 20% tolerance to account for gap elimination and optimization
+                isRealZoom = currentRange < (timeRangeMs * 0.8);
+                
+                debugLog('debug_chart_operations', `Zoom analysis for ${chartId}: range=${(currentRange/1000/60/60).toFixed(1)}h, timeRange=${(timeRangeMs/1000/60/60).toFixed(1)}h, isRealZoom=${isRealZoom}`);
+                addDebugLog(`🔍 Zoom analýza pre ${chartId}: rozsah=${(currentRange/1000/60/60).toFixed(1)}h, požadovaný=${(timeRangeMs/1000/60/60).toFixed(1)}h, isRealZoom=${isRealZoom}`);
+            }
+            
+            // Additional check for valid zoom values
+            let hasValidZoom = false;
+            if (hasActiveZoom && isRealZoom) {
+                const currentMin = chart.options.scales.x.min;
+                const currentMax = chart.options.scales.x.max;
+                hasValidZoom = typeof currentMin === 'number' && typeof currentMax === 'number' && 
+                              !isNaN(currentMin) && !isNaN(currentMax) && currentMin < currentMax;
+                
+                addDebugLog(`🔍 Validácia zoom pre ${chartId}: hasValidZoom=${hasValidZoom}, min=${currentMin}, max=${currentMax}`);
+                
+                if (!hasValidZoom) {
+                    debugLog('debug_chart_operations', `Invalid zoom range detected for ${chartId} - min: ${currentMin}, max: ${currentMax} - clearing zoom`);
+                    // Clear invalid zoom
+                    chart.options.scales.x.min = undefined;
+                    chart.options.scales.x.max = undefined;
+                }
+            }
+            
+            if (hasActiveZoom && hasValidZoom && isRealZoom) {
+                addDebugLog(`🔍 Začínam progressive zoom-out pre ${chartId}`);
+                // Progressive zoom out - instead of jumping to full range, expand zoom by steps
+                const currentMin = chart.options.scales.x.min;
+                const currentMax = chart.options.scales.x.max;
+                const currentRange = currentMax - currentMin;
+                
+                    // Get the full data range available in the chart
+                    let dataMin = null;
+                    let dataMax = null;
+                    
+                    // Find min/max from all datasets
+                    chart.data.datasets.forEach(dataset => {
+                        if (dataset.data && dataset.data.length > 0) {
+                            dataset.data.forEach(point => {
+                                const x = point.x || point;
+                                if (dataMin === null || x < dataMin) dataMin = x;
+                                if (dataMax === null || x > dataMax) dataMax = x;
+                            });
+                        }
+                    });
+                    
+                    addDebugLog(`🔍 Progressive zoom dáta pre ${chartId}: dataMin=${dataMin ? new Date(dataMin).toLocaleTimeString() : 'null'}, dataMax=${dataMax ? new Date(dataMax).toLocaleTimeString() : 'null'}`);
+                    
+                    if (dataMin !== null && dataMax !== null) {
+                        const fullDataRange = dataMax - dataMin;
+                        addDebugLog(`🔍 Progressive zoom rozsah pre ${chartId}: fullDataRange=${(fullDataRange/1000/60/60).toFixed(1)}h, currentRange=${(currentRange/1000/60/60).toFixed(1)}h`);
+                        const currentCenter = (currentMin + currentMax) / 2;
+                        
+                        // Expand by 2.5x each time for faster zoom-out, but keep centered
+                        const newRange = Math.min(currentRange * 2.5, fullDataRange);
+                        addDebugLog(`🔍 Progressive zoom výpočet pre ${chartId}: newRange=${(newRange/1000/60/60).toFixed(1)}h`);
+                        
+                        // If we can't expand within current data (newRange <= currentRange), 
+                        // we need to load a larger time range
+                        if (newRange <= currentRange) {
+                            addDebugLog(`⏭️ Progressive zoom dosiahol limit dát - načítavam väčší rozsah`);
+                            
+                            // Skip progressive zoom and go directly to loading larger time range
+                            const nextRange = getNextLargerRange(currentTimeRange);
+                            if (nextRange !== currentTimeRange) {
+                                addDebugLog(`🔍 Rozširujem na väčší časový rozsah: ${currentTimeRange} → ${nextRange}`);
+                                
+                                addDebugLog(`⏳ Načítavam čerstvé dáta pre ${nextRange}`);
+                                const subtitle = chart.options.plugins.subtitle;
+                                if (subtitle) {
+                                    subtitle.text = `Načítavam dáta pre ${nextRange}...`;
+                                    subtitle.color = '#3b82f6';
+                                }
+                                chart.update('none');
+                                
+                                // Call the existing logic that handles loading larger time range
+                                // This will trigger the "No real zoom active" path which loads fresh data
+                                window._chartTimeRanges.set(chartId, nextRange);
+                                chart.options.scales.x.min = undefined;
+                                chart.options.scales.x.max = undefined;
+                                return; // Exit progressive zoom-out, let normal logic handle the larger range
+                            }
+                        }
+                        
+                        const newMin = Math.max(dataMin, currentCenter - newRange / 2);
+                        const newMax = Math.min(dataMax, currentCenter + newRange / 2);
+                        
+                        // Check if we've reached the full range (within 5% tolerance)
+                        const tolerance = fullDataRange * 0.05;
+                        const isNearFullRange = (newMax - newMin) >= (fullDataRange - tolerance);
+                        
+                        if (isNearFullRange) {
+                            // If we're close to full range, show full range
+                            debugLog('debug_chart_operations', `Progressive zoom-out for ${chartId} - reached full data range`);
+                            chart.options.scales.x.min = undefined;
+                            chart.options.scales.x.max = undefined;
+                            
+                            // Restore original visual time range when reaching full data range
+                            restoreOriginalVisualTimeRange();
+                            
+                            const subtitle = chart.options.plugins.subtitle;
+                            if (subtitle) {
+                                subtitle.text = 'Zobrazené všetky dostupné dáta - ďalší zoom out načíta viac dát';
+                                subtitle.color = '#9ca3af';
+                            }
+                        } else {
+                            // Progressive zoom out step
+                            debugLog('debug_chart_operations', `Progressive zoom-out for ${chartId} - expanding from ${(currentRange/1000/60/60).toFixed(1)}h to ${(newRange/1000/60/60).toFixed(1)}h`);
+                            chart.options.scales.x.min = newMin;
+                            chart.options.scales.x.max = newMax;
+                            
+                            const subtitle = chart.options.plugins.subtitle;
+                            if (subtitle) {
+                                subtitle.text = 'Postupný zoom out - kliknite znovu pre ďalší krok';
+                                subtitle.color = '#fbbf24';
+                            }
+                            
+                            // Update time format for new zoom level
+                            updateSingleChartTimeFormat(chart, newMin, newMax);
+                            
+                            // Update visual time range indication for progressive zoom-out
+                            updateVisualTimeRangeIndicatorForZoomOut(newMin, newMax);
+                        }
+                    } else {
+                        // Fallback: no data available, just clear zoom
+                        addDebugLog(`⚠️ Žiadne dáta pre progressive zoom-out na ${chartId} - odstraňujem zoom`);
+                        debugLog('debug_chart_operations', `No data available for progressive zoom-out on ${chartId} - clearing zoom`);
+                        chart.options.scales.x.min = undefined;
+                        chart.options.scales.x.max = undefined;
+                        
+                        const subtitle = chart.options.plugins.subtitle;
+                        if (subtitle) {
+                            subtitle.text = 'Zobrazené všetky dostupné dáta - ďalší zoom out načíta viac dát';
+                            subtitle.color = '#9ca3af';
+                        }
+                    }
+            } else {
+                // No real zoom active - try to load larger time range if possible
+                // (This includes cases where chart has min/max set for full time range display)
+                addDebugLog(`📊 Žiadny aktívny zoom pre ${chartId}, aktuálny rozsah: ${currentTimeRange}`);
+                debugLog('debug_chart_operations', `No real zoom active for ${chartId}, current range: ${currentTimeRange}`);
+                
+                if (currentTimeRange !== '1y') {
+                    const nextRange = getNextLargerRange(currentTimeRange);
+                    if (nextRange !== currentTimeRange) {
+                        addDebugLog(`🔍 Rozširujem časový rozsah: ${currentTimeRange} → ${nextRange}`);
+                        debugLog('debug_chart_operations', `Expanding time range: ${currentTimeRange} -> ${nextRange}`);
+                        
+                        // Check if we need to load fresh data for this range
+                        // This is important for charts that were previously expanded but may not have all data
+                        const shouldLoadFreshData = true; // Always load fresh data to ensure we have all available data
+                        
+                        if (shouldLoadFreshData) {
+                            addDebugLog(`⏳ Načítavam čerstvé dáta pre ${nextRange}`);
+                            debugLog('debug_chart_operations', `Loading fresh data for ${nextRange} to ensure all available data is shown`);
+                            
+                            // Update subtitle to show loading
+                            const subtitle = chart.options.plugins.subtitle;
+                            if (subtitle) {
+                                subtitle.text = `Načítavam všetky dostupné dáta pre ${nextRange}...`;
+                                subtitle.color = '#3b82f6';
+                            }
+                            chart.update('none');
+                        
+                            // DIRECT API APPROACH: Call API directly, bypass all monitoring.js logic
+                            if (typeof window.currentDeviceId !== 'undefined') {
+                                const deviceId = window.currentDeviceId;
+                                debugLog('debug_chart_operations', `Making direct API call for ${nextRange} data`);
+                                
+                                // Map frontend range names to backend range names
+                                const apiRange = nextRange === '30m' ? 'recent' : nextRange;
+                                
+                                // Call API directly
+                                addDebugLog(`🌐 Volám API: /api/monitoring/history/${deviceId}?range=${apiRange}`);
+                                fetch(`/api/monitoring/history/${deviceId}?range=${apiRange}`)
+                                    .then(response => {
+                                        addDebugLog(`📡 API odpoveď status: ${response.status} ${response.ok ? '✅' : '❌'}`);
+                                        return response.json();
+                                    })
+                                    .then(apiResponse => {
+                                        addDebugLog(`📦 API úspešné pre ${nextRange}, objekty: ${Object.keys(apiResponse || {}).join(', ')}`);
+                                        debugLog('debug_api_calls', `Direct API call successful for ${nextRange}, raw response:`, apiResponse);
+                                        
+                                        // Parse the new API format - different for ping vs SNMP data
+                                        let data = null;
+                                        if (apiResponse && typeof apiResponse === 'object') {
+                                            // Find which data array to use based on chart type
+                                            if (chartId === 'pingChart' && apiResponse.ping_data) {
+                                                data = apiResponse.ping_data;
+                                            } else if ((chartId === 'cpuChart' || chartId === 'temperatureChart' || chartId === 'memoryChart') && apiResponse.snmp_data) {
+                                                // For SNMP charts, filter data by measurement type
+                                                const allSnmpData = apiResponse.snmp_data;
+                                                
+                                                if (chartId === 'cpuChart') {
+                                                    // Filter for CPU data - look for items that have CPU-related fields
+                                                    data = allSnmpData.filter(item => 
+                                                        item.cpu_load !== undefined || 
+                                                        item.cpu_usage !== undefined || 
+                                                        item.cpu !== undefined || 
+                                                        (item.oid && item.oid.includes('cpu')) ||
+                                                        (item.name && item.name.toLowerCase().includes('cpu'))
+                                                    );
+                                                } else if (chartId === 'temperatureChart') {
+                                                    // Filter for temperature data
+                                                    data = allSnmpData.filter(item => 
+                                                        item.temperature !== undefined || 
+                                                        item.temp !== undefined ||
+                                                        (item.oid && item.oid.includes('temp')) ||
+                                                        (item.name && item.name.toLowerCase().includes('temp'))
+                                                    );
+                                                } else if (chartId === 'memoryChart') {
+                                                    // Filter for memory data
+                                                    data = allSnmpData.filter(item => 
+                                                        item.memory_usage !== undefined || 
+                                                        item.memory !== undefined ||
+                                                        (item.oid && item.oid.includes('memory')) ||
+                                                        (item.name && item.name.toLowerCase().includes('mem'))
+                                                    );
+                                                }
+                                                
+                                                // If no filtered data found, use all snmp_data and let field mapping handle it
+                                                if (!data || data.length === 0) {
+                                                    data = allSnmpData;
+                                                }
+                                            }
+                                        }
+                                        
+                                        if (!data || !Array.isArray(data)) {
+                                            addDebugLog(`❌ Žiadne dáta pre ${chartId} v API odpovedi! Dostupné kľúče: ${Object.keys(apiResponse || {}).join(', ')}`);
+                                            debugLog('debug_chart_operations', `No data found for chart ${chartId} in API response. Available keys:`, Object.keys(apiResponse || {}));
+                                            
+                                            // Extra debug for SNMP data structure
+                                            if (apiResponse.snmp_data) {
+                                                debugLog('debug_chart_operations', `SNMP data structure for ${chartId}:`, {
+                                                    length: apiResponse.snmp_data.length,
+                                                    firstItem: apiResponse.snmp_data[0],
+                                                    fields: apiResponse.snmp_data[0] ? Object.keys(apiResponse.snmp_data[0]) : 'no items'
+                                                });
+                                            }
+                                            
+                                            throw new Error(`No valid data array found for ${chartId}`);
+                                        }
+                                        
+                                        addDebugLog(`✅ Našiel som ${data.length} záznamov pre ${chartId}`);
+                                        debugLog('debug_chart_operations', `Got ${data.length} data points for ${chartId}`);
+                                        
+                                        // Update chart data directly
+                                        const targetChart = Chart.getChart(chartId);
+                                        if (targetChart && data && data.length > 0) {
+                                            debugLog('debug_chart_operations', `Chart ${chartId} processing ${data.length} data points`);
+                                            
+                                            // Process data - different charts use different field names
+                                            let newData = [];
+                                            if (chartId === 'pingChart') {
+                                                newData = data.map(item => ({
+                                                    x: new Date(item.timestamp).getTime(),
+                                                    y: item.avg_latency // ping data uses avg_latency
+                                                }));
+                                            } else if (chartId === 'cpuChart') {
+                                                // CPU data from SNMP - need to check field names
+                                                addDebugLog(`🔍 Kontrolujem CPU dáta - prvý záznam: ${JSON.stringify(data[0] || {}).substring(0, 200)}`);
+                                                debugLog('debug_chart_operations', `CPU data sample:`, data[0]);
+                                                newData = data.map(item => {
+                                                    // Use explicit checks instead of || operator to handle 0 values correctly
+                                                    let cpuValue = undefined;
+                                                    if (item.cpu_load !== undefined) cpuValue = item.cpu_load;
+                                                    else if (item.cpu_usage !== undefined) cpuValue = item.cpu_usage;
+                                                    else if (item.cpu !== undefined) cpuValue = item.cpu;
+                                                    else if (item.value !== undefined) cpuValue = item.value;
+                                                    
+                                                    return {
+                                                        x: new Date(item.timestamp).getTime(),
+                                                        y: cpuValue
+                                                    };
+                                                });
+                                                addDebugLog(`🔍 CPU hodnoty: ${newData.slice(0, 3).map(d => `${d.x}:${d.y}`).join(', ')}...`);
+                                            } else if (chartId === 'temperatureChart') {
+                                                // Temperature data from SNMP - need to check field names
+                                                debugLog('debug_chart_operations', `Temperature data sample:`, data[0]);
+                                                newData = data.map(item => {
+                                                    // Use explicit checks instead of || operator to handle 0 values correctly
+                                                    let tempValue = undefined;
+                                                    if (item.temperature !== undefined) tempValue = item.temperature;
+                                                    else if (item.temp !== undefined) tempValue = item.temp;
+                                                    else if (item.value !== undefined) tempValue = item.value;
+                                                    
+                                                    return {
+                                                        x: new Date(item.timestamp).getTime(),
+                                                        y: tempValue
+                                                    };
+                                                });
+                                            } else if (chartId === 'memoryChart') {
+                                                // Memory data from SNMP - need to check field names
+                                                debugLog('debug_chart_operations', `Memory data sample:`, data[0]);
+                                                newData = data.map(item => {
+                                                    // Use explicit checks instead of || operator to handle 0 values correctly
+                                                    let memValue = undefined;
+                                                    if (item.memory_usage !== undefined) memValue = item.memory_usage;
+                                                    else if (item.memory !== undefined) memValue = item.memory;
+                                                    else if (item.value !== undefined) memValue = item.value;
+                                                    
+                                                    return {
+                                                        x: new Date(item.timestamp).getTime(),
+                                                        y: memValue
+                                                    };
+                                                });
+                                            }
+                                            
+                                            // Filter valid data points
+                                            newData = newData.filter(point => 
+                                                point.y !== null && point.y !== undefined && !isNaN(point.y)
+                                            );
+                                            addDebugLog(`🔍 Po filtrovaní: ${newData.length} platných bodov (odstránené null/undefined/NaN)`);
+                                            
+                                            if (newData.length === 0 && data.length > 0) {
+                                                addDebugLog(`❌ VŠETKY dáta boli odfiltrované! Vzorka surových hodnôt: ${data.slice(0, 3).map(d => Object.keys(d).map(k => `${k}:${d[k]}`).join(',')).join(' | ')}`);
+                                            }
+                                            
+                                            debugLog('debug_chart_operations', `Processed ${newData.length} valid data points for ${chartId}`);
+                                            addDebugLog(`🔄 Spracoval som ${newData.length}/${data.length} platných bodov pre ${chartId}`);
+                                            
+                                            if (targetChart.data.datasets[0] && newData.length > 0) {
+                                                targetChart.data.datasets[0].data = newData;
+                                                
+                                                // Use the same logic as applyFullTimeRangeToChart for proper time axis scaling
+                                                const nextRangeMs = getTimeRangeMs(nextRange);
+                                                const now = new Date().getTime();
+                                                
+                                                // Find actual data range
+                                                let dataMin = null;
+                                                let dataMax = null;
+                                                newData.forEach(point => {
+                                                    const x = point.x || point;
+                                                    if (dataMin === null || x < dataMin) dataMin = x;
+                                                    if (dataMax === null || x > dataMax) dataMax = x;
+                                                });
+                                                
+                                                // Apply same optimization logic as applyFullTimeRangeToChart
+                                                let requestedMin, requestedMax;
+                                                const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(nextRange);
+                                                
+                                                if (isShortRange && dataMin !== null && dataMax !== null) {
+                                                    // For short ranges: optimize to show all available data without gaps
+                                                    const dataDuration = dataMax - dataMin;
+                                                    
+                                                    if (dataDuration < nextRangeMs) {
+                                                        // If we have less data than requested range, show data-centric view
+                                                        // Add small padding (5% of data duration or minimum 2 minutes)
+                                                        const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
+                                                        requestedMin = dataMin - padding;
+                                                        requestedMax = dataMax + padding;
+                                                        addDebugLog(`📏 Krátky rozsah s málo dátami - zobrazujem od dát: ${new Date(requestedMin).toLocaleTimeString()} do ${new Date(requestedMax).toLocaleTimeString()}`);
+                                                    } else {
+                                                        // If we have enough data, show full range ending at latest data
+                                                        requestedMin = dataMax - nextRangeMs;
+                                                        requestedMax = dataMax;
+                                                        addDebugLog(`📏 Krátky rozsah s dosť dátami - zobrazujem posledných ${nextRange}: ${new Date(requestedMin).toLocaleTimeString()} do ${new Date(requestedMax).toLocaleTimeString()}`);
+                                                    }
+                                                } else {
+                                                    // For longer ranges: show full requested horizon
+                                                    requestedMin = now - nextRangeMs;
+                                                    requestedMax = now;
+                                                }
+                                                
+                                                targetChart.options.scales.x.min = requestedMin;
+                                                targetChart.options.scales.x.max = requestedMax;
+                                                
+                                                addDebugLog(`🕒 Nastavená časová os: ${new Date(requestedMin).toLocaleTimeString()} - ${new Date(requestedMax).toLocaleTimeString()}`);
+                                                
+                                                // Apply correct time formatting for the new range
+                                                updateSingleChartTimeFormat(targetChart, requestedMin, requestedMax);
+                                                
+                                                // Update subtitle with proper data coverage info
+                                                let subtitle = targetChart.options.plugins.subtitle;
+                                                if (subtitle && dataMin !== null && dataMax !== null) {
+                                                    const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
+                                                    const requestedDays = Math.ceil(nextRangeMs / (1000 * 60 * 60 * 24));
+                                                    
+                                                    if (isShortRange && dataDays < requestedDays) {
+                                                        if (dataDays < 1) {
+                                                            const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
+                                                            subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
+                                                        } else {
+                                                            subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
+                                                        }
+                                                        subtitle.color = '#10b981'; // Green for optimized view
+                                                    } else {
+                                                        subtitle.text = `Načítané ${newData.length} bodov za ${nextRange}`;
+                                                        subtitle.color = '#9ca3af';
+                                                    }
+                                                } else if (subtitle) {
+                                                    subtitle.text = `Načítané ${newData.length} bodov za ${nextRange}`;
+                                                    subtitle.color = '#9ca3af';
+                                                }
+                                                
+                                                // Update visual time range indicator to reflect the new range
+                                                // Don't reset _originalActiveButton here - we're expanding to larger range
+                                                updateTimeRangeButtonsVisually(nextRange);
+                                                
+                                                // Update chart
+                                                targetChart.update('active');
+                                                
+                                                debugLog('debug_chart_operations', `Successfully applied ${nextRange} data to chart ${chartId}, ${newData.length} points`);
+                                                addDebugLog(`✅ Úspešne aktualizovaný graf ${chartId} na ${nextRange} s ${newData.length} bodmi`);
+                                                
+                                                // CRITICAL: Update per-chart time range instead of global
+                                                // Each chart maintains its own independent time range state
+                                                window._chartTimeRanges.set(chartId, nextRange);
+                                                addDebugLog(`🔄 Aktualizovaný per-chart rozsah pre ${chartId}: ${nextRange}`);
+                                            } else {
+                                                addDebugLog(`⚠️ Žiadne platné dáta na aktualizáciu grafu ${chartId} (${newData.length} bodov)`);
+                                                debugLog('debug_chart_operations', `No valid data to update chart ${chartId}`);
+                                                
+                                                const subtitle = targetChart.options.plugins.subtitle;
+                                                if (subtitle) {
+                                                    subtitle.text = `Žiadne dáta pre ${nextRange}`;
+                                                    subtitle.color = '#fbbf24';
+                                                }
+                                            }
+                                        } else {
+                                            addDebugLog(`❌ Graf ${chartId} nenájdený alebo žiadne dáta`);
+                                            debugLog('debug_chart_operations', `Chart ${chartId} not found or no data`);
+                                        }
+                                    })
+                                    .catch(error => {
+                                        addDebugLog(`💥 API volanie zlyhalo: ${error.message}`);
+                                        console.error('Direct API call failed:', error);
+                                        
+                                        const subtitle = chart.options.plugins.subtitle;
+                                        if (subtitle) {
+                                            subtitle.text = 'Chyba pri načítavaní dát - skúste znovu';
+                                            subtitle.color = '#ef4444';
+                                        }
+                                    });
+                                
+                                return; // Exit early
+                            } else {
+                                debugLog('debug_api_calls', 'currentDeviceId not available for direct API call');
+                            }
+                        } else {
+                            debugLog('debug_chart_operations', `Data loading skipped for ${nextRange} - using existing data`);
+                        }
+                    } else {
+                        addDebugLog(`⚠️ Už na maximálnom rozsahu (${currentTimeRange})`);
+                        debugLog('debug_chart_operations', `Already at maximum range (${currentTimeRange})`);
+                    }
+                } else {
+                    addDebugLog(`🔴 Už na maximálnom rozsahu (1y) - žiadne ďalšie rozširovanie`);
+                    debugLog('debug_chart_operations', `Already at maximum range (1y) - no further expansion possible`);
+                    
+                    // Don't try to go beyond 1y, just show appropriate message
+                    const subtitle = chart.options.plugins.subtitle;
+                    if (subtitle) {
+                        subtitle.text = 'Zobrazený maximálny rozsah (1 rok) - označte oblasť pre zoom';
+                        subtitle.color = '#9ca3af';
+                    }
+                }
+            }
+            
+            // Reset to dynamic time formatting based on requested time range (not just data range)
+        // Apply this logic when there's no real zoom active (including full time range display)
+        if (!hasActiveZoom || !isRealZoom) {
+            // Check if this chart is permanently expanded - if so, skip this logic
+            if (window._expandedCharts && window._expandedCharts.has(chartId)) {
+                debugLog('debug_chart_operations', `resetZoom skipping time range reset for ${chartId} - chart is permanently expanded`);
+                chart.update('active');
+                debugLog('debug_chart_operations', `Reset completed for ${chartId} (permanently expanded)`);
+                return;
+            }
+            
+            // When zoom is completely reset or showing full time range, show the full requested time range on axis
+            // even if data only covers part of it (e.g., show 30 days on axis but data only for last 7 days)
+            const timeRangeMs = getTimeRangeMs(currentTimeRange);
+            const now = new Date().getTime();
+            
+            // Find the actual data range for comparison
+            let dataMin = null;
+            let dataMax = null;
+            
+            if (chart.data && chart.data.datasets && chart.data.datasets.length > 0) {
+                chart.data.datasets.forEach(dataset => {
+                    if (dataset.data && dataset.data.length > 0) {
+                        dataset.data.forEach(point => {
+                            const x = point.x || point;
+                            if (dataMin === null || x < dataMin) dataMin = x;
+                            if (dataMax === null || x > dataMax) dataMax = x;
+                        });
+                    }
+                });
+            }
+            
+            // For shorter time ranges, optimize the display to reduce left-side gaps
+            let requestedMin, requestedMax;
+            const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
+            
+            if (isShortRange && dataMin !== null && dataMax !== null) {
+                // For short ranges: optimize to show all available data without gaps
+                const dataDuration = dataMax - dataMin;
+                
+                // If data spans less than requested range, show data-centric view with padding
+                if (dataDuration < timeRangeMs) {
+                    // Add small padding (5% of data duration or minimum 2 minutes)
+                    const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
+                    requestedMin = dataMin - padding;
+                    requestedMax = dataMax + padding;
+                } else {
+                    // If we have enough data, show full range ending at latest data
+                    requestedMin = dataMax - timeRangeMs;
+                    requestedMax = dataMax;
+                }
+            } else {
+                // For longer ranges (7d, 30d, 90d, 1y): always show full requested horizon
+                requestedMin = now - timeRangeMs;
+                requestedMax = now;
+            }
+            
+            // Set axis to show the optimized range
+            chart.options.scales.x.min = requestedMin;
+            chart.options.scales.x.max = requestedMax;
+            
+            // Use time formatting based on the requested range (not data range)
+            updateSingleChartTimeFormat(chart, requestedMin, requestedMax);
+            
+            // Update subtitle to show data coverage within the displayed range
+            const subtitle = chart.options.plugins.subtitle;
+            if (subtitle && dataMin !== null && dataMax !== null) {
+                const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
+                const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
+                
+                if (isShortRange && dataDays < requestedDays) {
+                    // For short ranges with limited data, show optimized view message
+                    if (dataDays < 1) {
+                        const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
+                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
+                    } else {
+                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
+                    }
+                    subtitle.color = '#10b981'; // Green color for optimized view
+                } else if (!isShortRange && dataDays < requestedDays) {
+                    // For long ranges, show horizon message
+                    subtitle.text = `Zobrazený ${currentTimeRange} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
+                    subtitle.color = '#fbbf24';
+                } else {
+                    subtitle.text = `Zobrazené všetky dostupné dáta za ${currentTimeRange}`;
+                    subtitle.color = '#9ca3af';
+                }
+            }
+            
+            // Restore original visual time range indication when zoom is completely reset
+            restoreOriginalVisualTimeRange();
+        }
+        
+        // Update chart
+        chart.update('active');
+        addDebugLog(`✅ Reset dokončený pre ${chartId}`);
+        debugLog('debug_chart_operations', `Reset completed for ${chartId}`);
+        }
+
+        // Wrapper function for button-triggered zoom reset with debug logging
+        function resetZoomButton(chartId) {
+            addDebugLog(`🔎 resetZoomButton() kliknuté pre chart: ${chartId}`);
+            debugLog('debug_chart_operations', `resetZoomButton clicked for chart: ${chartId}`);
+            
+            // Simple rate limiting for button clicks
+            if (!window._buttonClickTimes) {
+                window._buttonClickTimes = {};
+            }
+            
+            const now = Date.now();
+            const lastButtonClickTime = window._buttonClickTimes[chartId] || 0;
+            const timeSinceLastButtonClick = now - lastButtonClickTime;
+            
+            if (timeSinceLastButtonClick < 500) {
+                addDebugLog(`⏱️ resetZoomButton rate limited pre ${chartId} - posledný klik bol ${timeSinceLastButtonClick}ms dozadu`);
+                debugLog('debug_chart_operations', `resetZoomButton rate limited for ${chartId} - last button click was ${timeSinceLastButtonClick}ms ago`);
+                return;
+            }
+            
+            window._buttonClickTimes[chartId] = now;
+            addDebugLog(`➡️ Volám resetZoom(${chartId})`);
+            resetZoom(chartId);
+        }
+
+        // Reset zoom on all charts - called when time range changes
+        function resetAllChartsZoom() {
+            debugLog('debug_chart_operations', 'resetAllChartsZoom called - this will reset all charts simultaneously');
+            
+            // Clear per-chart time range tracking when resetting all charts
+            if (window._chartTimeRanges) {
+                debugLog('debug_chart_operations', 'Clearing per-chart time ranges due to global reset');
+                window._chartTimeRanges.clear();
+                addDebugLog(`🔄 Vymazané per-chart time ranges - všetky grafy späť na default`);
+            }
+            
+            // Clear permanently expanded charts when global time range changes
+            if (window._expandedCharts) {
+                debugLog('debug_chart_operations', 'Clearing permanently expanded charts due to global time range change');
+                window._expandedCharts.clear();
+            }
+            
+            // Clear wasExpanded flags when global time range changes
+            if (window._wasExpanded) {
+                debugLog('debug_chart_operations', 'Clearing wasExpanded flags due to global time range change');
+                window._wasExpanded.clear();
+            }
+            
+            ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(chartId => {
+                const chart = Chart.getChart(chartId);
+                if (chart) {
+                    // Clear zoom completely
+                    chart.options.scales.x.min = undefined;
+                    chart.options.scales.x.max = undefined;
+                    
+                    // Reset subtitle
+                    const subtitle = chart.options.plugins.subtitle;
+                    if (subtitle) {
+                        subtitle.text = 'Označte oblasť pre zoom, dvojité kliknutie pre zoom out';
+                        subtitle.color = '#9ca3af';
+                    }
+                    
+                    // Reset to dynamic time formatting based on requested time range (not just data range)
+                    // Show the full requested time range on axis even if data only covers part of it
+                    const currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
+                    const timeRangeMs = getTimeRangeMs(currentTimeRange);
+                    const now = new Date().getTime();
+                    
+                    // Find the actual data range for comparison
+                    let dataMin = null;
+                    let dataMax = null;
+                    
+                    if (chart.data && chart.data.datasets && chart.data.datasets.length > 0) {
+                        chart.data.datasets.forEach(dataset => {
+                            if (dataset.data && dataset.data.length > 0) {
+                                dataset.data.forEach(point => {
+                                    const x = point.x || point;
+                                    if (dataMin === null || x < dataMin) dataMin = x;
+                                    if (dataMax === null || x > dataMax) dataMax = x;
+                                });
+                            }
+                        });
+                    }
+                    
+                    // For shorter time ranges, optimize the display to reduce left-side gaps
+                    let requestedMin, requestedMax;
+                    const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
+                    
+                    if (isShortRange && dataMin !== null && dataMax !== null) {
+                        // For short ranges: start from data beginning, but ensure we show the full requested duration
+                        const dataDuration = dataMax - dataMin;
+                        const minRequiredDuration = Math.min(timeRangeMs, dataDuration);
+                        
+                        // If data spans less than requested range, show data-centric view with padding
+                        if (dataDuration < timeRangeMs) {
+                            // Add small padding (5% of data duration or minimum 2 minutes)
+                            const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
+                            requestedMin = dataMin - padding;
+                            requestedMax = dataMax + padding;
+                        } else {
+                            // If we have enough data, show full range ending at latest data
+                            requestedMin = dataMax - timeRangeMs;
+                            requestedMax = dataMax;
+                        }
+                    } else {
+                        // For longer ranges (7d, 30d, 90d, 1y): always show full requested horizon
+                        requestedMin = now - timeRangeMs;
+                        requestedMax = now;
+                    }
+                    
+                    // Set axis to show the optimized range
+                    chart.options.scales.x.min = requestedMin;
+                    chart.options.scales.x.max = requestedMax;
+                    
+                    // Use time formatting based on the requested range (not data range)
+                    updateSingleChartTimeFormat(chart, requestedMin, requestedMax);
+                    
+                    // Update subtitle to show data coverage within the displayed range
+                    if (subtitle && dataMin !== null && dataMax !== null) {
+                        const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
+                        const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
+                        
+                        if (isShortRange && dataDays < requestedDays) {
+                            // For short ranges with limited data, show optimized view message
+                            if (dataDays < 1) {
+                                const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
+                                subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
+                            } else {
+                                subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
+                            }
+                            subtitle.color = '#10b981'; // Green color for optimized view
+                        } else if (!isShortRange && dataDays < requestedDays) {
+                            // For long ranges, show horizon message
+                            subtitle.text = `Zobrazený ${currentTimeRange} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
+                            subtitle.color = '#fbbf24';
+                        } else {
+                            subtitle.text = `Zobrazené všetky dostupné dáta za ${currentTimeRange}`;
+                            subtitle.color = '#9ca3af';
+                        }
+                    } else if (subtitle) {
+                        subtitle.text = 'Označte oblasť pre zoom, dvojité kliknutie pre zoom out';
+                        subtitle.color = '#9ca3af';
+                    }
+                    
+                    // Restore original visual time range indication when all charts are reset
+                    restoreOriginalVisualTimeRange();
+                    
+                    // Use 'none' update mode to avoid animation conflicts with subsequent data loading
+                    chart.update('none');
+                }
+            });
+        }
+
+        // Apply full time range horizon to all charts (called after data loading)
+        function applyFullTimeRangeToAllCharts() {
+            // Skip if we're doing single chart zoom-out expansion
+            if (window._singleChartZoomOut) {
+                debugLog('debug_chart_operations', 'applyFullTimeRangeToAllCharts skipped - single chart zoom-out in progress for:', window._singleChartZoomOut);
+                return;
+            }
+            
+            debugLog('debug_chart_operations', 'applyFullTimeRangeToAllCharts called - setting full horizon for all charts');
+            ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(chartId => {
+                const chart = Chart.getChart(chartId);
+                if (chart) {
+                    // Skip permanently expanded charts unless global time range changed
+                    if (window._expandedCharts && window._expandedCharts.has(chartId)) {
+                        debugLog('debug_chart_operations', `applyFullTimeRangeToAllCharts skipped for ${chartId} - chart is permanently expanded`);
+                        return;
+                    }
+                    applyFullTimeRangeToChart(chart);
+                }
+            });
+        }
+
+        // Apply full time range horizon to single chart
+        function applyFullTimeRangeToChart(chart) {
+            if (!chart) return;
+            
+            // Skip if this chart is currently in single zoom-out mode
+            if (window._singleChartZoomOut && chart.canvas && chart.canvas.id === window._singleChartZoomOut) {
+                debugLog('debug_chart_operations', `applyFullTimeRangeToChart skipped for ${chart.canvas.id} - chart is in single zoom-out mode`);
+                return;
+            }
+            
+            // Skip if this chart is permanently expanded
+            if (window._expandedCharts && chart.canvas && window._expandedCharts.has(chart.canvas.id)) {
+                debugLog('debug_chart_operations', `applyFullTimeRangeToChart skipped for ${chart.canvas.id} - chart is permanently expanded`);
+                return;
+            }
+            
+            // Get the requested time range and calculate full horizon
+            const currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
+            const timeRangeMs = getTimeRangeMs(currentTimeRange);
+            const now = new Date().getTime();
+            
+            // Find the actual data range for comparison
+            let dataMin = null;
+            let dataMax = null;
+            
+            if (chart.data && chart.data.datasets && chart.data.datasets.length > 0) {
+                chart.data.datasets.forEach(dataset => {
+                    if (dataset.data && dataset.data.length > 0) {
+                        dataset.data.forEach(point => {
+                            const x = point.x || point;
+                            if (dataMin === null || x < dataMin) dataMin = x;
+                            if (dataMax === null || x > dataMax) dataMax = x;
+                        });
+                    }
+                });
+            }
+            
+            // For shorter time ranges, optimize the display to reduce left-side gaps
+            let requestedMin, requestedMax;
+            const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
+            
+            if (isShortRange && dataMin !== null && dataMax !== null) {
+                // For short ranges: start from data beginning, but ensure we show the full requested duration
+                const dataDuration = dataMax - dataMin;
+                const minRequiredDuration = Math.min(timeRangeMs, dataDuration);
+                
+                // If data spans less than requested range, show data-centric view with padding
+                if (dataDuration < timeRangeMs) {
+                    // Add small padding (5% of data duration or minimum 2 minutes)
+                    const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
+                    requestedMin = dataMin - padding;
+                    requestedMax = dataMax + padding;
+                } else {
+                    // If we have enough data, show full range ending at latest data
+                    requestedMin = dataMax - timeRangeMs;
+                    requestedMax = dataMax;
+                }
+            } else {
+                // For longer ranges (7d, 30d, 90d, 1y): always show full requested horizon
+                requestedMin = now - timeRangeMs;
+                requestedMax = now;
+            }
+            
+            // Set axis to show the optimized range
+            chart.options.scales.x.min = requestedMin;
+            chart.options.scales.x.max = requestedMax;
+            
+            // NOTE: Time formatting is handled by monitoring.js updateChartTimeFormats() 
+            // during global time range changes. Only update time formats during zoom operations.
+            
+            // Update subtitle to show data coverage within the displayed range
+            const subtitle = chart.options.plugins.subtitle;
+            if (subtitle && dataMin !== null && dataMax !== null) {
+                const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
+                const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
+                const actualRangeDays = Math.ceil((requestedMax - requestedMin) / (1000 * 60 * 60 * 24));
+                
+                if (isShortRange && dataDays < requestedDays) {
+                    // For short ranges with limited data, show optimized view message
+                    if (dataDays < 1) {
+                        const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
+                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
+                    } else {
+                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
+                    }
+                    subtitle.color = '#10b981'; // Green color for optimized view
+                } else if (!isShortRange && dataDays < requestedDays) {
+                    // For long ranges, show horizon message
+                    subtitle.text = `Zobrazený ${currentTimeRange} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
+                    subtitle.color = '#fbbf24';
+                } else {
+                    subtitle.text = `Zobrazené všetky dostupné dáta za ${currentTimeRange}`;
+                    subtitle.color = '#9ca3af';
+                }
+            } else if (subtitle) {
+                subtitle.text = `Zobrazený ${currentTimeRange} horizont - označte oblasť pre zoom`;
+                subtitle.color = '#9ca3af';
+            }
+            
+            // Update chart (use 'none' to avoid animation during data loading)
+            chart.update('none');
+            
+            debugLog('debug_chart_operations', `applyFullTimeRangeToChart completed for ${chart.canvas ? chart.canvas.id : 'unknown'} - applied ${currentTimeRange} range`);
+        }
+
+        // Export to window for access from monitoring.js
+        window.resetAllChartsZoom = resetAllChartsZoom;
+        window.applyFullTimeRangeToAllCharts = applyFullTimeRangeToAllCharts;
+
+        // Update time range selector based on current zoom level
+        // Helper function to update time format for single chart without affecting others
+        function updateSingleChartTimeFormat(chart, minX, maxX) {
+            if (!chart || !minX || !maxX) return;
+            
+            // For full time range display, use the current time range setting instead of actual data range
+            const currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
+            const timeRangeMs = getTimeRangeMs(currentTimeRange);
+            
+            // Check if we're displaying the full requested range (not zoomed in)
+            const isFullRange = Math.abs((maxX - minX) - timeRangeMs) < (timeRangeMs * 0.1); // 10% tolerance
+            
+            let diffMs, diffMinutes, diffHours, diffDays;
+            
+            if (isFullRange) {
+                // Use the requested time range for formatting (full horizon display)
+                diffMs = timeRangeMs;
+                diffMinutes = diffMs / (1000 * 60);
+                diffHours = diffMs / (1000 * 60 * 60);
+                diffDays = diffHours / 24;
+            } else {
+                // Use actual zoom range for formatting (zoomed in)
+                diffMs = maxX - minX;
+                diffMinutes = diffMs / (1000 * 60);
+                diffHours = diffMs / (1000 * 60 * 60);
+                diffDays = diffHours / 24;
+            }
+            
+            // Determine appropriate time format for this zoom level with better granularity
+            let timeFormats;
+            
+            // For full range display of long time periods, use specialized formatting
+            if (isFullRange && diffDays >= 7) {
+                if (diffDays <= 7) {
+                    // 7d range - show daily markers
+                    timeFormats = {
+                        displayFormats: { day: 'dd/MM', hour: 'dd/MM' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'day',
+                        stepSize: 1,
+                        maxTicksLimit: 8
+                    };
+                } else if (diffDays <= 30) {
+                    // 30d range - show daily markers every 3-4 days
+                    timeFormats = {
+                        displayFormats: { day: 'dd/MM', week: 'dd/MM' },
+                        tooltipFormat: 'dd/MM/yyyy',
+                        unit: 'day',
+                        stepSize: 3,
+                        maxTicksLimit: 12
+                    };
+                } else if (diffDays <= 90) {
+                    // 90d range - show weekly markers
+                    timeFormats = {
+                        displayFormats: { day: 'dd/MM', week: 'dd/MM', month: 'dd/MM' },
+                        tooltipFormat: 'dd/MM/yyyy',
+                        unit: 'week',
+                        stepSize: 1,
+                        maxTicksLimit: 12
+                    };
+                } else {
+                    // 1y range - show monthly markers
+                    timeFormats = {
+                        displayFormats: { week: 'dd/MM', month: 'MM/yy', quarter: 'MM/yy' },
+                        tooltipFormat: 'dd/MM/yyyy',
+                        unit: 'month',
+                        stepSize: 1,
+                        maxTicksLimit: 12
+                    };
+                }
+            } else if (diffMinutes <= 30) {
+                // Very small range - show minutes with seconds
+                timeFormats = {
+                    displayFormats: { minute: 'HH:mm', second: 'HH:mm:ss' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm:ss',
+                    unit: 'minute',
+                    stepSize: Math.max(1, Math.ceil(diffMinutes / 10)),
+                    maxTicksLimit: 10
+                };
+            } else if (diffMinutes <= 120) {
+                // Small range (30-120 minutes) - show every 5-10 minutes
+                timeFormats = {
+                    displayFormats: { minute: 'HH:mm', hour: 'HH:mm' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'minute',
+                    stepSize: Math.max(5, Math.ceil(diffMinutes / 12)),
+                    maxTicksLimit: 12
+                };
+            } else if (diffHours <= 8) {
+                // Medium range (2-8 hours) - show every 15-30 minutes
+                timeFormats = {
+                    displayFormats: { minute: 'HH:mm', hour: 'HH:mm' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'minute',
+                    stepSize: Math.max(15, Math.ceil(diffMinutes / 15)),
+                    maxTicksLimit: 15
+                };
+            } else if (diffHours <= 24) {
+                // Day range - show every 1-3 hours
+                timeFormats = {
+                    displayFormats: { hour: 'HH:mm', day: 'dd/MM HH:mm' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'hour',
+                    stepSize: Math.max(1, Math.ceil(diffHours / 12)),
+                    maxTicksLimit: 12
+                };
+            } else if (diffHours <= 48) {
+                // 1-2 day range - show every 2-4 hours with times visible
+                timeFormats = {
+                    displayFormats: { hour: 'HH:mm', day: 'dd/MM HH:mm' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'hour',
+                    stepSize: Math.max(2, Math.ceil(diffHours / 15)),
+                    maxTicksLimit: 15
+                };
+            } else if (diffDays <= 5) {
+                // 2-5 day range - show every 4-6 hours with times visible
+                timeFormats = {
+                    displayFormats: { hour: 'HH:mm', day: 'dd/MM HH:mm' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'hour',
+                    stepSize: Math.max(4, Math.ceil(diffHours / 18)),
+                    maxTicksLimit: 18
+                };
+            } else if (diffDays <= 7) {
+                // 6-7 day range - show daily markers (e.g., for 7d time range)
+                timeFormats = {
+                    displayFormats: { day: 'dd/MM', hour: 'dd/MM' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'day',
+                    stepSize: 1,
+                    maxTicksLimit: 8
+                };
+            } else if (diffDays <= 10) {
+                // 8-10 day range - show daily markers
+                timeFormats = {
+                    displayFormats: { day: 'dd/MM', hour: 'dd/MM' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'day',
+                    stepSize: 1,
+                    maxTicksLimit: 10
+                };
+            } else if (diffDays <= 30) {
+                // 2-4 week range (up to 30d) - show daily markers, every 2-3 days
+                timeFormats = {
+                    displayFormats: { day: 'dd/MM', week: 'dd/MM' },
+                    tooltipFormat: 'dd/MM/yyyy HH:mm',
+                    unit: 'day',
+                    stepSize: Math.max(2, Math.ceil(diffDays / 15)),
+                    maxTicksLimit: 15
+                };
+            } else if (diffDays <= 90) {
+                // 30-90 day range - show weekly markers with day/month format
+                timeFormats = {
+                    displayFormats: { day: 'dd/MM', week: 'dd/MM', month: 'dd/MM' },
+                    tooltipFormat: 'dd/MM/yyyy',
+                    unit: 'week',
+                    stepSize: 1,
+                    maxTicksLimit: 12
+                };
+            } else if (diffDays <= 365) {
+                // 90d - 1 year range - show monthly markers
+                timeFormats = {
+                    displayFormats: { week: 'dd/MM', month: 'MM/yy', quarter: 'MM/yy' },
+                    tooltipFormat: 'dd/MM/yyyy',
+                    unit: 'month',
+                    stepSize: 1,
+                    maxTicksLimit: 12
+                };
+            } else {
+                // Very long range (365+ days) - show quarterly/monthly markers with year display
+                timeFormats = {
+                    displayFormats: { month: 'MM/yy', quarter: 'Q/yy', year: 'yyyy' },
+                    tooltipFormat: 'dd/MM/yyyy',
+                    unit: 'quarter',
+                    stepSize: 1,
+                    maxTicksLimit: 8
+                };
+            }
+            
+            // Apply time formats to this chart only
+            if (chart.options && chart.options.scales && chart.options.scales.x) {
+                chart.options.scales.x.time.displayFormats = timeFormats.displayFormats;
+                chart.options.scales.x.time.tooltipFormat = timeFormats.tooltipFormat;
+                chart.options.scales.x.time.unit = timeFormats.unit;
+                chart.options.scales.x.time.stepSize = timeFormats.stepSize;
+                if (chart.options.scales.x.ticks) {
+                    chart.options.scales.x.ticks.maxTicksLimit = timeFormats.maxTicksLimit || 8;
+                }
+                
+                debugLog('debug_chart_operations', `Applied time format for ${chart.canvas?.id}: unit=${timeFormats.unit}, stepSize=${timeFormats.stepSize}, range=${(diffDays).toFixed(1)}d, isFullRange=${isFullRange}`);
+            }
+        }
+
+        // Helper function to get time formats for a specific range (for full range display)
+        function getTimeFormatsForRange(timeRange) {
+            // These formats are optimized for full time range display
+            // showing the complete horizon even when data doesn't cover it all
+            switch (timeRange) {
+                case '30m':
+                    return {
+                        displayFormats: { minute: 'HH:mm', hour: 'HH:mm' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'minute',
+                        stepSize: 5,
+                        maxTicksLimit: 8
+                    };
+                case '3h':
+                    return {
+                        displayFormats: { minute: 'HH:mm', hour: 'HH:mm' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'minute',
+                        stepSize: 20,
+                        maxTicksLimit: 10
+                    };
+                case '6h':
+                    return {
+                        displayFormats: { minute: 'HH:mm', hour: 'HH:mm' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'hour',
+                        stepSize: 1,
+                        maxTicksLimit: 8
+                    };
+                case '12h':
+                    return {
+                        displayFormats: { hour: 'HH:mm', day: 'dd/MM HH:mm' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'hour',
+                        stepSize: 2,
+                        maxTicksLimit: 8
+                    };
+                case '24h':
+                    return {
+                        displayFormats: { hour: 'HH:mm', day: 'dd/MM HH:mm' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'hour',
+                        stepSize: 3,
+                        maxTicksLimit: 10
+                    };
+                case '7d':
+                    return {
+                        displayFormats: { day: 'dd/MM', hour: 'dd/MM HH:mm' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'day',
+                        stepSize: 1,
+                        maxTicksLimit: 8
+                    };
+                case '30d':
+                    return {
+                        displayFormats: { day: 'dd/MM', month: 'MM/yy' },
+                        tooltipFormat: 'dd/MM/yyyy',
+                        unit: 'day',
+                        stepSize: 3,
+                        maxTicksLimit: 12
+                    };
+                case '90d':
+                    return {
+                        displayFormats: { day: 'dd/MM', month: 'MM/yy' },
+                        tooltipFormat: 'dd/MM/yyyy',
+                        unit: 'day',
+                        stepSize: 7,
+                        maxTicksLimit: 14
+                    };
+                case '1y':
+                    return {
+                        displayFormats: { day: 'dd/MM', month: 'MM/yy', year: 'yyyy' },
+                        tooltipFormat: 'dd/MM/yyyy',
+                        unit: 'month',
+                        stepSize: 1,
+                        maxTicksLimit: 12
+                    };
+                default:
+                    return {
+                        displayFormats: { hour: 'HH:mm', day: 'dd/MM' },
+                        tooltipFormat: 'dd/MM/yyyy HH:mm',
+                        unit: 'hour',
+                        stepSize: 2,
+                        maxTicksLimit: 8
+                    };
+            }
+        }
+
+        // Global function to cleanup all selection boxes (emergency cleanup)
+        function cleanupAllSelections() {
+            // Debouncing - ignore if called too frequently
+            const now = Date.now();
+            if (window._lastCleanupTime && (now - window._lastCleanupTime) < 100) {
+                debugLog('debug_chart_operations', `cleanupAllSelections debounced - last call was ${now - window._lastCleanupTime}ms ago`);
+                return;
+            }
+            window._lastCleanupTime = now;
+            
+            debugLog('cleanupAllSelections called - clearing all loading states and selection boxes');
+            
+            try {
+                // Clear any pending loading states
+                if (window._chartLoadingStates) {
+                    console.log('Debug: Emergency cleanup of loading states:', window._chartLoadingStates);
+                    window._chartLoadingStates = {};
+                }
+                
+                // Clear pending zoom targets
+                if (window._pendingZoomTarget) {
+                    console.log('Debug: Emergency cleanup of pending zoom target:', window._pendingZoomTarget);
+                    window._pendingZoomTarget = null;
+                }
+                
+                // 1. Vyčistiť všetky premenné výberových okien
+                if (typeof chartSelectionBox !== 'undefined' && chartSelectionBox) {
+                    if (chartSelectionBox.parentElement) {
+                        chartSelectionBox.parentElement.removeChild(chartSelectionBox);
+                    }
+                    chartSelectionBox = null;
+                }
+                
+                if (typeof chartIsSelecting !== 'undefined') {
+                    chartIsSelecting = false;
+                }
+                
+                // 2. Nájsť a odstrániť všetky potenciálne výberové okná
+                const allContainers = document.querySelectorAll('.chart-container');
+                allContainers.forEach(container => {
+                    // Skúsiť rôzne selektory pre nájdenie výberových okien
+                    const selectors = [
+                        'div[style*="rgba(59, 130, 246, 0.2)"]',
+                        'div[style*="position:absolute"]',
+                        'div.chart-selection-box',
+                        'div[id*="selection"]'
+                    ];
+                    
+                    selectors.forEach(selector => {
+                        const selectionBoxes = container.querySelectorAll(selector);
+                        if (selectionBoxes.length > 0) {
+                            console.log(`Found ${selectionBoxes.length} selection boxes with selector ${selector}`);
+                        }
+                        selectionBoxes.forEach(box => {
+                            if (box.parentElement) {
+                                console.log('Removing selection box:', box);
+                                box.parentElement.removeChild(box);
+                            }
+                        });
+                    });
+                });
+                
+                // 3. Vyčistiť všetky štýly dokumentu, ktoré by mohli ovplyvniť kurzor
+                document.body.style.cursor = '';
+                document.querySelectorAll('.chart-container').forEach(container => {
+                    container.style.cursor = '';
+                });
+                
+                console.log('All selections cleaned up successfully');
+            } catch (error) {
+                console.error('Error during emergency cleanup:', error);
+            }
+        }
+
+        // Reset global variables for cleanup function
+        function resetGlobalZoomVariables() {
+            if (typeof currentChart !== 'undefined') {
+                currentChart = null;
+            }
+            console.log('Emergency cleanup complete');
+        }
+
+        // Helper function to get time range in milliseconds
+        function getTimeRangeMs(timeRange) {
+            const now = new Date();
+            switch (timeRange) {
+                case '30m': return 30 * 60 * 1000; // 30 minutes
+                case '3h': return 3 * 60 * 60 * 1000;
+                case '6h': return 6 * 60 * 60 * 1000;
+                case '12h': return 12 * 60 * 60 * 1000;
+                case '24h': return 24 * 60 * 60 * 1000;
+                case '7d': return 7 * 24 * 60 * 60 * 1000;
+                case '30d': return 30 * 24 * 60 * 60 * 1000;
+                case '90d': return 90 * 24 * 60 * 60 * 1000;
+                case '1y': return 365 * 24 * 60 * 60 * 1000;
+                default: return 24 * 60 * 60 * 1000; // default 24h
+            }
+        }
+
+        // Helper function to get appropriate time range for given millisecond range
+        function getTimeRangeForMs(rangeMs) {
+            const hour = 60 * 60 * 1000;
+            const day = 24 * hour;
+            
+            // Use midpoint boundaries to correctly categorize actual data ranges
+            if (rangeMs <= 1.5 * hour) return '30m';     // up to 1.5h → 30m
+            if (rangeMs <= 4.5 * hour) return '3h';      // up to 4.5h → 3h
+            if (rangeMs <= 9 * hour) return '6h';        // up to 9h → 6h  
+            if (rangeMs <= 18 * hour) return '12h';      // up to 18h → 12h
+            if (rangeMs <= 3.5 * day) return '24h';      // up to 3.5 days → 24h
+            if (rangeMs <= 18.5 * day) return '7d';      // up to 18.5 days → 7d
+            if (rangeMs <= 60 * day) return '30d';       // up to 60 days → 30d
+            if (rangeMs <= 180 * day) return '90d';      // up to 180 days → 90d
+            return '1y';
+        }
+
+        // Helper function to get the next time range in progression
+        function getNextTimeRange(currentRange) {
+            const rangeProgression = ['30m', '3h', '6h', '12h', '24h', '7d', '30d', '90d', '1y'];
+            const currentIndex = rangeProgression.indexOf(currentRange);
+            
+            if (currentIndex === -1 || currentIndex >= rangeProgression.length - 1) {
+                return null; // Already at maximum or invalid range
+            }
+            
+            return rangeProgression[currentIndex + 1];
+        }
+
+        // Helper function to check if data loading is needed for given range
+        function isDataLoadingNeeded(targetRange, currentRange) {
+            // Always load data when expanding to a longer range
+            const targetMs = getTimeRangeMs(targetRange);
+            const currentMs = getTimeRangeMs(currentRange);
+            
+            return targetMs > currentMs;
+        }
+
+        // Helper function to get next larger time range
+        function getNextLargerRange(currentRange) {
+            const ranges = ['30m', '3h', '6h', '12h', '24h', '7d', '30d', '90d', '1y'];
+            const currentIndex = ranges.indexOf(currentRange);
+            if (currentIndex >= 0 && currentIndex < ranges.length - 1) {
+                return ranges[currentIndex + 1];
+            }
+            return '1y'; // Maximum range
+        }
+
+        // Load additional data when zoom-out requires larger time range
+        // Funkcia pre načítavanie dodatočných dát pre zoom-out
+        function loadAdditionalDataForZoom(newRange, targetChart, targetMin, targetMax) {
+            if (typeof window.currentDeviceId !== 'undefined' && window.currentDeviceId) {
+                console.log('Loading additional data for zoom-out to range:', newRange);
+                
+                // Store zoom target for after data loads
+                if (targetChart && targetMin !== undefined && targetMax !== undefined) {
+                    window._pendingZoomTarget = {
+                        chartId: targetChart.canvas.id,
+                        min: targetMin,
+                        max: targetMax
+                    };
+                }
+                
+                // Temporarily update the global range for data loading
+                const originalGlobalRange = window.currentTimeRange;
+                window.currentTimeRange = newRange;
+                
+                // Load data for the larger range using the monitoring.js function
+                if (typeof window.loadHistoricalData === 'function') {
+                    window.loadHistoricalData(window.currentDeviceId).then(() => {
+                        console.log('Additional data loaded for zoom-out');
+                        
+                        // Apply pending zoom to target chart
+                        if (window._pendingZoomTarget) {
+                            const chart = Chart.getChart(window._pendingZoomTarget.chartId);
+                            if (chart) {
+                                chart.options.scales.x.min = window._pendingZoomTarget.min;
+                                chart.options.scales.x.max = window._pendingZoomTarget.max;
+                                
+                                // Update subtitle for successful zoom out
+                                const subtitle = chart.options.plugins.subtitle;
+                                if (subtitle) {
+                                    subtitle.text = 'Zoom aktívny s rozšírenými dátami - dvojité kliknutie pre reset';
+                                    subtitle.color = '#fbbf24';
+                                }
+                                
+                                // Update time format for the new zoom level
+                                updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
+                                
+                                chart.update('active');
+                                console.log('Applied pending zoom after data load');
+                            }
+                            window._pendingZoomTarget = null;
+                        }
+                        
+                        // Restore original global range after loading
+                        window.currentTimeRange = originalGlobalRange;
+                    }).catch(error => {
+                        console.error('Error loading additional data for zoom:', error);
+                        
+                        // Clear pending zoom on error and apply basic zoom
+                        if (window._pendingZoomTarget) {
+                            const chart = Chart.getChart(window._pendingZoomTarget.chartId);
+                            if (chart) {
+                                chart.options.scales.x.min = window._pendingZoomTarget.min;
+                                chart.options.scales.x.max = window._pendingZoomTarget.max;
+                                
+                                const subtitle = chart.options.plugins.subtitle;
+                                if (subtitle) {
+                                    subtitle.text = 'Zoom aktívny s dostupnými dátami - dvojité kliknutie pre reset';
+                                    subtitle.color = '#fbbf24';
+                                }
+                                
+                                updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
+                                chart.update('active');
+                            }
+                            window._pendingZoomTarget = null;
+                        }
+                        
+                        // Restore original range on error
+                        window.currentTimeRange = originalGlobalRange;
+                    });
+                } else {
+                    // Fallback: just apply zoom with available data
+                    if (targetChart && targetMin !== undefined && targetMax !== undefined) {
+                        targetChart.options.scales.x.min = targetMin;
+                        targetChart.options.scales.x.max = targetMax;
+                        
+                        const subtitle = targetChart.options.plugins.subtitle;
+                        if (subtitle) {
+                            subtitle.text = 'Zoom aktívny s dostupnými dátami - dvojité kliknutie pre reset';
+                            subtitle.color = '#fbbf24';
+                        }
+                        
+                        updateSingleChartTimeFormat(targetChart, targetMin, targetMax);
+                        targetChart.update('active');
+                    }
+                }
+            }
+        }
+
+        // Debug helper functions (integrated with our debug system)
+        let debugSettings = {};
+        
+        const loadDebugSettings = async () => {
+            try {
+                const response = await fetch('/api/settings');
+                const settings = await response.json();
+                debugSettings = settings;
+                
+                // Initialize debug terminal after settings are loaded
+                initializeDebugTerminal();
+            } catch (error) {
+                console.error('Failed to load debug settings:', error);
+            }
+        };
+        
+        function debugLog(debugType, message, ...args) {
+            if (debugSettings[debugType] === 'true' || debugSettings['debug_master_switch'] === 'true') {
+                console.log(`[${debugType.toUpperCase()}]`, message, ...args);
+            }
+        }
+        
+        // Load debug settings on initialization
+        loadDebugSettings();
+        // Add custom zoom functionality to charts
+        function addCustomZoom(chart) {
+            const canvas = chart.canvas;
+            let chartStartX = 0;
+            let chartIsSelecting = false;
+            let chartSelectionBox = null;
+            let lastTapTime = 0;
+            let touchStartX = 0;
+            
+            // Remove any existing listeners for this chart
+            canvas.removeEventListener('mousedown', canvas._zoomMouseDown);
+            canvas.removeEventListener('mousemove', canvas._zoomMouseMove);
+            canvas.removeEventListener('mouseleave', canvas._zoomMouseLeave);
+            document.removeEventListener('mouseup', canvas._zoomMouseUp);
+            canvas.removeEventListener('touchstart', canvas._zoomTouchStart);
+            canvas.removeEventListener('touchmove', canvas._zoomTouchMove);
+            canvas.removeEventListener('touchend', canvas._zoomTouchEnd);
+            canvas.removeEventListener('dblclick', canvas._zoomDoubleClick);
+            
+            // Double click/tap handler for zoom out
+            const doubleClickHandler = function(e) {
+                e.preventDefault();
+                
+                debugLog('debug_chart_operations', `Double-click detected on chart: ${chart.canvas.id}`);
+                
+                // Additional debouncing for double-click to prevent rapid calls
+                const now = Date.now();
+                if (!chart._lastDoubleClickTime) {
+                    chart._lastDoubleClickTime = 0;
+                }
+                
+                const timeSinceLastDoubleClick = now - chart._lastDoubleClickTime;
+                if (timeSinceLastDoubleClick < 800) { // 800ms debouncing for double-click - reasonable protection
+                    debugLog('debug_chart_operations', `Double-click debounced for ${chart.canvas.id} - last was ${timeSinceLastDoubleClick}ms ago`);
+                    return;
+                }
+                
+                chart._lastDoubleClickTime = now;
+                
+                // Reset zoom - use chart ID directly
+                resetZoom(chart.canvas.id);
+            };
+            
+            // Mouse down handler with improved precision for dense data
+            const mouseDownHandler = function(e) {
+                // Prevent any browser text selection during drag
+                e.preventDefault();
+                e.stopPropagation();
+                
+                chartIsSelecting = true;
+                currentChart = chart;
+                window._chartSelectionActive = true; // Global flag for click listener
+                
+                // Get fresh canvas rectangle with subpixel precision
+                const rect = canvas.getBoundingClientRect();
+                chartStartX = e.clientX - rect.left;
+                
+                // Add temporary cursor style for better UX
+                canvas.style.cursor = 'crosshair';
+                
+                createSelectionBox();
+            };
+            
+            // Mouse move handler with improved responsiveness
+            const mouseMoveHandler = function(e) {
+                if (chartIsSelecting && chartSelectionBox && currentChart === chart) {
+                    // Prevent text selection during drag
+                    e.preventDefault();
+                    
+                    const rect = canvas.getBoundingClientRect();
+                    const currentCanvasX = e.clientX - rect.left;
+                    
+                    // Update selection box with throttling for performance
+                    updateSelectionBox(chartStartX, currentCanvasX);
+                    
+                    // Add visual feedback in cursor
+                    const selectionWidth = Math.abs(currentCanvasX - chartStartX);
+                    if (selectionWidth > 10) {
+                        canvas.style.cursor = 'col-resize';
+                    } else {
+                        canvas.style.cursor = 'crosshair';
+                    }
+                }
+            };
+            
+            // Mouse up handler (na document, aby fungoval aj mimo canvas)
+            const mouseUpHandler = function(e) {
+                console.log('Mouse up event detected');
+                
+                // Vždy vyčistiť výber bez ohľadu na kontext
+                if (chartSelectionBox) {
+                    try {
+                        // Najprv sa pokúsime spraviť zoom ak je to možné
+                        if (chartIsSelecting && currentChart === chart) {
+                            // Only do zoom selection if mouse up is still over the canvas
+                            const rect = canvas.getBoundingClientRect();
+                            const isOverCanvas = (
+                                e.clientX >= rect.left && 
+                                e.clientX <= rect.right && 
+                                e.clientY >= rect.top && 
+                                e.clientY <= rect.bottom
+                            );
+                            
+                            if (isOverCanvas) {
+                                const endCanvasX = e.clientX - rect.left;
+                                handleZoomSelection(chartStartX, endCanvasX);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error during zoom selection:', error);
+                    } finally {
+                        // Vždy vyčistiť výber, aj keď nastala chyba
+                        cleanupSelection();
+                    }
+                } else {
+                    // Ak z nejakého dôvodu chartSelectionBox neexistuje, len reset stavov
+                    if (chartIsSelecting && currentChart === chart) {
+                        chartIsSelecting = false;
+                        window._chartSelectionActive = false;
+                        currentChart = null;
+                    }
+                }
+                
+                // Reset stavových premenných - už sa robí v cleanupSelection(), takže je zbytočné
+                // chartIsSelecting = false;
+                // window._chartSelectionActive = false; 
+                // if (currentChart === chart) {
+                //     currentChart = null;
+                // }
+            };
+            
+            // Mouse leave handler - cleanup selection if mouse leaves canvas
+            const mouseLeaveHandler = function(e) {
+                console.log('Mouse leave event detected');
+                
+                // Bezpečnostné čistenie pri opustení oblasti grafu
+                if (chartIsSelecting && currentChart === chart) {
+                    cleanupSelection();
+                    chartIsSelecting = false;
+                    if (currentChart === chart) {
+                        currentChart = null;
+                    }
+                }
+            };
+            
+            // Touch start handler
+            const touchStartHandler = function(e) {
+                e.preventDefault();
+                
+                // Check for double tap
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTapTime;
+                if (tapLength < 500 && tapLength > 0) {
+                    // Double tap detected - zoom out
+                    debugLog('debug_chart_operations', `Double-tap detected on chart: ${chart.canvas.id}`);
+                    
+                    // Additional debouncing for double-tap
+                    if (!chart._lastDoubleTapTime) {
+                        chart._lastDoubleTapTime = 0;
+                    }
+                    
+                    const timeSinceLastDoubleTap = currentTime - chart._lastDoubleTapTime;
+                    if (timeSinceLastDoubleTap < 1000) { // 1 second debouncing
+                        debugLog('debug_chart_operations', `Double-tap debounced for ${chart.canvas.id} - last was ${timeSinceLastDoubleTap}ms ago`);
+                        return;
+                    }
+                    
+                    chart._lastDoubleTapTime = currentTime;
+                    resetZoom(chart.canvas.id);
+                    return;
+                }
+                lastTapTime = currentTime;
+                
+                // Start selection
+                const touch = e.touches[0];
+                chartIsSelecting = true;
+                currentChart = chart;
+                window._chartSelectionActive = true; // Global flag for click listener
+                
+                const rect = canvas.getBoundingClientRect();
+                touchStartX = touch.clientX - rect.left;
+                chartStartX = touchStartX;
+                
+                createSelectionBox();
+            };
+            
+            // Touch move handler
+            const touchMoveHandler = function(e) {
+                if (chartIsSelecting && chartSelectionBox && currentChart === chart) {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    const currentCanvasX = touch.clientX - rect.left;
+                    updateSelectionBox(touchStartX, currentCanvasX);
+                }
+            };
+            
+            // Touch end handler
+            const touchEndHandler = function(e) {
+                if (chartIsSelecting && currentChart === chart) {
+                    e.preventDefault();
+                    if (chartSelectionBox) {
+                        const touch = e.changedTouches[0];
+                        const rect = canvas.getBoundingClientRect();
+                        const endCanvasX = touch.clientX - rect.left;
+                        handleZoomSelection(touchStartX, endCanvasX);
+                    }
+                    cleanupSelection();
+                }
+            };
+            
+            // Helper function to create selection box
+            function createSelectionBox() {
+                chartSelectionBox = document.createElement('div');
+                chartSelectionBox.style.position = 'absolute';
+                chartSelectionBox.style.background = 'rgba(59, 130, 246, 0.2)';
+                chartSelectionBox.style.border = '2px solid rgb(59, 130, 246)';
+                chartSelectionBox.style.borderRadius = '4px';
+                chartSelectionBox.style.pointerEvents = 'none';
+                chartSelectionBox.style.zIndex = '1000';
+                chartSelectionBox.style.display = 'none';
+                
+                const chartContainer = canvas.closest('.chart-container');
+                if (chartContainer) {
+                    chartContainer.appendChild(chartSelectionBox);
+                }
+            }
+            
+            // Helper function to update selection box with improved precision
+            function updateSelectionBox(startX, currentX) {
+                if (!chartSelectionBox || !chartIsSelecting) {
+                    return; // Safety check
+                }
+                
+                // Improved threshold for dense data - smaller minimum movement required
+                const minMovement = 3; // Reduced from 5 for better precision with dense data
+                
+                if (Math.abs(currentX - startX) > minMovement) {
+                    chartSelectionBox.style.display = 'block';
+                    
+                    const left = Math.min(startX, currentX);
+                    const width = Math.abs(currentX - startX);
+                    
+                    const canvasRect = canvas.getBoundingClientRect();
+                    const containerRect = canvas.closest('.chart-container').getBoundingClientRect();
+                    
+                    const offsetLeft = canvasRect.left - containerRect.left;
+                    const offsetTop = canvasRect.top - containerRect.top;
+                    
+                    chartSelectionBox.style.left = (offsetLeft + left) + 'px';
+                    chartSelectionBox.style.top = offsetTop + 'px';
+                    chartSelectionBox.style.width = width + 'px';
+                    chartSelectionBox.style.height = canvasRect.height + 'px';
+                    
+                    // Keep consistent blue color for selection box regardless of direction
+                    chartSelectionBox.style.borderColor = 'rgb(59, 130, 246)'; // Always blue
+                }
+            }
+            
+            // Helper function to handle zoom selection with improved precision for dense data
+            function handleZoomSelection(startX, endX) {
+                // Reduced minimum selection width for better precision with dense data
+                const minSelectionWidth = 10; // Reduced from 20 for better precision
+                
+                if (Math.abs(endX - startX) > minSelectionWidth) {
+                    const chartArea = chart.chartArea;
+                    
+                    // Improved clamping with better edge handling
+                    const clampedStartX = Math.max(chartArea.left, Math.min(chartArea.right, startX));
+                    const clampedEndX = Math.max(chartArea.left, Math.min(chartArea.right, endX));
+                    
+                    // Get data values for the selected pixels
+                    let startDataX = chart.scales.x.getValueForPixel(clampedStartX);
+                    let endDataX = chart.scales.x.getValueForPixel(clampedEndX);
+                    
+                    // Snap to nearby data points for better precision with dense data
+                    if (chart.data.datasets[0] && chart.data.datasets[0].data.length > 100) {
+                        // Only enable snap-to-data for dense datasets (>100 points)
+                        startDataX = snapToNearestDataPoint(startDataX, chart);
+                        endDataX = snapToNearestDataPoint(endDataX, chart);
+                    }
+                    
+                    const minX = Math.min(startDataX, endDataX);
+                    const maxX = Math.max(startDataX, endDataX);
+                    
+                    // Validate selection range
+                    if (maxX - minX < 1000) { // Less than 1 second selection - probably accidental
+                        debugLog('Selection too narrow, ignoring zoom');
+                        return;
+                    }
+                    
+                    debugLog('debug_chart_operations', `Zoom selection: ${new Date(minX).toLocaleString()} to ${new Date(maxX).toLocaleString()}`);
+                    
+                    // Apply zoom with animation
+                    chart.options.scales.x.min = minX;
+                    chart.options.scales.x.max = maxX;
+                    chart.update('active'); // Use 'active' mode for animation
+                    
+                    const subtitle = chart.options.plugins.subtitle;
+                    if (subtitle) {
+                        subtitle.text = 'Zoom aktívny - dvojité kliknutie pre zoom out';
+                        subtitle.color = '#fbbf24';
+                    }
+                    
+                    // Update time range and chart formatting with new zoom-in logic
+                    updateSingleChartTimeFormat(chart, minX, maxX);
+                    
+                    // Add visual time range indication (safe - does not affect existing logic)
+                    updateVisualTimeRangeIndicator(minX, maxX);
+                }
+            }
+            
+            // Helper function to snap selection to nearest data point for better precision
+            function snapToNearestDataPoint(targetValue, chart) {
+                if (!chart.data.datasets[0] || !chart.data.datasets[0].data) {
+                    return targetValue;
+                }
+                
+                const data = chart.data.datasets[0].data;
+                let nearestValue = targetValue;
+                let minDistance = Infinity;
+                
+                data.forEach(point => {
+                    const pointX = point.x || point;
+                    const distance = Math.abs(pointX - targetValue);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestValue = pointX;
+                    }
+                });
+                
+                // Only snap if the nearest point is within reasonable distance (5% of visible range)
+                const visibleRange = chart.scales.x.max - chart.scales.x.min;
+                const snapThreshold = visibleRange * 0.05;
+                
+                if (minDistance < snapThreshold) {
+                    return nearestValue;
+                }
+                
+                return targetValue;
+            }
+            
+            // Helper function to cleanup selection with cursor reset
+            function cleanupSelection() {
+                console.log('Cleaning up selection...'); // Debug log
+                
+                try {
+                    // Reset cursor style
+                    canvas.style.cursor = '';
+                    
+                    // Force cleanup of selection box
+                    if (chartSelectionBox) {
+                        if (chartSelectionBox.parentElement) {
+                            chartSelectionBox.parentElement.removeChild(chartSelectionBox);
+                        } else {
+                            console.log('Selection box has no parent element');
+                        }
+                        chartSelectionBox = null;
+                    } else {
+                        console.log('No selection box to clean up');
+                    }
+                    
+                    // Reset selection state
+                    chartIsSelecting = false;
+                    window._chartSelectionActive = false; // Clear global flag
+                    
+                    // Reset current chart if it's this chart
+                    if (currentChart === chart) {
+                        currentChart = null;
+                    }
+                    
+                    // Remove any stray selection boxes (failsafe)
+                    const chartContainer = canvas.closest('.chart-container');
+                    if (chartContainer) {
+                        const strayBoxes = chartContainer.querySelectorAll('div[style*="rgba(59, 130, 246, 0.2)"], div[style*="rgba(34, 197, 94, 0.2)"]');
+                        strayBoxes.forEach(box => {
+                            if (box.parentElement) {
+                                box.parentElement.removeChild(box);
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error during selection cleanup:', error);
+                }
+                
+                console.log('Selection cleanup complete'); // Debug log
+            }
+            
+            // Store references for cleanup
+            canvas._zoomMouseDown = mouseDownHandler;
+            canvas._zoomMouseMove = mouseMoveHandler;
+            canvas._zoomMouseUp = mouseUpHandler;
+            canvas._zoomMouseLeave = mouseLeaveHandler;
+            canvas._zoomTouchStart = touchStartHandler;
+            canvas._zoomTouchMove = touchMoveHandler;
+            canvas._zoomTouchEnd = touchEndHandler;
+            canvas._zoomDoubleClick = doubleClickHandler;
+            
+            // Add event listeners
+            canvas.addEventListener('mousedown', mouseDownHandler);
+            canvas.addEventListener('mousemove', mouseMoveHandler);
+            canvas.addEventListener('mouseleave', mouseLeaveHandler);
+            document.addEventListener('mouseup', mouseUpHandler);
+            
+            // Touch events for mobile
+            canvas.addEventListener('touchstart', touchStartHandler, { passive: false });
+            canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
+            canvas.addEventListener('touchend', touchEndHandler, { passive: false });
+            
+            // Double click for zoom out
+            canvas.addEventListener('dblclick', doubleClickHandler);
+        }
+
+        // Theme management
+        function initTheme() {
+            const savedTheme = localStorage.getItem('mikrotik-theme') || 'dark';
+            if (savedTheme === 'light') {
+                document.body.className = 'light-theme min-h-screen bg-gray-50';
+            } else {
+                document.body.className = 'min-h-screen bg-gray-900';
+            }
+            updateThemeIcon();
+        }
+        
+        function toggleTheme() {
+            const isLight = document.body.classList.contains('light-theme');
+            if (isLight) {
+                document.body.className = 'min-h-screen bg-gray-900';
+                localStorage.setItem('mikrotik-theme', 'dark');
+            } else {
+                document.body.className = 'light-theme min-h-screen bg-gray-50';
+                localStorage.setItem('mikrotik-theme', 'light');
+            }
+            updateThemeIcon();
+        }
+        
+        function updateThemeIcon() {
+            const icon = document.getElementById('themeIcon');
+            const isLight = document.body.classList.contains('light-theme');
+            icon.className = isLight ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        
+        // Initialize theme on page load
+        initTheme();
+        
+        // Export functions to global scope for access from monitoring.js
+        window.addCustomZoom = addCustomZoom;
+        window.resetZoom = resetZoom;
+        window.cleanupAllSelections = cleanupAllSelections;
+        
+        // Emergency keyboard shortcut for stuck selection boxes
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                console.log('Escape key pressed - cleaning up all selections');
+                cleanupAllSelections();
+            }
+        });
+        
+        // Global click event handler for emergency cleanup
+        let clickTimeout;
+        document.addEventListener('click', function(e) {
+            // Delay the cleanup to avoid interfering with double-click
+            clearTimeout(clickTimeout);
+            clickTimeout = setTimeout(() => {
+                // Check if click was outside any chart container
+                const chartContainers = document.querySelectorAll('.chart-container');
+                let isInsideChart = false;
+                
+                chartContainers.forEach(container => {
+                    if (container.contains(e.target)) {
+                        isInsideChart = true;
+                    }
+                });
+                
+                // Only cleanup if click is outside charts AND no selection is currently active
+                if (!isInsideChart && !window._chartSelectionActive) {
+                    debugLog('Delayed click outside chart detected - emergency cleanup');
+                    cleanupAllSelections();
+                }
+            }, 300); // 300ms delay to avoid double-click interference
+        });
+        
+        // Theme toggle event listener
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+        });
+        
+        // Safe visual time range indication for zoom-in (uses existing active button styling)
+        function updateVisualTimeRangeIndicator(minX, maxX) {
+            // Only visual indication - does NOT change window.currentTimeRange or affect zoom-out logic
+            if (!minX || !maxX) return;
+            
+            const diffMs = maxX - minX;
+            const diffMinutes = diffMs / (1000 * 60);
+            const diffHours = diffMs / (1000 * 60 * 60);
+            const diffDays = diffHours / 24;
+            
+            // Determine what time range this zoom level corresponds to visually
+            let visualRange = null;
+            if (diffMinutes <= 35) {
+                visualRange = '30m'; // ~30 min
+            } else if (diffHours <= 3.5) {
+                visualRange = '3h';
+            } else if (diffHours <= 7) {
+                visualRange = '6h';
+            } else if (diffHours <= 14) {
+                visualRange = '12h';
+            } else if (diffHours <= 30) {
+                visualRange = '24h';
+            } else if (diffDays <= 10) {
+                visualRange = '7d';
+            } else if (diffDays <= 45) {
+                visualRange = '30d';
+            } else if (diffDays <= 120) {
+                visualRange = '90d';
+            } else {
+                visualRange = '1y';
+            }
+            
+            // Store original active button to restore later (only once)
+            if (!window._originalActiveButton) {
+                const currentActiveBtn = document.querySelector('.time-range-btn.active');
+                if (currentActiveBtn) {
+                    window._originalActiveButton = currentActiveBtn.getAttribute('data-range');
+                }
+            }
+            
+            // Apply visual indication using existing .active class system
+            if (visualRange) {
+                updateTimeRangeButtonsVisually(visualRange);
+            }
+        }
+        
+        // Enhanced visual time range indication for zoom-out (handles larger ranges properly)
+        function updateVisualTimeRangeIndicatorForZoomOut(minX, maxX) {
+            // Enhanced logic for zoom-out that properly handles larger time ranges
+            if (!minX || !maxX) return;
+            
+            const diffMs = maxX - minX;
+            const diffMinutes = diffMs / (1000 * 60);
+            const diffHours = diffMs / (1000 * 60 * 60);
+            const diffDays = diffHours / 24;
+            const diffMonths = diffDays / 30;
+            
+            // Enhanced logic with better boundaries for larger ranges
+            let visualRange = null;
+            if (diffMinutes <= 35) {
+                visualRange = '30m'; // ~30 min
+            } else if (diffHours <= 3.5) {
+                visualRange = '3h';
+            } else if (diffHours <= 7) {
+                visualRange = '6h';
+            } else if (diffHours <= 14) {
+                visualRange = '12h';
+            } else if (diffHours <= 30) {
+                visualRange = '24h';
+            } else if (diffDays <= 10) {
+                visualRange = '7d';
+            } else if (diffDays <= 45) {
+                visualRange = '30d';
+            } else if (diffDays <= 120) {
+                visualRange = '90d';
+            } else {
+                visualRange = '1y';
+            }
+            
+            // Store original active button to restore later (only once)
+            if (!window._originalActiveButton) {
+                const currentActiveBtn = document.querySelector('.time-range-btn.active');
+                if (currentActiveBtn) {
+                    window._originalActiveButton = currentActiveBtn.getAttribute('data-range');
+                }
+            }
+            
+            // Apply visual indication using existing .active class system
+            if (visualRange) {
+                updateTimeRangeButtonsVisually(visualRange);
+            }
+            
+            debugLog('debug_chart_operations', `Visual range indicator updated for zoom-out: ${(diffDays).toFixed(1)}d -> ${visualRange}`);
+        }
+        
+        // Helper to visually update time range buttons using existing active styling
+        function updateTimeRangeButtonsVisually(visualRange) {
+            // Remove active class from all buttons
+            const timeRangeButtons = document.querySelectorAll('.time-range-btn');
+            timeRangeButtons.forEach(btn => {
+                btn.classList.remove('active');
+                // Add subtle zoom indication to title
+                const dataRange = btn.getAttribute('data-range');
+                if (dataRange === visualRange) {
+                    btn.classList.add('active');
+                    if (!btn.originalTitle) {
+                        btn.originalTitle = btn.title || '';
+                    }
+                    // Only add (zoom) indication if we're in a zoom state (not direct time range selection)
+                    if (window._originalActiveButton && window._originalActiveButton !== visualRange) {
+                        btn.title = `${btn.originalTitle} (zoom)`.trim();
+                    } else {
+                        btn.title = btn.originalTitle;
+                    }
+                } else {
+                    if (btn.originalTitle !== undefined) {
+                        btn.title = btn.originalTitle;
+                    }
+                }
+            });
+        }
+        
+        // Restore original active button when zoom is reset
+        function restoreOriginalVisualTimeRange() {
+            // Remove active class from all buttons
+            const timeRangeButtons = document.querySelectorAll('.time-range-btn');
+            timeRangeButtons.forEach(btn => {
+                btn.classList.remove('active');
+                // Restore original titles
+                if (btn.originalTitle !== undefined) {
+                    btn.title = btn.originalTitle;
+                    btn.originalTitle = undefined;
+                }
+            });
+            
+            // Restore original active button
+            if (window._originalActiveButton) {
+                const originalBtn = document.querySelector(`[data-range="${window._originalActiveButton}"]`);
+                if (originalBtn) {
+                    originalBtn.classList.add('active');
+                }
+                window._originalActiveButton = null;
+            } else {
+                // Fallback: try to determine current active range from window.currentTimeRange
+                if (typeof window.currentTimeRange !== 'undefined') {
+                    const currentBtn = document.querySelector(`[data-range="${window.currentTimeRange}"]`);
+                    if (currentBtn) {
+                        currentBtn.classList.add('active');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

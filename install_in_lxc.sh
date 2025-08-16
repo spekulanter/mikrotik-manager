@@ -14,15 +14,15 @@ function msg_warn() { echo -e "\\033[1;33mWARNING\\033[0m: $1"; }
 REPO_URL="https://github.com/spekulanter/mikrotik-manager.git"
 APP_DIR="/opt/mikrotik-manager"
 DATA_DIR="/var/lib/mikrotik-manager"
-SERVICE_FILE="/etc/systemd/system/mbm.service"
+SERVICE_FILE="/etc/systemd/system/mikrotik-manager.service"
 
 # Kontrola, či už existuje inštalácia
-if [ -d "${APP_DIR}" ] && [ -f "${SERVICE_FILE}" ] && systemctl is-enabled mbm.service &>/dev/null; then
+if [ -d "${APP_DIR}" ] && [ -f "${SERVICE_FILE}" ] && systemctl is-enabled mikrotik-manager.service &>/dev/null; then
     echo "🔄 Detegovaná existujúca inštalácia - spúšťam aktualizáciu..."
     
     # UPDATE PROCES
     msg_info "Zastavujem službu MikroTik Backup Manager..."
-    systemctl stop mbm.service &>/dev/null
+    systemctl stop mikrotik-manager.service &>/dev/null
     msg_ok "Služba zastavená."
     
     msg_info "Zálohujem aktuálnu konfiguráciu..."
@@ -46,7 +46,7 @@ if [ -d "${APP_DIR}" ] && [ -f "${SERVICE_FILE}" ] && systemctl is-enabled mbm.s
     msg_ok "Závislosti aktualizované."
     
     msg_info "Spúšťam službu..."
-    systemctl start mbm.service &>/dev/null
+    systemctl start mikrotik-manager.service &>/dev/null
     msg_ok "Služba spustená."
     
     echo "✅ Aktualizácia dokončená!"
@@ -59,8 +59,69 @@ else
     # Aktualizácia systému a inštalácia závislostí
     msg_info "Aktualizujem systém a inštalujem potrebné balíčky..."
     apt-get update &>/dev/null
-    apt-get install -y git python3-pip python3-venv &>/dev/null
+    apt-get install -y git python3-pip python3-venv curl wget unzip openjdk-17-jdk &>/dev/null
     msg_ok "Systémové závislosti sú nainštalované."
+    
+    # Inštalácia Node.js 18.x
+    msg_info "Inštalujem Node.js 18.x pre Android development..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - &>/dev/null
+    apt-get install -y nodejs &>/dev/null
+    msg_ok "Node.js nainštalované: $(node -v)"
+    
+    # Inštalácia Android SDK
+    msg_info "Inštalujem Android SDK pre APK building..."
+    mkdir -p /opt/android-sdk
+    cd /tmp
+    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+    unzip -q commandlinetools-linux-11076708_latest.zip -d /opt/android-sdk/
+    mv /opt/android-sdk/cmdline-tools /opt/android-sdk/cmdline-tools-temp
+    mkdir -p /opt/android-sdk/cmdline-tools/latest
+    mv /opt/android-sdk/cmdline-tools-temp/* /opt/android-sdk/cmdline-tools/latest/
+    rmdir /opt/android-sdk/cmdline-tools-temp
+    rm commandlinetools-linux-11076708_latest.zip
+    
+    # Nastavenie Android SDK environment
+    export ANDROID_HOME=/opt/android-sdk
+    export ANDROID_SDK_ROOT=/opt/android-sdk
+    export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
+    
+    # Inštalácia Android SDK komponentov
+    yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses &>/dev/null
+    /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" &>/dev/null
+    msg_ok "Android SDK nainštalované."
+    
+    # Inštalácia Gradle
+    msg_info "Inštalujem Gradle build system..."
+    wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -O /tmp/gradle.zip
+    unzip -q /tmp/gradle.zip -d /opt/
+    mv /opt/gradle-8.13 /opt/gradle
+    rm /tmp/gradle.zip
+    export PATH=${PATH}:/opt/gradle/bin
+    msg_ok "Gradle nainštalované: $(gradle -v | head -n1)"
+    
+    # Inštalácia Cordova CLI
+    msg_info "Inštalujem Cordova CLI pre mobile app development..."
+    npm install -g cordova &>/dev/null
+    msg_ok "Cordova nainštalované: $(cordova -v)"
+    
+    # Vytvorenie environment setup file
+    msg_info "Vytváram environment setup súbor..."
+    cat << 'ENVEOF' > /etc/environment
+ANDROID_HOME=/opt/android-sdk
+ANDROID_SDK_ROOT=/opt/android-sdk
+PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/gradle/bin"
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENVEOF
+    
+    # Vytvorenie profile setup
+    cat << 'PROFEOF' > /etc/profile.d/android-dev.sh
+export ANDROID_HOME=/opt/android-sdk
+export ANDROID_SDK_ROOT=/opt/android-sdk
+export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+PROFEOF
+    chmod +x /etc/profile.d/android-dev.sh
+    msg_ok "Android development prostredie nastavené."
     
     # Vytvorenie adresárov
     msg_info "Vytváram adresáre aplikácie a pre dáta..."
@@ -112,18 +173,33 @@ EOF
     # Povolenie a spustenie služby
     msg_info "Povoľujem a spúšťam službu MikroTik Backup Manager..."
     systemctl daemon-reload
-    systemctl enable --now mbm.service &>/dev/null
-    msg_ok "Služba mbm.service je aktívna a beží."
+    systemctl enable --now mikrotik-manager.service &>/dev/null
+    msg_ok "Služba mikrotik-manager.service je aktívna a beží."
     
     echo "🎉 Inštalácia dokončená!"
-    echo "🌐 Aplikácia je dostupná na: http://$(hostname -I | awk '{print $1}'):5000"
+    echo "🌐 Web aplikácia je dostupná na: http://$(hostname -I | awk '{print $1}'):5000"
     echo "📋 Prvé prihlásenie: vytvorte si účet cez registračný formulár"
+    echo ""
+    echo "📱 Android Development Tools nainštalované:"
+    echo "   • Node.js $(node -v 2>/dev/null || echo 'N/A')"
+    echo "   • Java $(java -version 2>&1 | head -n1 | cut -d'"' -f2 2>/dev/null || echo 'N/A')"
+    echo "   • Android SDK v35.0.0"
+    echo "   • Gradle $(gradle -v 2>/dev/null | head -n1 | awk '{print $2}' || echo 'N/A')"
+    echo "   • Cordova $(cordova -v 2>/dev/null || echo 'N/A')"
+    echo ""
+    echo "🛠️  APK Building:"
+    echo "   cd /opt/mikrotik-manager-app && cordova build android"
     
 fi
 
 echo ""
 echo "📖 Užitočné príkazy:"
-echo "   Reštart služby:    systemctl restart mbm.service"
-echo "   Stav služby:       systemctl status mbm.service"  
-echo "   Logy služby:       journalctl -u mbm.service -f"
+echo "   Reštart služby:    systemctl restart mikrotik-manager.service"
+echo "   Stav služby:       systemctl status mikrotik-manager.service"  
+echo "   Logy služby:       journalctl -u mikrotik-manager.service -f"
 echo "   Manuálny update:   cd ${APP_DIR} && ./update.sh"
+echo ""
+echo "📱 Android APK Development:"
+echo "   Build APK:         cd ${APP_DIR} && ./build-apk.sh"
+echo "   Cordova projekt:   /opt/mikrotik-manager-app/"
+echo "   Finálny APK:       /opt/MikroTikManager.apk"

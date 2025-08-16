@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'self' data: gap: https://ssl.gstatic.com 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src *; img-src * data: content:;">
+    <title>MikroTik Manager</title>
+    
+    <!-- Cordova Script -->
+    <script type="text/javascript" src="cordova.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .setup-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .app-icon {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .app-icon svg {
+            width: 60px;
+            height: 60px;
+            fill: white;
+        }
+        
+        h1 {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 16px;
+            margin-bottom: 40px;
+        }
+        
+        .input-group {
+            width: 100%;
+            max-width: 320px;
+            margin-bottom: 20px;
+        }
+        
+        .input-group label {
+            display: block;
+            color: white;
+            font-size: 14px;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .input-group input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .connect-btn {
+            width: 100%;
+            max-width: 320px;
+            padding: 16px 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            margin-bottom: 10px;
+        }
+        
+        .connect-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .connect-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .secondary-btn {
+            width: 100%;
+            max-width: 320px;
+            padding: 12px 24px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        
+        .secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-left: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: white;
+            font-size: 16px;
+            text-align: center;
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            max-width: 320px;
+            text-align: center;
+        }
+        
+        .success-message {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.5);
+            color: #86efac;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            max-width: 320px;
+            text-align: center;
+        }
+        
+        .info-message {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            color: #93c5fd;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            max-width: 320px;
+            text-align: center;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Hide setup screen completely when not needed */
+        .setup-hidden {
+            display: none !important;
+            visibility: hidden !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <div id="loadingText" class="loading-text">Spúšťam aplikáciu...</div>
+    </div>
+    
+    <!-- Setup Screen -->
+    <div id="setupScreen" class="setup-container">
+        <div class="app-icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+        </div>
+        
+        <h1>MikroTik Manager</h1>
+        <p id="subtitle" class="subtitle">Zadajte adresu vášho servera</p>
+        
+        <div id="messageArea"></div>
+        
+        <form autocomplete="off" data-lpignore="true">
+        </form>
+        <div class="input-group">
+            <label for="serverUrl">Server URL</label>
+            <input 
+                type="url" 
+                id="serverUrl" 
+                placeholder="https://your-server.domain.com"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+                data-form-type="other"
+                data-lpignore="true"
+                autocomplete="new-password"
+            >
+        </div>
+        
+        <form autocomplete="off" data-lpignore="true">
+        </form>
+        <div class="input-group">
+            <button id="connectBtn" class="connect-btn" onclick="startNativeApp()">
+                � Spustiť aplikáciu
+            </button>
+            
+            <button id="resetBtn" class="secondary-btn" onclick="resetApp()">
+                � Reset nastavení
+            </button>
+        </div>
+        
+        <div id="infoMessage" class="info-message">
+            💡 Po zadaní URL sa spustí natívna aplikácia
+        </div>
+    </div>
+
+    <script>
+        let currentServerUrl = '';
+        let inAppBrowserRef = null;
+        let isAppRunning = false;
+        let showingSetup = false;
+        
+        // Initialize app when device is ready
+        document.addEventListener('deviceready', onDeviceReady, false);
+        
+        function onDeviceReady() {
+            console.log('Device is ready');
+
+            // One-time template cleanup - remove only if this is truly first run
+            if (!localStorage.getItem("app_initialized")) {
+                localStorage.removeItem("mikrotik_server_url");
+                localStorage.removeItem("mikrotik_logged_in");
+                localStorage.setItem("app_initialized", "true");
+            }
+            
+            // Load saved server URL
+            const savedUrl = localStorage.getItem("mikrotik_server_url");
+            const hasBeenLoggedIn = localStorage.getItem('mikrotik_logged_in') === 'true';
+            
+            if (savedUrl && hasBeenLoggedIn) {
+                // User has been logged in before, start app immediately without showing setup
+                currentServerUrl = savedUrl;
+                startAppDirectly();
+            } else {
+                // First time setup or no login history
+                showInitialSetup();
+            }
+            
+            // Handle Android back button
+            document.addEventListener("backbutton", onBackKeyDown, false);
+            
+            // Enable enter key on input
+            document.getElementById('serverUrl').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    startNativeApp();
+                }
+            });
+        }
+        
+        function startAppDirectly() {
+            // Hide setup screen completely and start app immediately
+            hideSetupScreenCompletely();
+            showLoading('Spúšťam aplikáciu...');
+            
+            // Start app immediately without any delay
+            openNativeApp(currentServerUrl);
+        }
+        
+        function showInitialSetup() {
+            // Show setup screen for first time users
+            const savedUrl = localStorage.getItem("mikrotik_server_url");
+            if (savedUrl) {
+                document.getElementById("serverUrl").value = savedUrl;
+            }
+            showSetupScreen();
+        }
+        
+        function hideSetupScreenCompletely() {
+            document.getElementById('setupScreen').classList.add('setup-hidden');
+        }
+        
+        function showSetupScreen() {
+            document.getElementById('setupScreen').classList.remove('setup-hidden');
+            document.getElementById('setupScreen').classList.remove('hidden');
+            showingSetup = true;
+        }
+        
+        function hideSetupScreen() {
+            document.getElementById('setupScreen').classList.add('hidden');
+        }
+        
+        function showLoading(text) {
+            document.getElementById('loading').style.display = 'flex';
+            if (text) {
+                document.getElementById('loadingText').textContent = text;
+            }
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        function showMessage(message, type = 'error') {
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = `<div class="${type}-message">${message}</div>`;
+            
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 5000);
+        }
+        
+        function showError(message) {
+            showMessage(message, 'error');
+        }
+        
+        function showSuccess(message) {
+            showMessage(message, 'success');
+        }
+        
+        function showInfo(message) {
+            showMessage(message, 'info');
+        }
+        
+        function isValidUrl(string) {
+            try {
+                const url = new URL(string);
+                return url.protocol === 'http:' || url.protocol === 'https:';
+            } catch (_) {
+                return false;
+            }
+        }
+        
+        async function startNativeApp() {
+            const urlInput = document.getElementById('serverUrl');
+            const connectBtn = document.getElementById('connectBtn');
+            let url = urlInput.value.trim();
+            
+            if (!url) {
+                showError('Zadajte URL servera');
+                return;
+            }
+            
+            // Add https:// if no protocol specified
+            if (!url.match(/^https?:\/\//)) {
+                url = 'https://' + url;
+            }
+            
+            if (!isValidUrl(url)) {
+                showError('Neplatný formát URL. Použite https://domain.com alebo http://ip:port');
+                return;
+            }
+            
+            connectBtn.disabled = true;
+            connectBtn.textContent = '⏳ Spúšťam...';
+            showLoading('Pripravujem aplikáciu...');
+            
+            try {
+                // Save URL for future use
+                localStorage.setItem('mikrotik_server_url', url);
+                currentServerUrl = url;
+                
+                // Launch the native-like app
+                openNativeApp(url);
+                
+            } catch (error) {
+                console.error('Error during startup:', error);
+                showError('Chyba pri spaní aplikácie');
+                hideLoading();
+                connectBtn.disabled = false;
+                connectBtn.textContent = '🚀 Spustiť aplikáciu';
+            }
+        }
+        
+        function openNativeApp(url) {
+            if (!url) {
+                url = currentServerUrl || document.getElementById('serverUrl').value;
+            }
+            
+            if (!url) {
+                showError('Žiadny server URL nie je nastavený');
+                hideLoading();
+                showSetupScreen();
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.disabled = false;
+                connectBtn.textContent = '🚀 Spustiť aplikáciu';
+                return;
+            }
+            
+            // Add protocol if missing
+            if (!url.match(/^https?:\/\//)) {
+                url = 'https://' + url;
+            }
+            
+            if (window.cordova && window.cordova.InAppBrowser) {
+                try {
+                    // Simple options for clean experience
+                    const options = 'location=no,toolbar=no,zoom=no,hardwareback=yes,fullscreen=yes';
+                    
+                    // Open immediately
+                    inAppBrowserRef = window.cordova.InAppBrowser.open(url, '_blank', options);
+                    
+                    if (inAppBrowserRef) {
+                        hideSetupScreenCompletely();
+                        isAppRunning = true;
+                        showingSetup = false;
+                        
+                        // Event listeners
+                        inAppBrowserRef.addEventListener('loadstart', function(event) {
+                            // Don't show loading for returning users
+                            if (showingSetup) {
+                                showLoading('Načítavam stránku...');
+                            }
+                        });
+                        
+                        inAppBrowserRef.addEventListener('loadstop', function(event) {
+                            hideLoading();
+                            // Mark as logged in after successful load
+                            localStorage.setItem('mikrotik_logged_in', 'true');
+                        });
+                        
+                        inAppBrowserRef.addEventListener('loaderror', function(event) {
+                            showError('Chyba pri načítaní stránky');
+                            handleInAppBrowserClose();
+                        });
+                        
+                        inAppBrowserRef.addEventListener('exit', function(event) {
+                            handleInAppBrowserClose();
+                        });
+                        
+                    } else {
+                        showError('Nepodarilo sa otvoriť aplikáciu');
+                        handleInAppBrowserClose();
+                    }
+                    
+                } catch (error) {
+                    console.error('Error opening InAppBrowser:', error);
+                    showError('Chyba pri spúšťaní aplikácie');
+                    handleInAppBrowserClose();
+                }
+                
+            } else {
+                // Fallback for testing in browser
+                if (confirm('InAppBrowser nie je dostupný. Otvoriť v novom okne?')) {
+                    window.open(url, '_blank');
+                }
+                hideLoading();
+            }
+        }
+        
+        function handleInAppBrowserClose() {
+            inAppBrowserRef = null;
+            isAppRunning = false;
+            hideLoading();
+            
+            // Check if user has been logged in before
+            const hasBeenLoggedIn = localStorage.getItem('mikrotik_logged_in') === 'true';
+            
+            if (hasBeenLoggedIn && !showingSetup) {
+                // User was logged in and didn't explicitly request setup, so auto-restart
+                setTimeout(() => {
+                    startAppDirectly();
+                }, 500);
+            } else {
+                // Show setup screen
+                showSetupScreen();
+                const connectBtn = document.getElementById('connectBtn');
+                connectBtn.disabled = false;
+                connectBtn.textContent = '🚀 Spustiť aplikciu';
+            }
+        }
+        
+        function resetApp() {
+            // Clear all saved data
+            localStorage.removeItem('mikrotik_server_url');
+            localStorage.removeItem('mikrotik_logged_in');
+            
+            // Reset form
+            document.getElementById('serverUrl').value = '';
+            currentServerUrl = '';
+            showingSetup = true;
+            
+            showInfo('Nastavenia boli vymazané');
+        }
+        
+        function onBackKeyDown() {
+            if (isAppRunning && inAppBrowserRef) {
+                // If app is running, close it and show setup
+                inAppBrowserRef.close();
+                showingSetup = true;
+            } else {
+                // If on setup screen, exit app
+                if (navigator.app && navigator.app.exitApp) {
+                    navigator.app.exitApp();
+                } else if (navigator.device && navigator.device.exitApp) {
+                    navigator.device.exitApp();
+                }
+            }
+        }
+        
+        // For testing in browser
+        if (!window.cordova) {
+            console.log('Running in browser mode');
+            setTimeout(onDeviceReady, 500);
+        }
+        
+        // Global error handlers
+        window.addEventListener('error', function(e) {
+            console.error('Window error:', e.error);
+        });
+        
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e.reason);
+        });
+    </script>
+</body>
+</html>

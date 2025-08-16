@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Manager - Browser Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            height: 600px;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .info {
+            padding: 15px;
+            background: #e3f2fd;
+            color: #1976d2;
+            text-align: center;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>📱 MikroTik Manager</h2>
+            <p>Browser Test - Mobile Preview</p>
+        </div>
+        
+        <div class="info">
+            <strong>Test Mode:</strong> Toto je ukážka ako bude aplikácia vyzerať na mobile
+        </div>
+        
+        <div class="content">
+            <iframe src="www/index.html"></iframe>
+        </div>
+    </div>
+</body>
+</html>

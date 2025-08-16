@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nastavenia - MikroTik Backup Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --main-bg: #111827; --card-bg: #1f2937; --border-color: #374151; 
+            --text-color: #d1d5db; --accent-color: #38bdf8; --accent-color-hover: #0ea5e9;
+        }
+        body { background-color: var(--main-bg); color: var(--text-color); font-family: 'Inter', sans-serif; }
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); transition: all 0.3s ease; }
+        .card:hover { box-shadow: 0 0 15px rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); }
+        .btn { transition: all 0.2s ease-in-out; }
+        .btn-primary { background-color: var(--accent-color); color: #ffffff; }
+        .btn-primary:hover { background-color: var(--accent-color-hover); }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Svetlá téma */
+        body.light-theme {
+            --main-bg: #f9fafb; --card-bg: #ffffff; --border-color: #e5e7eb; 
+            --text-color: #374151; --accent-color: #0ea5e9; --accent-color-hover: #0284c7;
+            background-color: var(--main-bg); color: var(--text-color);
+        }
+        
+        body.light-theme .card {
+            background-color: var(--card-bg); border-color: var(--border-color);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        
+        body.light-theme .card:hover {
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.15); border-color: rgba(14, 165, 233, 0.3);
+        }
+        
+        body.light-theme .btn:hover {
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        body.light-theme input, body.light-theme select, body.light-theme textarea {
+            background-color: #f9fafb; border-color: #d1d5db; color: #374151;
+        }
+        
+        body.light-theme input:focus, body.light-theme select:focus, body.light-theme textarea:focus {
+            border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+        
+        /* Header v svetlej téme */
+        body.light-theme header {
+            background-color: rgba(255, 255, 255, 0.9) !important;
+            border-color: var(--border-color) !important;
+            backdrop-filter: blur(8px);
+        }
+        
+        /* Tlačidlá v headeri - svetlá téma */
+        body.light-theme .btn {
+            background-color: var(--accent-color) !important;
+            color: #ffffff !important;
+            border: 1px solid var(--accent-color) !important;
+        }
+        
+        body.light-theme .btn:hover {
+            background-color: var(--accent-color-hover) !important;
+            color: #ffffff !important;
+            border-color: var(--accent-color-hover) !important;
+        }
+        
+        /* Text v headeri - svetlá téma */
+        body.light-theme header h1,
+        body.light-theme header a,
+        body.light-theme header span {
+            color: var(--text-color) !important;
+        }
+        
+        body.light-theme header a:hover {
+            color: var(--accent-color) !important;
+        }
+        
+        /* Navigácia */
+        .nav-link { transition: all 0.2s ease; }
+        .nav-link:hover { color: var(--accent-color); }
+        .nav-link.active { color: var(--accent-color); border-bottom: 2px solid var(--accent-color); }
+        
+        /* Animácie */
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .section-card {
+            margin-bottom: 2rem;
+            animation: slideInUp 0.4s ease-out;
+        }
+        
+        @keyframes slideInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header -->
+    <header class="border-b border-gray-700 bg-gray-800/50 backdrop-blur-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-4">
+                    <a href="/" class="text-xl font-bold text-sky-400 hover:text-sky-300 transition-colors">
+                        <i class="fas fa-network-wired mr-2"></i>MikroTik Manager
+                    </a>
+                    <span class="text-gray-400">|</span>
+                    <h1 class="text-lg font-semibold">Nastavenia</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="themeToggle" class="btn bg-gray-700 hover:bg-gray-600 p-2 rounded-lg" title="Prepnúť tému">
+                        <i class="fas fa-sun"></i>
+                    </button>
+                    <button onclick="goBack()" class="btn bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg">
+                        <i class="fas fa-arrow-left mr-2"></i>Späť
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="hidden">
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-4xl text-sky-400 mb-4"></i>
+                <p class="text-lg">Načítavam nastavenia...</p>
+            </div>
+        </div>
+
+        <!-- Settings Form -->
+        <form id="settingsForm" class="hidden">
+            <!-- System Overview -->
+            <div class="section-card card rounded-xl p-6 mb-6 bg-gradient-to-r from-blue-900/20 to-green-900/20 border border-blue-500/30">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-info-circle mr-3"></i>Prehľad monitorovacieho systému
+                </h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-600">
+                        <h3 class="text-lg font-semibold text-green-400 mb-3">
+                            <i class="fas fa-heartbeat mr-2"></i>ICMP Ping Monitoring
+                        </h3>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li>• <strong>Hlavná úloha:</strong> Online/Offline detekcia zariadení</li>
+                            <li>• <strong>Adaptívne intervaly:</strong> Štandardný → Rýchly pri výpadku</li>
+                            <li>• <strong>Pushover notifikácie:</strong> Device offline/online</li>
+                            <li>• <strong>Grafy (voliteľne):</strong> Ping výsledky sa môžu ukladať aj do grafov</li>
+                            <li>• <strong>Výhody:</strong> Jeden systém pre dostupnosť aj metriky</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-600">
+                        <h3 class="text-lg font-semibold text-blue-400 mb-3">
+                            <i class="fas fa-chart-line mr-2"></i>SNMP Monitoring
+                        </h3>
+                        <ul class="space-y-2 text-sm text-gray-300">
+                            <li>• <strong>Hlavná úloha:</strong> Výkonnostné metriky a alarmy</li>
+                            <li>• <strong>Zber dát:</strong> CPU, RAM, teplota, systémové info</li>
+                            <li>• <strong>Pushover notifikácie:</strong> Kritické hodnoty, reboot, verzie</li>
+                            <li>• <strong>Výhody:</strong> Bohaté informácie o stave systému</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="mt-4 p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-lightbulb text-yellow-400 mt-0.5"></i>
+                        <div class="text-sm text-blue-200">
+                            <strong>Výsledok:</strong> Rýchla detekcia výpadkov cez adaptívny ping systém + detailné výkonnostné monitorovanie cez SNMP. 
+                            Ping testy môžu voliteľne slúžiť aj na grafy, takže máte všetko v jednom efektívnom systéme.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Automatické zálohovanie -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-clock mr-3"></i>Automatické zálohovanie
+                </h2>
+                <div class="space-y-6">
+                    <div>
+                        <label for="backup_schedule_enabled" class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="backup_schedule_enabled" name="backup_schedule_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                            <span class="ml-3 font-medium">Povoliť automatické zálohovanie</span>
+                        </label>
+                        <small class="text-gray-400 block mt-1 ml-7">Automaticky vytvoriť zálohy zariadení podľa nastaveného rozvrhu</small>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="backup_schedule_type" class="block mb-2 font-medium">Interval zálohovania</label>
+                            <select id="backup_schedule_type" name="backup_schedule_type" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" onchange="toggleWeeklySettings()">
+                                <option value="daily">Denne</option>
+                                <option value="weekly">Týždenne</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="backup_schedule_time" class="block mb-2 font-medium">Čas zálohovania (HH:MM)</label>
+                            <input type="time" id="backup_schedule_time" name="backup_schedule_time" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                        </div>
+                    </div>
+                    
+                    <!-- Weekly settings - separate row -->
+                    <div id="weeklySettings" class="hidden transition-all duration-300 ease-in-out">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="backup_schedule_day" class="block mb-2 font-medium">Deň v týždni</label>
+                                <select id="backup_schedule_day" name="backup_schedule_day" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                                    <option value="monday">Pondelok</option>
+                                    <option value="tuesday">Utorok</option>
+                                    <option value="wednesday">Streda</option>
+                                    <option value="thursday">Štvrtok</option>
+                                    <option value="friday">Piatok</option>
+                                    <option value="saturday">Sobota</option>
+                                    <option value="sunday">Nedeľa</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="backup_retention_count" class="block mb-2 font-medium">Počet uchovávaných záloh (na zariadenie)</label>
+                            <input type="number" id="backup_retention_count" name="backup_retention_count" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   value="10" min="1" max="100">
+                            <small class="text-gray-400 block mt-1">Koľko záloh sa má uchovávať pre každé zariadenie. Staršie sa automaticky zmažú.</small>
+                        </div>
+                        
+                        <div>
+                            <label for="backup_delay_seconds" class="block mb-2 font-medium">Oneskorenie medzi zálohami (sekundy)</label>
+                            <input type="number" id="backup_delay_seconds" name="backup_delay_seconds" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   value="30" min="5" max="300">
+                            <small class="text-gray-400 block mt-1">Odporúčaný rozsah: 30-60 sekúnd. Kratší čas môže preťažiť sieť.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SNMP Monitoring -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-chart-line mr-3"></i>SNMP Monitoring (Výkonnostné metriky)
+                </h2>
+                
+                <!-- Global Values Notice -->
+                <div class="mb-4 p-3 bg-yellow-900/30 border border-yellow-500/50 rounded-lg">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-globe text-yellow-400 mt-0.5"></i>
+                        <div class="text-sm text-yellow-200">
+                            <strong>Globálne nastavenie:</strong> Tieto hodnoty sa použijú pre všetky zariadenia, ktoré nemajú nastavené vlastné intervaly.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="snmp_check_interval_minutes" class="block mb-2 font-medium">Interval SNMP zberu dát (minúty)</label>
+                        <input type="number" id="snmp_check_interval_minutes" name="snmp_check_interval_minutes" 
+                               class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                               value="10" min="1" max="1440">
+                        <small class="text-gray-400 block mt-1">Interval zberu SNMP metrík (CPU, RAM, teplota) pre zariadenia bez vlastného nastavenia. Rozsah: 1-1440 minút</small>
+                        <div class="mt-3 p-4 bg-gray-800/50 border border-gray-500/50 rounded-lg">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-info-circle text-gray-400 mt-0.5"></i>
+                                <div class="text-sm text-gray-300">
+                                    <strong>Účel:</strong> SNMP monitoring zbiera len výkonnostné metriky (CPU, RAM, teplota) pre grafy a notifikácie o kritických hodnotách. 
+                                    <strong>Online/Offline notifikácie sú riadené ICMP ping monitoringom nižšie.</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ICMP Ping Monitoring & Availability -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-wifi mr-3"></i>ICMP Ping Monitoring & Dostupnosť
+                </h2>
+                
+                <!-- Global Values Notice -->
+                <div class="mb-4 p-3 bg-yellow-900/30 border border-yellow-500/50 rounded-lg">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-globe text-yellow-400 mt-0.5"></i>
+                        <div class="text-sm text-yellow-200">
+                            <strong>Globálne nastavenie:</strong> Tieto hodnoty sa použijú pre všetky zariadenia, ktoré nemajú nastavené vlastné intervaly.
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Availability Monitoring Section -->
+                <div class="mb-8 p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-4 text-blue-300">
+                        <i class="fas fa-heartbeat mr-2"></i>Monitorovanie dostupnosti (Online/Offline)
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="availability_monitoring_enabled" class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="availability_monitoring_enabled" name="availability_monitoring_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                                <span class="ml-3 font-medium">Povoliť monitorovanie dostupnosti zariadení</span>
+                            </label>
+                            <small class="text-gray-400 block mt-1 ml-7">Aktivuje ICMP ping monitoring pre detekciu online/offline stavov a spúšťa Pushover notifikácie</small>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="ping_heartbeat_interval" class="block mb-2 font-medium">Štandardný ping interval (sekundy)</label>
+                                <input type="number" id="ping_heartbeat_interval" name="ping_heartbeat_interval" 
+                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                       value="300" min="30" max="3600">
+                                <small class="text-gray-400 block mt-1">Bežný interval ping testov. Odporúčané: 300-600s (5-10 min)</small>
+                            </div>
+                            
+                            <div>
+                                <label for="ping_retry_interval" class="block mb-2 font-medium">Retry interval pri výpadku (sekundy)</label>
+                                <input type="number" id="ping_retry_interval" name="ping_retry_interval" 
+                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                       value="20" min="5" max="120">
+                                <small class="text-gray-400 block mt-1">Rýchlejší interval pri detekcii výpadku. Odporúčané: 10-30s</small>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="ping_retries" class="block mb-2 font-medium">Počet neúspešných pokusov</label>
+                                <input type="number" id="ping_retries" name="ping_retries" 
+                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                       value="3" min="0" max="10">
+                                <small class="text-gray-400 block mt-1">Koľkokrát skúsiť ping pred označením ako offline. 0 = okamžite</small>
+                            </div>
+                            
+                            <div>
+                                <label for="ping_timeout" class="block mb-2 font-medium">Timeout pre jeden ping (sekundy)</label>
+                                <input type="number" id="ping_timeout" name="ping_timeout" 
+                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                       value="5" min="1" max="30">
+                                <small class="text-gray-400 block mt-1">Čas čakania na odpoveď z jedného ping-u</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Automatické ukladanie do grafov -->
+                <div class="p-4 bg-green-900/30 border border-green-500/50 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-4 text-green-300">
+                        <i class="fas fa-chart-line mr-2"></i>Automatické grafy z ping testov
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-check-circle text-green-400 mt-0.5"></i>
+                            <div class="text-sm text-green-200">
+                                <strong>Automaticky zapnuté:</strong> Všetky ping testy z dostupnostného monitoringu sa automaticky ukladajú do databázy pre ICMP grafy v monitoring sekcii.
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-lightbulb text-yellow-400 mt-0.5"></i>
+                            <div class="text-sm text-green-200">
+                                <strong>Výhoda:</strong> Jeden ping systém slúži na dostupnosť aj grafy - žiadna duplicita, maximálne efektívne využitie siete.
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
+                            <div class="text-sm text-green-200">
+                                <strong>Interval grafov:</strong> Grafy sa generujú z tých istých ping testov podľa nastavených intervalov dostupnosti.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pushover Notifikácie -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-mobile-alt mr-3"></i>Pushover Notifikácie
+                </h2>
+                <div class="mb-6 p-4 bg-green-900/30 border border-green-500/50 rounded-lg">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-info-circle text-green-400 mt-0.5"></i>
+                        <div class="text-sm text-green-200">
+                            <strong>Nová logika notifikácií:</strong>
+                            <ul class="mt-2 space-y-1 ml-4">
+                                <li>• <strong>Online/Offline notifikácie:</strong> Riadené ICMP ping monitoringom s adaptívnymi intervalmi</li>
+                                <li>• <strong>Výkonnostné notifikácie:</strong> CPU/RAM/teplota z SNMP monitoringu</li>
+                                <li>• <strong>Zálohovacie notifikácie:</strong> Úspech/zlyhanie zálohovacích procesov</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label for="pushover_app_key" class="block mb-2 font-medium">Pushover App Key/Token</label>
+                            <input type="text" id="pushover_app_key" name="pushover_app_key" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   placeholder="Váš App Key z Pushover">
+                        </div>
+                        <div>
+                            <label for="pushover_user_key" class="block mb-2 font-medium">Pushover User Key</label>
+                            <input type="text" id="pushover_user_key" name="pushover_user_key" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   placeholder="Váš User Key z Pushover">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Typy notifikácií</h3>
+                        <div id="notificationTypes" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Kritické limity</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label for="temp_critical_threshold" class="block mb-2 font-medium">Teplota (°C)</label>
+                                <input type="number" id="temp_critical_threshold" name="temp_critical_threshold" 
+                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                            </div>
+                            <div>
+                                <label for="cpu_critical_threshold" class="block mb-2 font-medium">CPU (%)</label>
+                                <input type="number" id="cpu_critical_threshold" name="cpu_critical_threshold" 
+                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                            </div>
+                            <div>
+                                <label for="memory_critical_threshold" class="block mb-2 font-medium">Pamäť (%)</label>
+                                <input type="number" id="memory_critical_threshold" name="memory_critical_threshold" 
+                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Obmedzenia</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="quiet_hours_enabled" class="flex items-center cursor-pointer">
+                                    <input type="checkbox" id="quiet_hours_enabled" name="quiet_hours_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                                    <span class="ml-3 font-medium">Povoliť "Quiet Hours" (tichý režim)</span>
+                                </label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="quiet_hours_start" class="block mb-2 font-medium">Tichý režim od</label>
+                                    <input type="time" id="quiet_hours_start" name="quiet_hours_start" 
+                                           class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                                </div>
+                                <div>
+                                    <label for="quiet_hours_end" class="block mb-2 font-medium">Tichý režim do</label>
+                                    <input type="time" id="quiet_hours_end" name="quiet_hours_end" 
+                                           class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <button type="button" id="testPushoverBtn" class="btn bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg w-full flex items-center justify-center gap-2">
+                            <i class="fas fa-paper-plane"></i> Otestovať Notifikáciu
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FTP Nastavenia -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-server mr-3"></i>FTP Server
+                </h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                        <label for="ftp_server" class="block mb-2 font-medium">FTP Server</label>
+                        <input type="text" id="ftp_server" name="ftp_server" 
+                               class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div>
+                        <label for="ftp_port" class="block mb-2 font-medium">FTP Port</label>
+                        <input type="number" id="ftp_port" name="ftp_port" 
+                               class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div>
+                        <label for="ftp_username" class="block mb-2 font-medium">FTP Používateľ</label>
+                        <input type="text" id="ftp_username" name="ftp_username" 
+                               class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div>
+                        <label for="ftp_password" class="block mb-2 font-medium">FTP Heslo</label>
+                        <input type="password" id="ftp_password" name="ftp_password" 
+                               class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div class="lg:col-span-2">
+                        <label for="ftp_directory" class="block mb-2 font-medium">FTP Adresár</label>
+                        <input type="text" id="ftp_directory" name="ftp_directory" 
+                               class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Správa dát -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-database mr-3"></i>Správa dát a logov
+                </h2>
+                <div class="space-y-6">
+                    <div>
+                        <label for="backup_detailed_logging" class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="backup_detailed_logging" name="backup_detailed_logging" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                            <span class="ml-3 font-medium">Detailné logovanie zálohového procesu</span>
+                        </label>
+                        <small class="text-gray-400 block mt-1 ml-7">Ak je vypnuté, zobrazujú sa len základné správy o spustení a dokončení zálohy</small>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label for="log_retention_days" class="block mb-2 font-medium">Uchovávanie logov (dni)</label>
+                            <input type="number" id="log_retention_days" name="log_retention_days" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   value="30" min="1" max="365">
+                            <small class="text-gray-400 block mt-1">Rozsah: 1-365 dní</small>
+                        </div>
+                        <div>
+                            <label for="ping_retention_days" class="block mb-2 font-medium">Ping dáta (dni)</label>
+                            <input type="number" id="ping_retention_days" name="ping_retention_days" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   value="30" min="1" max="365">
+                            <small class="text-gray-400 block mt-1">Rozsah: 1-365 dní</small>
+                        </div>
+                        <div>
+                            <label for="snmp_retention_days" class="block mb-2 font-medium">SNMP dáta (dni)</label>
+                            <input type="number" id="snmp_retention_days" name="snmp_retention_days" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   value="30" min="1" max="365">
+                            <small class="text-gray-400 block mt-1">Rozsah: 1-365 dní</small>
+                        </div>
+                        <div>
+                            <label for="log_max_entries" class="block mb-2 font-medium">Max logov v pamäti</label>
+                            <input type="number" id="log_max_entries" name="log_max_entries" 
+                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                   value="1000" min="100" max="5000">
+                            <small class="text-gray-400 block mt-1">Rozsah: 100-5000</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Debug & Logovanie -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-bug mr-3"></i>Debug & Diagnostika
+                </h2>
+                
+                <div class="mb-4 p-3 bg-orange-900/30 border border-orange-500/50 rounded-lg">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-exclamation-triangle text-orange-400 mt-0.5"></i>
+                        <div class="text-sm text-orange-200">
+                            <strong>Upozornenie:</strong> Debug módy zvyšujú výkon systému a môžu produkovať veľké množstvo logov. 
+                            Používajte len na diagnostiku problémov a vypnite po vyriešení.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-green-400">Debug Terminal</h3>
+                    
+                    <div>
+                        <label for="debug_terminal" class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="debug_terminal" name="debug_terminal" class="h-4 w-4 rounded text-yellow-500 focus:ring-yellow-500">
+                            <span class="ml-3 font-medium text-yellow-400">
+                                <i class="fas fa-terminal mr-2"></i>Debug Terminal
+                            </span>
+                        </label>
+                        <small class="text-gray-400 block mt-1 ml-7">
+                            Zobrazí debug terminál v pravom dolnom rohu na monitoring stránke pre sledovanie zoom operácií a globálnych zmien časových intervalov.
+                            <br>Terminál zobrazuje kľúčové akcie v reálnom čase (zoom-out, načítanie dát, API volania).
+                            <br><strong>Ovládanie:</strong> Ctrl+D pre zapnutie/vypnutie, Copy pre kopírovanie, Clear pre vymazanie.
+                        </small>
+                    </div>
+                </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-end mt-8 pt-6 border-t border-gray-700">
+                <button type="button" id="cancelSettingsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg">
+                    <i class="fas fa-times mr-2"></i> Zrušiť
+                </button>
+                <button type="submit" class="btn btn-primary font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2">
+                    <i class="fas fa-save"></i> Uložiť nastavenia
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="notificationToast" class="hidden fixed bottom-4 right-4 z-50">
+        <div class="bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
+            <i class="fas fa-check-circle"></i>
+            <span id="notificationMessage">Nastavenia boli uložené</span>
+        </div>
+    </div>
+
+    <script>
+        // Define toggleWeeklySettings globally so it's available immediately
+        function toggleWeeklySettings() {
+            const weeklySettings = document.getElementById('weeklySettings');
+            const scheduleType = document.getElementById('backup_schedule_type');
+            
+            if (!weeklySettings || !scheduleType) {
+                return;
+            }
+            
+            if (scheduleType.value === 'weekly') {
+                weeklySettings.classList.remove('hidden');
+            } else {
+                weeklySettings.classList.add('hidden');
+            }
+        }
+        
+        // API helper
+        const api = {
+            _handleResponse: async (res) => {
+                if (res.status === 401) {
+                    window.location.href = '/login';
+                    return {};
+                }
+                
+                try {
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.message || `HTTP ${res.status}: ${res.statusText}`);
+                    }
+                    return data;
+                } catch (error) {
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                    }
+                    throw error;
+                }
+            },
+            
+            get: async function(endpoint) {
+                const res = await fetch(`/api/${endpoint}`);
+                return this._handleResponse(res);
+            },
+            
+            post: async function(endpoint, data) {
+                const res = await fetch(`/api/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                return this._handleResponse(res);
+            }
+        };
+
+        // Theme management
+        const themeToggle = document.getElementById('themeToggle');
+        const body = document.body;
+        
+        // Initialize theme management
+        const initializeTheme = () => {
+            const savedTheme = localStorage.getItem('mikrotik-theme') || 'dark';
+            
+            if (savedTheme === 'light') {
+                body.classList.add('light-theme');
+                themeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+            } else {
+                body.classList.remove('light-theme');
+                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+            }
+        };
+        
+        // Listen for theme changes from other tabs/windows
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'mikrotik-theme') {
+                initializeTheme();
+            }
+        });
+        
+        // Theme toggle click handler
+        themeToggle.addEventListener('click', () => {
+            body.classList.toggle('light-theme');
+            const isLight = body.classList.contains('light-theme');
+            themeToggle.innerHTML = isLight ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+            localStorage.setItem('mikrotik-theme', isLight ? 'light' : 'dark');
+            
+            // Trigger storage event for other tabs
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: 'mikrotik-theme',
+                newValue: isLight ? 'light' : 'dark',
+                storageArea: localStorage
+            }));
+        });
+        
+        // Initialize theme on page load
+        initializeTheme();
+
+        // Notification types configuration
+        const notificationTypesConfig = {
+            // Dostupnosť zariadení (ICMP ping monitoring)
+            notify_device_offline: "🔴 Zariadenie offline (ICMP)",
+            notify_device_online: "✅ Zariadenie online (ICMP)",
+            
+            // Zálohovanie
+            notify_backup_success: "✅ Úspešná záloha",
+            notify_backup_failure: "❌ Neúspešná záloha",
+            
+            // Výkonnostné alarmy (SNMP monitoring) 
+            notify_temp_critical: "🌡️ Kritická teplota (SNMP)",
+            notify_cpu_critical: "🖥️ Kritická záťaž CPU (SNMP)",
+            notify_memory_critical: "💾 Kritická pamäť (SNMP)",
+            
+            // Systémové udalosti (SNMP/API monitoring)
+            notify_reboot_detected: "🔄 Reboot detekovaný",
+            notify_version_change: "🆕 Zmena verzie OS"
+        };
+
+        // Show notification toast
+        const showNotification = (message, type = 'success') => {
+            const toast = document.getElementById('notificationToast');
+            const messageEl = document.getElementById('notificationMessage');
+            const iconEl = toast.querySelector('i');
+            
+            messageEl.textContent = message;
+            
+            // Update colors based on type
+            const bgColor = type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600';
+            const icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+            
+            toast.firstElementChild.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3`;
+            iconEl.className = `fas ${icon}`;
+            
+            toast.classList.remove('hidden');
+            
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 4000);
+        };
+
+        // Load settings
+        const loadSettings = async () => {
+            try {
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                document.getElementById('settingsForm').classList.add('hidden');
+                
+                const settings = await api.get('settings');
+                
+                // Populate form fields
+                Object.keys(settings).forEach(key => {
+                    const element = document.getElementById(key);
+                    if (element) {
+                        if (element.type === 'checkbox') {
+                            element.checked = settings[key] === 'true';
+                        } else {
+                            element.value = settings[key] || '';
+                        }
+                    }
+                });
+                
+                // Populate notification types
+                const notificationTypesContainer = document.getElementById('notificationTypes');
+                notificationTypesContainer.innerHTML = '';
+                
+                Object.keys(notificationTypesConfig).forEach(key => {
+                    const isChecked = settings[key] === 'true';
+                    const label = notificationTypesConfig[key];
+                    
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center p-3 bg-gray-800/50 rounded-lg border border-gray-600';
+                    div.innerHTML = `
+                        <input type="checkbox" id="${key}" name="${key}" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500" ${isChecked ? 'checked' : ''}>
+                        <label for="${key}" class="ml-3 text-sm font-medium cursor-pointer">${label}</label>
+                    `;
+                    notificationTypesContainer.appendChild(div);
+                });
+                
+                document.getElementById('loadingIndicator').classList.add('hidden');
+                document.getElementById('settingsForm').classList.remove('hidden');
+                
+                // Set weekly settings visibility after loading and DOM is ready
+                requestAnimationFrame(() => {
+                    toggleWeeklySettings();
+                });
+                
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showNotification('Chyba pri načítaní nastavení', 'error');
+            }
+        };
+        
+        // Update debug status display
+        const updateDebugStatus = (settings) => {
+            const debugStatus = document.getElementById('debugStatus');
+            const debugSettings = [
+                'debug_snmp_timers',
+                'debug_ping_monitoring', 
+                'debug_snmp_data',
+                'debug_websocket',
+                'debug_chart_operations',
+                'debug_websocket_frontend',
+                'debug_api_calls',
+                'debug_device_operations',
+                'debug_chart_frontend_panel',
+                'debug_master_switch'
+            ];
+            
+            const activeDebugs = debugSettings.filter(key => settings[key] === 'true');
+            
+            if (activeDebugs.length === 0) {
+                debugStatus.innerHTML = '<span class="text-green-400">Všetky debug módy sú vypnuté ✓</span>';
+            } else {
+                debugStatus.innerHTML = `
+                    <span class="text-orange-400">Aktívne debug módy (${activeDebugs.length}):</span><br>
+                    <span class="text-gray-300">${activeDebugs.map(key => key.replace('debug_', '').replace(/_/g, ' ')).join(', ')}</span>
+                `;
+            }
+        };
+
+        // Clear debug logs
+        const clearDebugLogs = async () => {
+            if (!confirm('Ste si istí, že chcete vymazať všetky debug logy? Táto akcia sa nedá vrátiť späť.')) {
+                return;
+            }
+            
+            try {
+                await api.post('logs/cleanup-debug');
+                showNotification('Debug logy boli úspešne vymazané', 'success');
+            } catch (error) {
+                console.error('Error clearing debug logs:', error);
+                showNotification('Chyba pri mazaní debug logov', 'error');
+            }
+        };
+
+        // Save settings
+        const saveSettings = async (e) => {
+            e.preventDefault();
+            
+            try {
+                const formData = new FormData(e.target);
+                const data = {};
+                
+                // Convert FormData to object
+                for (const [key, value] of formData.entries()) {
+                    data[key] = value;
+                }
+                
+                // Handle checkboxes that aren't checked (they won't be in FormData)
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    if (!data.hasOwnProperty(checkbox.name)) {
+                        data[checkbox.name] = 'false';
+                    } else {
+                        data[checkbox.name] = 'true';
+                    }
+                });
+                
+                const result = await api.post('settings', data);
+                
+                if (result.status === 'success') {
+                    showNotification('Nastavenia boli úspešne uložené', 'success');
+                    
+                    // Notify monitoring page of settings change
+                    localStorage.setItem('settingsChanged', 'true');
+                    
+                    // Also trigger immediate refresh for debug panel if monitoring page is open
+                    if (window.opener && window.opener.refreshDebugSettings) {
+                        window.opener.refreshDebugSettings();
+                    }
+                } else {
+                    showNotification(result.message || 'Chyba pri ukladaní nastavení', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                showNotification('Chyba pri ukladaní nastavení', 'error');
+            }
+        };
+
+        // Event listeners
+        document.getElementById('settingsForm').addEventListener('submit', saveSettings);
+        
+        document.getElementById('testPushoverBtn').addEventListener('click', async () => {
+            try {
+                await api.post('notifications/test');
+                showNotification('Test notifikácia bola poslaná', 'success');
+            } catch (error) {
+                showNotification('Chyba pri posielaní test notifikácie', 'error');
+            }
+        });
+        
+        document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
+            goBack();
+        });
+        
+        // Function to go back to the previous page
+        function goBack() {
+            // Check if there's a referrer and it's from the same site
+            if (document.referrer && document.referrer.includes(window.location.origin)) {
+                window.history.back();
+            } else {
+                // Fallback to home page if no referrer or external referrer
+                window.location.href = '/';
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add event listener for backup schedule type change first
+            const scheduleTypeElement = document.getElementById('backup_schedule_type');
+            if (scheduleTypeElement) {
+                scheduleTypeElement.addEventListener('change', toggleWeeklySettings);
+            }
+            
+            // Load settings
+            loadSettings();
+            
+            // Initial call to set correct visibility
+            setTimeout(() => {
+                toggleWeeklySettings();
+            }, 200);
+        });
+    </script>
+</body>
+</html>

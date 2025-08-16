@@ -148,10 +148,16 @@ else
     # Inštalácia Gradle
     msg_info "Inštalujem Gradle build system..."
     if [ ! -d "/opt/gradle" ]; then
+        # Vymaž staré Gradle súbory ak existujú
+        rm -rf /opt/gradle-8.13 2>/dev/null || true
+        rm -f /tmp/gradle.zip 2>/dev/null || true
+        
         wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -O /tmp/gradle.zip
-        unzip -q /tmp/gradle.zip -d /opt/
-        mv /opt/gradle-8.13 /opt/gradle
-        rm /tmp/gradle.zip
+        cd /tmp
+        unzip -q gradle.zip
+        mv gradle-8.13 /opt/gradle
+        rm -f gradle.zip
+        cd /opt/mikrotik-manager
     else
         msg_info "Gradle už je nainštalované, preskakujem..."
     fi

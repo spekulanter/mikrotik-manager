@@ -187,9 +187,9 @@ EOF
         cordova platform add android >/dev/null 2>&1 || true
         cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1 || true
         
-        # Kopírovanie index.html z repozitára ak existuje
-        if [ -f "/opt/mikrotik-manager/mikrotik-manager-app/www/index.html" ]; then
-            cp /opt/mikrotik-manager/mikrotik-manager-app/www/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+        # Kopírovanie template index.html z repozitára ak existuje
+        if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+            cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
         fi
         cd ${APP_DIR}
         msg_ok "Cordova projekt vytvorený."

@@ -200,6 +200,24 @@ EOF
         cp /opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md /opt/ 2>/dev/null || true
     fi
     
+    # Automatické vytvorenie APK ak neexistuje alebo ak je starší ako template
+    if [ ! -f "/opt/MikroTikManager.apk" ] || [ "/opt/mikrotik-manager/template/index.html" -nt "/opt/MikroTikManager.apk" ]; then
+        msg_info "Vytváram Android APK..."
+        cd /opt/mikrotik-manager-app
+        source /etc/profile.d/android-dev.sh 2>/dev/null || true
+        export ANDROID_HOME=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
+        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+        
+        cordova build android >/dev/null 2>&1 || true
+        if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
+            msg_ok "APK vytvorený: /opt/MikroTikManager.apk"
+        fi
+        cd ${APP_DIR}
+    fi
+    
     # Vymazanie Python cache pre zaručené načítanie nového kódu
     msg_info "Čistím Python cache..."
     find ${APP_DIR} -name "*.pyc" -delete 2>/dev/null || true
@@ -413,3 +431,4 @@ echo "📱 Android APK Development:"
 echo "   Build APK:         cd ${APP_DIR} && ./build-apk.sh"
 echo "   Cordova projekt:   /opt/mikrotik-manager-app/"
 echo "   Finálny APK:       /opt/MikroTikManager.apk"
+echo "   APK Instructions:  /opt/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md"

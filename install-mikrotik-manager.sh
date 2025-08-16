@@ -37,10 +37,10 @@ if [ -d "${APP_DIR}/.git" ]; then
     msg_info "Sťahujem najnovšie zmeny z ${REPO_URL}..."
     cd ${APP_DIR}
     # Jednoduchý a spoľahlivý update
-    git fetch origin 2>/dev/null || true
-    git reset --hard origin/main 2>/dev/null || true
-    git clean -fd 2>/dev/null || true
-    git pull origin main 2>/dev/null || true
+    git fetch origin >/dev/null 2>&1
+    git reset --hard origin/main >/dev/null 2>&1
+    git clean -fd >/dev/null 2>&1
+    git pull origin main >/dev/null 2>&1
     msg_ok "Kód aktualizovaný na najnovšiu verziu."
     
     # Kontrola a vytvorenie Python Virtual Environment ak neexistuje
@@ -52,7 +52,7 @@ if [ -d "${APP_DIR}/.git" ]; then
     
     msg_info "Aktualizujem Python závislosti..."
     source ${APP_DIR}/venv/bin/activate
-    pip install -r ${APP_DIR}/requirements.txt >/dev/null 2>&1
+    pip install --quiet -r ${APP_DIR}/requirements.txt >/dev/null 2>&1
     deactivate
     msg_ok "Závislosti aktualizované."
     
@@ -349,7 +349,7 @@ PROFEOF
     # Inštalácia Python knižníc
     msg_info "Inštalujem potrebné Python knižnice..."
     source ${APP_DIR}/venv/bin/activate
-    pip install -r ${APP_DIR}/requirements.txt >/dev/null 2>&1
+    pip install --quiet -r ${APP_DIR}/requirements.txt >/dev/null 2>&1
     deactivate
     msg_ok "Knižnice nainštalované."
     

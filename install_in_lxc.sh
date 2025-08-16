@@ -5,8 +5,14 @@
 #
 set -e
 
-# Funkcie pre farebný výstup
-function msg_info() { echo -e "\\033[1;34mINFO\\033[0m: $1"; }
+# Funkcie pre farebný vý    # Inštalácia Cordova CLI
+    msg_info "Inštalujem Cordova CLI pre mobile app development..."
+    if ! command -v cordova &> /dev/null; then
+        npm install -g cordova >/dev/null 2>&1
+    else
+        msg_info "Cordova už je nainštalované, preskakujem..."
+    fi
+    msg_ok "Cordova nainštalované: $(cordova -v 2>/dev/null || echo 'Cordova ready')"ction msg_info() { echo -e "\\033[1;34mINFO\\033[0m: $1"; }
 function msg_ok() { echo -e "\\033[1;32mSUCCESS\\033[0m: $1"; }
 function msg_warn() { echo -e "\\033[1;33mWARNING\\033[0m: $1"; }
 
@@ -107,15 +113,15 @@ else
     # INŠTALAČNÝ PROCES
     # Aktualizácia systému a inštalácia závislostí
     msg_info "Aktualizujem systém a inštalujem potrebné balíčky..."
-    apt-get update 2>/dev/null || true
-    apt-get install -y git python3-pip python3-venv curl wget unzip openjdk-17-jdk 2>/dev/null || true
+    apt-get update >/dev/null 2>&1
+    apt-get install -y git python3-pip python3-venv curl wget unzip openjdk-17-jdk >/dev/null 2>&1
     msg_ok "Systémové závislosti sú nainštalované."
     
     # Inštalácia Node.js 18.x
     msg_info "Inštalujem Node.js 18.x pre Android development..."
     if ! command -v node &> /dev/null || [[ "$(node -v)" != "v18."* ]]; then
-        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - 2>/dev/null || true
-        apt-get install -y nodejs 2>/dev/null || true
+        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - >/dev/null 2>&1
+        apt-get install -y nodejs >/dev/null 2>&1
     else
         msg_info "Node.js 18.x už je nainštalované, preskakujem..."
     fi
@@ -140,8 +146,8 @@ else
         export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
         
         # Inštalácia Android SDK komponentov
-        yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses &>/dev/null
-        /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" &>/dev/null
+        yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1
+        /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" >/dev/null 2>&1
     else
         msg_info "Android SDK už je nainštalované, preskakujem..."
         export ANDROID_HOME=/opt/android-sdk
@@ -206,7 +212,7 @@ PROFEOF
 
     # Klonovanie repozitára
     msg_info "Sťahujem aplikáciu z ${REPO_URL}..."
-    git clone ${REPO_URL} ${APP_DIR} &>/dev/null
+    git clone ${REPO_URL} ${APP_DIR} >/dev/null 2>&1
     msg_ok "Aplikácia stiahnutá."
     
     # Vytvorenie Python Virtual Environment
@@ -217,7 +223,7 @@ PROFEOF
     # Inštalácia Python knižníc
     msg_info "Inštalujem potrebné Python knižnice..."
     source ${APP_DIR}/venv/bin/activate
-    pip install -r ${APP_DIR}/requirements.txt &>/dev/null
+    pip install -r ${APP_DIR}/requirements.txt >/dev/null 2>&1
     deactivate
     msg_ok "Knižnice nainštalované."
     
@@ -246,7 +252,7 @@ EOF
     # Povolenie a spustenie služby
     msg_info "Povoľujem a spúšťam službu MikroTik Backup Manager..."
     systemctl daemon-reload
-    systemctl enable --now mikrotik-manager.service &>/dev/null
+    systemctl enable --now mikrotik-manager.service >/dev/null 2>&1
     msg_ok "Služba mikrotik-manager.service je aktívna a beží."
     
     echo "🎉 Inštalácia dokončená!"

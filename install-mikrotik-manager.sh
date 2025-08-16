@@ -204,9 +204,12 @@ EOF
     if [ ! -f "/opt/MikroTikManager.apk" ] && [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
         msg_info "Kopírujem pre-built Android APK..."
         cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk
+        rm -f ${APP_DIR}/MikroTikManager.apk
         msg_ok "APK skopírovaný z repozitára: /opt/MikroTikManager.apk"
     elif [ -f "/opt/MikroTikManager.apk" ]; then
         msg_info "Android APK už existuje: /opt/MikroTikManager.apk"
+        # Vymaž APK z repozitára ak existuje
+        rm -f ${APP_DIR}/MikroTikManager.apk
     else
         msg_warn "APK nenájdený. Pre vytvorenie spusti: cd /opt/mikrotik-manager && ./build-apk.sh"
     fi
@@ -367,6 +370,7 @@ PROFEOF
     if [ ! -f "/opt/MikroTikManager.apk" ]; then
         if [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
             cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk
+            rm -f ${APP_DIR}/MikroTikManager.apk
             msg_ok "APK skopírovaný z repozitára: /opt/MikroTikManager.apk"
         else
             msg_warn "Pre-built APK nenájdený v repozitári. Na vytvorenie APK spusti manuálne: ./build-apk.sh"

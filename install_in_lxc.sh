@@ -22,7 +22,16 @@ if [ -d "${APP_DIR}/.git" ]; then
     
     # UPDATE PROCES
     msg_info "Zastavujem službu MikroTik Backup Manager..."
-    systemctl stop mikrotik-manager.service &>/dev/null
+    # Robustné zastavenie služby s timeout
+    if systemctl is-active --quiet mikrotik-manager.service; then
+        systemctl stop mikrotik-manager.service --no-block
+        sleep 2
+        # Ak stále beží, vynúť zastavenie
+        if systemctl is-active --quiet mikrotik-manager.service; then
+            systemctl kill mikrotik-manager.service
+            sleep 1
+        fi
+    fi
     msg_ok "Služba zastavená."
     
     msg_info "Zálohujem aktuálnu konfiguráciu..."
@@ -87,11 +96,22 @@ EOF
     msg_ok "Cache vymazaná."
     
     msg_info "Spúšťam službu..."
-    systemctl start mikrotik-manager.service &>/dev/null
-    sleep 2
-    # Vynúť reload aplikácie pre istotu
-    systemctl restart mikrotik-manager.service &>/dev/null
-    msg_ok "Služba spustená a reštartovaná."
+    systemctl start mikrotik-manager.service
+    sleep 3
+    
+    # Kontrola, či sa služba spustila
+    if systemctl is-active --quiet mikrotik-manager.service; then
+        msg_ok "Služba úspešne spustená."
+    else
+        msg_warn "Služba sa nespustila správne, pokúšam sa o restart..."
+        systemctl restart mikrotik-manager.service
+        sleep 2
+        if systemctl is-active --quiet mikrotik-manager.service; then
+            msg_ok "Služba úspešne reštartovaná."
+        else
+            msg_warn "Problém so spustením služby - skontrolujte logy: journalctl -u mikrotik-manager.service"
+        fi
+    fi
     
     echo "✅ Aktualizácia dokončená!"
     echo "🌐 Aplikácia je dostupná na: http://$(hostname -I | awk '{print $1}'):5000"

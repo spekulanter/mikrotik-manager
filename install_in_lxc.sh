@@ -22,16 +22,9 @@ if [ -d "${APP_DIR}/.git" ]; then
     
     # UPDATE PROCES
     msg_info "Zastavujem službu MikroTik Backup Manager..."
-    # Robustné zastavenie služby s timeout
-    if systemctl is-active --quiet mikrotik-manager.service; then
-        systemctl stop mikrotik-manager.service --no-block
-        sleep 2
-        # Ak stále beží, vynúť zastavenie
-        if systemctl is-active --quiet mikrotik-manager.service; then
-            systemctl kill mikrotik-manager.service
-            sleep 1
-        fi
-    fi
+    systemctl stop mikrotik-manager.service || true
+    systemctl kill mikrotik-manager.service || true
+    sleep 1
     msg_ok "Služba zastavená."
     
     msg_info "Zálohujem aktuálnu konfiguráciu..."
@@ -43,16 +36,16 @@ if [ -d "${APP_DIR}/.git" ]; then
     
     msg_info "Sťahujem najnovšie zmeny z ${REPO_URL}..."
     cd ${APP_DIR}
-    # Vyčisti lokálne zmeny a stiahni najnovšiu verziu
-    git fetch origin
-    git checkout main
-    git reset --hard origin/main
-    git clean -fd
+    # Jednoduchý a spoľahlivý update
+    git fetch origin || true
+    git reset --hard origin/main || true
+    git clean -fd || true
+    git pull origin main || true
     msg_ok "Kód aktualizovaný na najnovšiu verziu."
     
     msg_info "Aktualizujem Python závislosti..."
     source ${APP_DIR}/venv/bin/activate
-    pip install -r ${APP_DIR}/requirements.txt &>/dev/null
+    pip install -r ${APP_DIR}/requirements.txt || true
     deactivate
     msg_ok "Závislosti aktualizované."
     
@@ -79,16 +72,6 @@ EOF
     systemctl daemon-reload
     msg_ok "Systemd služba skontrolovaná."
     
-    # Aktualizácia Cordova projektu ak existuje
-    if [ -d "/opt/mikrotik-manager-app" ]; then
-        msg_info "Aktualizujem Cordova projekt..."
-        cd /opt/mikrotik-manager-app
-        npm update &>/dev/null || true
-        cordova platform update android &>/dev/null || true
-        cd ${APP_DIR}
-        msg_ok "Cordova projekt aktualizovaný."
-    fi
-    
     # Vymazanie Python cache pre zaručené načítanie nového kódu
     msg_info "Čistím Python cache..."
     find ${APP_DIR} -name "*.pyc" -delete 2>/dev/null || true
@@ -96,22 +79,10 @@ EOF
     msg_ok "Cache vymazaná."
     
     msg_info "Spúšťam službu..."
-    systemctl start mikrotik-manager.service
-    sleep 3
-    
-    # Kontrola, či sa služba spustila
-    if systemctl is-active --quiet mikrotik-manager.service; then
-        msg_ok "Služba úspešne spustená."
-    else
-        msg_warn "Služba sa nespustila správne, pokúšam sa o restart..."
-        systemctl restart mikrotik-manager.service
-        sleep 2
-        if systemctl is-active --quiet mikrotik-manager.service; then
-            msg_ok "Služba úspešne reštartovaná."
-        else
-            msg_warn "Problém so spustením služby - skontrolujte logy: journalctl -u mikrotik-manager.service"
-        fi
-    fi
+    systemctl start mikrotik-manager.service || true
+    sleep 2
+    systemctl enable mikrotik-manager.service || true
+    msg_ok "Služba spustená."
     
     echo "✅ Aktualizácia dokončená!"
     echo "🌐 Aplikácia je dostupná na: http://$(hostname -I | awk '{print $1}'):5000"

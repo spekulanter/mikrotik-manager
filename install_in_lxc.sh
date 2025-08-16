@@ -17,7 +17,7 @@ DATA_DIR="/var/lib/mikrotik-manager"
 SERVICE_FILE="/etc/systemd/system/mikrotik-manager.service"
 
 # Kontrola, či už existuje inštalácia
-if [ -d "${APP_DIR}" ] && [ -f "${SERVICE_FILE}" ] && systemctl is-enabled mikrotik-manager.service &>/dev/null; then
+if [ -d "${APP_DIR}/.git" ]; then
     echo "🔄 Detegovaná existujúca inštalácia - spúšťam aktualizáciu..."
     
     # UPDATE PROCES
@@ -34,10 +34,12 @@ if [ -d "${APP_DIR}" ] && [ -f "${SERVICE_FILE}" ] && systemctl is-enabled mikro
     
     msg_info "Sťahujem najnovšie zmeny z ${REPO_URL}..."
     cd ${APP_DIR}
-    # Resetuj na najnovší main branch (prepíše lokálne zmeny)
+    # Vyčisti lokálne zmeny a stiahni najnovšiu verziu
     git fetch origin
+    git checkout main
     git reset --hard origin/main
-    msg_ok "Kód aktualizovaný."
+    git clean -fd
+    msg_ok "Kód aktualizovaný na najnovšiu verziu."
     
     msg_info "Aktualizujem Python závislosti..."
     source ${APP_DIR}/venv/bin/activate
@@ -106,45 +108,64 @@ else
     
     # Inštalácia Node.js 18.x
     msg_info "Inštalujem Node.js 18.x pre Android development..."
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - &>/dev/null
-    apt-get install -y nodejs &>/dev/null
+    if ! command -v node &> /dev/null || [[ "$(node -v)" != "v18."* ]]; then
+        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - &>/dev/null
+        apt-get install -y nodejs &>/dev/null
+    else
+        msg_info "Node.js 18.x už je nainštalované, preskakujem..."
+    fi
     msg_ok "Node.js nainštalované: $(node -v)"
     
     # Inštalácia Android SDK
     msg_info "Inštalujem Android SDK pre APK building..."
-    mkdir -p /opt/android-sdk
-    cd /tmp
-    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-    unzip -q commandlinetools-linux-11076708_latest.zip -d /opt/android-sdk/
-    mv /opt/android-sdk/cmdline-tools /opt/android-sdk/cmdline-tools-temp
-    mkdir -p /opt/android-sdk/cmdline-tools/latest
-    mv /opt/android-sdk/cmdline-tools-temp/* /opt/android-sdk/cmdline-tools/latest/
-    rmdir /opt/android-sdk/cmdline-tools-temp
-    rm commandlinetools-linux-11076708_latest.zip
-    
-    # Nastavenie Android SDK environment
-    export ANDROID_HOME=/opt/android-sdk
-    export ANDROID_SDK_ROOT=/opt/android-sdk
-    export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
-    
-    # Inštalácia Android SDK komponentov
-    yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses &>/dev/null
-    /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" &>/dev/null
+    if [ ! -d "/opt/android-sdk/cmdline-tools" ]; then
+        mkdir -p /opt/android-sdk
+        cd /tmp
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip -q commandlinetools-linux-11076708_latest.zip -d /opt/android-sdk/
+        mv /opt/android-sdk/cmdline-tools /opt/android-sdk/cmdline-tools-temp
+        mkdir -p /opt/android-sdk/cmdline-tools/latest
+        mv /opt/android-sdk/cmdline-tools-temp/* /opt/android-sdk/cmdline-tools/latest/
+        rmdir /opt/android-sdk/cmdline-tools-temp
+        rm commandlinetools-linux-11076708_latest.zip
+        
+        # Nastavenie Android SDK environment
+        export ANDROID_HOME=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
+        
+        # Inštalácia Android SDK komponentov
+        yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses &>/dev/null
+        /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" &>/dev/null
+    else
+        msg_info "Android SDK už je nainštalované, preskakujem..."
+        export ANDROID_HOME=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
+    fi
     msg_ok "Android SDK nainštalované."
     
     # Inštalácia Gradle
     msg_info "Inštalujem Gradle build system..."
-    wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -O /tmp/gradle.zip
-    unzip -q /tmp/gradle.zip -d /opt/
-    mv /opt/gradle-8.13 /opt/gradle
-    rm /tmp/gradle.zip
+    if [ ! -d "/opt/gradle" ]; then
+        wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -O /tmp/gradle.zip
+        unzip -q /tmp/gradle.zip -d /opt/
+        mv /opt/gradle-8.13 /opt/gradle
+        rm /tmp/gradle.zip
+    else
+        msg_info "Gradle už je nainštalované, preskakujem..."
+    fi
     export PATH=${PATH}:/opt/gradle/bin
-    msg_ok "Gradle nainštalované: $(gradle -v | head -n1)"
+    msg_ok "Gradle nainštalované: $(gradle -v 2>/dev/null | head -n1 || echo 'Gradle ready')"
     
     # Inštalácia Cordova CLI
     msg_info "Inštalujem Cordova CLI pre mobile app development..."
-    npm install -g cordova &>/dev/null
-    msg_ok "Cordova nainštalované: $(cordova -v)"
+    if ! command -v cordova &> /dev/null; then
+        npm install -g cordova &>/dev/null
+    else
+        msg_info "Cordova už je nainštalované, preskakujem..."
+    fi
+    msg_ok "Cordova nainštalované: $(cordova -v 2>/dev/null || echo 'Cordova ready')"
     
     # Vytvorenie environment setup file
     msg_info "Vytváram environment setup súbor..."

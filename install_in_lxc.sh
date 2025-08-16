@@ -5,14 +5,8 @@
 #
 set -e
 
-# Funkcie pre farebný vý    # Inštalácia Cordova CLI
-    msg_info "Inštalujem Cordova CLI pre mobile app development..."
-    if ! command -v cordova &> /dev/null; then
-        npm install -g cordova >/dev/null 2>&1
-    else
-        msg_info "Cordova už je nainštalované, preskakujem..."
-    fi
-    msg_ok "Cordova nainštalované: $(cordova -v 2>/dev/null || echo 'Cordova ready')"ction msg_info() { echo -e "\\033[1;34mINFO\\033[0m: $1"; }
+# Funkcie pre farebný výstup
+function msg_info() { echo -e "\\033[1;34mINFO\\033[0m: $1"; }
 function msg_ok() { echo -e "\\033[1;32mSUCCESS\\033[0m: $1"; }
 function msg_warn() { echo -e "\\033[1;33mWARNING\\033[0m: $1"; }
 

@@ -107,8 +107,8 @@ else
     # INŠTALAČNÝ PROCES
     # Aktualizácia systému a inštalácia závislostí
     msg_info "Aktualizujem systém a inštalujem potrebné balíčky..."
-    apt-get update &>/dev/null
-    apt-get install -y git python3-pip python3-venv curl wget unzip openjdk-17-jdk &>/dev/null
+    apt-get update 2>/dev/null || true
+    apt-get install -y git python3-pip python3-venv curl wget unzip openjdk-17-jdk 2>/dev/null || true
     msg_ok "Systémové závislosti sú nainštalované."
     
     # Inštalácia Node.js 18.x
@@ -162,7 +162,6 @@ else
         unzip -q gradle.zip
         mv gradle-8.13 /opt/gradle
         rm -f gradle.zip
-        cd /opt/mikrotik-manager
     else
         msg_info "Gradle už je nainštalované, preskakujem..."
     fi

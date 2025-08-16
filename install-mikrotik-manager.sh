@@ -210,10 +210,16 @@ EOF
         export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
         export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
         
-        cordova build android >/dev/null 2>&1 || true
-        if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
-            msg_ok "APK vytvorený: /opt/MikroTikManager.apk"
+        # Pokus o build APK s lepším error handlingom
+        if cordova build android >/dev/null 2>&1; then
+            if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+                cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
+                msg_ok "APK vytvorený: /opt/MikroTikManager.apk"
+            else
+                msg_warn "APK build úspešný, ale výsledný súbor nebol nájdený."
+            fi
+        else
+            msg_warn "APK build zlyhal. Spusti manuálne: cd /opt/mikrotik-manager && ./build-apk.sh"
         fi
         cd ${APP_DIR}
     fi
@@ -357,12 +363,39 @@ PROFEOF
         cordova platform add android >/dev/null 2>&1
         cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1
         
-        # Kopírovanie index.html z repozitára ak existuje
-        if [ -f "/opt/mikrotik-manager/mikrotik-manager-app/www/index.html" ]; then
-            cp /opt/mikrotik-manager/mikrotik-manager-app/www/index.html /opt/mikrotik-manager-app/www/
+        # Kopírovanie template index.html z repozitára ak existuje
+        if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+            cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
         fi
     fi
     msg_ok "Cordova projekt vytvorený."
+    
+    # Kopírovanie APK instructions template do /opt/
+    if [ -f "/opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md" ]; then
+        cp /opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md /opt/ 2>/dev/null || true
+    fi
+    
+    # Automatické vytvorenie APK pre fresh installation
+    msg_info "Vytváram Android APK..."
+    cd /opt/mikrotik-manager-app
+    source /etc/profile.d/android-dev.sh 2>/dev/null || true
+    export ANDROID_HOME=/opt/android-sdk
+    export ANDROID_SDK_ROOT=/opt/android-sdk
+    export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+    
+    # Pokus o build APK s lepším error handlingom
+    if cordova build android >/dev/null 2>&1; then
+        if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
+            msg_ok "APK vytvorený: /opt/MikroTikManager.apk"
+        else
+            msg_warn "APK build úspešný, ale výsledný súbor nebol nájdený."
+        fi
+    else
+        msg_warn "APK build zlyhal. Spusti manuálne: cd /opt/mikrotik-manager && ./build-apk.sh"
+    fi
+    cd ${APP_DIR}
     
     # Vytvorenie Python Virtual Environment
     msg_info "Vytváram izolované Python prostredie (venv)..."

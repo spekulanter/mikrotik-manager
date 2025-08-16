@@ -56,6 +56,62 @@ if [ -d "${APP_DIR}/.git" ]; then
     deactivate
     msg_ok "Závislosti aktualizované."
     
+    # Kontrola a aktualizácia Android development nástrojov
+    msg_info "Kontrolujem Android development nástroje..."
+    
+    # Node.js 18.x check
+    if ! command -v node &> /dev/null || [[ "$(node -v)" != "v18."* ]]; then
+        msg_info "Aktualizujem Node.js na verziu 18.x..."
+        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - >/dev/null 2>&1 || true
+        apt-get install -y nodejs >/dev/null 2>&1 || true
+    fi
+    
+    # Android SDK check
+    if [ ! -d "/opt/android-sdk/cmdline-tools" ]; then
+        msg_info "Inštalujem chýbajúce Android SDK..."
+        mkdir -p /opt/android-sdk
+        cd /tmp
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip 2>/dev/null || true
+        unzip -q commandlinetools-linux-11076708_latest.zip -d /opt/android-sdk/ 2>/dev/null || true
+        mv /opt/android-sdk/cmdline-tools /opt/android-sdk/cmdline-tools-temp 2>/dev/null || true
+        mkdir -p /opt/android-sdk/cmdline-tools/latest
+        mv /opt/android-sdk/cmdline-tools-temp/* /opt/android-sdk/cmdline-tools/latest/ 2>/dev/null || true
+        rmdir /opt/android-sdk/cmdline-tools-temp 2>/dev/null || true
+        rm commandlinetools-linux-11076708_latest.zip 2>/dev/null || true
+        cd ${APP_DIR}
+    fi
+    
+    # Gradle check
+    if [ ! -d "/opt/gradle" ]; then
+        msg_info "Inštalujem chýbajúci Gradle..."
+        cd /tmp
+        wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip 2>/dev/null || true
+        unzip -q gradle.zip 2>/dev/null || true
+        mv gradle-8.13 /opt/gradle 2>/dev/null || true
+        rm -f gradle.zip 2>/dev/null || true
+        cd ${APP_DIR}
+    fi
+    
+    # Cordova CLI check  
+    if ! command -v cordova &> /dev/null; then
+        msg_info "Inštalujem chýbajúci Cordova CLI..."
+        npm install -g cordova >/dev/null 2>&1 || true
+    fi
+    
+    # Environment setup check
+    if [ ! -f "/etc/profile.d/android-dev.sh" ]; then
+        msg_info "Aktualizujem environment setup..."
+        cat << 'PROFEOF' > /etc/profile.d/android-dev.sh
+export ANDROID_HOME=/opt/android-sdk
+export ANDROID_SDK_ROOT=/opt/android-sdk
+export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+PROFEOF
+        chmod +x /etc/profile.d/android-dev.sh
+    fi
+    
+    msg_ok "Android development nástroje skontrolované."
+    
     # Vytvorenie adresárov ak neexistujú
     msg_info "Kontrolujem adresáre..."
     mkdir -p ${DATA_DIR}/data/backups 2>/dev/null || true
@@ -85,6 +141,30 @@ WantedBy=multi-user.target
 EOF
     systemctl daemon-reload 2>/dev/null || true
     msg_ok "Systemd služba skontrolovaná."
+    
+    # Kontrola a vytvorenie Cordova projektu ak neexistuje (aj pri update)
+    if [ ! -d "/opt/mikrotik-manager-app" ]; then
+        msg_info "Vytváram chýbajúci Cordova projekt pre Android APK..."
+        # Načítať Android environment
+        source /etc/profile.d/android-dev.sh 2>/dev/null || true
+        export ANDROID_HOME=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
+        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+        
+        cd /opt
+        cordova create mikrotik-manager-app com.mikrotik.manager "MikroTik Manager" >/dev/null 2>&1 || true
+        cd mikrotik-manager-app
+        cordova platform add android >/dev/null 2>&1 || true
+        cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1 || true
+        
+        # Kopírovanie index.html z repozitára ak existuje
+        if [ -f "/opt/mikrotik-manager/mikrotik-manager-app/www/index.html" ]; then
+            cp /opt/mikrotik-manager/mikrotik-manager-app/www/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+        fi
+        cd ${APP_DIR}
+        msg_ok "Cordova projekt vytvorený."
+    fi
     
     # Vymazanie Python cache pre zaručené načítanie nového kódu
     msg_info "Čistím Python cache..."

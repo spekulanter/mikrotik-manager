@@ -195,6 +195,11 @@ EOF
         msg_ok "Cordova projekt vytvorený."
     fi
     
+    # Kopírovanie APK instructions template do /opt/
+    if [ -f "/opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md" ]; then
+        cp /opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md /opt/ 2>/dev/null || true
+    fi
+    
     # Vymazanie Python cache pre zaručené načítanie nového kódu
     msg_info "Čistím Python cache..."
     find ${APP_DIR} -name "*.pyc" -delete 2>/dev/null || true

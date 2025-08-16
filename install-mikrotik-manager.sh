@@ -214,12 +214,19 @@ EOF
         if cordova build android >/dev/null 2>&1; then
             if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
                 cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
-                msg_ok "APK vytvorený: /opt/MikroTikManager.apk"
+                msg_ok "APK vytvorený z buildu: /opt/MikroTikManager.apk"
             else
                 msg_warn "APK build úspešný, ale výsledný súbor nebol nájdený."
             fi
         else
-            msg_warn "APK build zlyhal. Spusti manuálne: cd /opt/mikrotik-manager && ./build-apk.sh"
+            msg_warn "APK build zlyhal, používam pre-built verziu..."
+            # Fallback: skopíruj pre-built APK z repozitára
+            if [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
+                cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk
+                msg_ok "APK skopírovaný z repozitára: /opt/MikroTikManager.apk"
+            else
+                msg_warn "Pre-built APK nenájdený v repozitári. Spusti manuálne: ./build-apk.sh"
+            fi
         fi
         cd ${APP_DIR}
     fi
@@ -388,12 +395,19 @@ PROFEOF
     if cordova build android >/dev/null 2>&1; then
         if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
             cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
-            msg_ok "APK vytvorený: /opt/MikroTikManager.apk"
+            msg_ok "APK vytvorený z buildu: /opt/MikroTikManager.apk"
         else
             msg_warn "APK build úspešný, ale výsledný súbor nebol nájdený."
         fi
     else
-        msg_warn "APK build zlyhal. Spusti manuálne: cd /opt/mikrotik-manager && ./build-apk.sh"
+        msg_warn "APK build zlyhal, používam pre-built verziu..."
+        # Fallback: skopíruj pre-built APK z repozitára
+        if [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
+            cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk
+            msg_ok "APK skopírovaný z repozitára: /opt/MikroTikManager.apk"
+        else
+            msg_warn "Pre-built APK nenájdený v repozitári. Spusti manuálne: ./build-apk.sh"
+        fi
     fi
     cd ${APP_DIR}
     

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# MikroTik Backup Manager - Smart Installer/Updater
+# MikroTik Backup Manager - Smart Installer/Updater v2.0
 # Deteguje existujúcu inštaláciu a spustí buď inštaláciu alebo update
 #
 set -e

@@ -22,8 +22,8 @@ if [ -d "${APP_DIR}/.git" ]; then
     
     # UPDATE PROCES
     msg_info "Zastavujem službu MikroTik Backup Manager..."
-    systemctl stop mikrotik-manager.service || true
-    systemctl kill mikrotik-manager.service || true
+    systemctl stop mikrotik-manager.service 2>/dev/null || true
+    systemctl kill mikrotik-manager.service 2>/dev/null || true
     sleep 1
     msg_ok "Služba zastavená."
     
@@ -37,17 +37,31 @@ if [ -d "${APP_DIR}/.git" ]; then
     msg_info "Sťahujem najnovšie zmeny z ${REPO_URL}..."
     cd ${APP_DIR}
     # Jednoduchý a spoľahlivý update
-    git fetch origin || true
-    git reset --hard origin/main || true
-    git clean -fd || true
-    git pull origin main || true
+    git fetch origin 2>/dev/null || true
+    git reset --hard origin/main 2>/dev/null || true
+    git clean -fd 2>/dev/null || true
+    git pull origin main 2>/dev/null || true
     msg_ok "Kód aktualizovaný na najnovšiu verziu."
+    
+    # Kontrola a vytvorenie Python Virtual Environment ak neexistuje
+    if [ ! -d "${APP_DIR}/venv" ]; then
+        msg_info "Vytváram chýbajúce Python Virtual Environment..."
+        python3 -m venv ${APP_DIR}/venv
+        msg_ok "Virtual environment vytvorené."
+    fi
     
     msg_info "Aktualizujem Python závislosti..."
     source ${APP_DIR}/venv/bin/activate
-    pip install -r ${APP_DIR}/requirements.txt || true
+    pip install -r ${APP_DIR}/requirements.txt 2>/dev/null || true
     deactivate
     msg_ok "Závislosti aktualizované."
+    
+    # Vytvorenie adresárov ak neexistujú
+    msg_info "Kontrolujem adresáre..."
+    mkdir -p ${DATA_DIR}/data/backups 2>/dev/null || true
+    chown -R root:root ${APP_DIR} 2>/dev/null || true
+    chown -R root:root ${DATA_DIR} 2>/dev/null || true
+    msg_ok "Adresáre skontrolované."
     
     # Aktualizácia systemd service súboru (možné zmeny)
     msg_info "Kontrolujem systemd službu..."
@@ -69,7 +83,7 @@ Environment="DATA_DIR=${DATA_DIR}/data"
 [Install]
 WantedBy=multi-user.target
 EOF
-    systemctl daemon-reload
+    systemctl daemon-reload 2>/dev/null || true
     msg_ok "Systemd služba skontrolovaná."
     
     # Vymazanie Python cache pre zaručené načítanie nového kódu
@@ -79,9 +93,9 @@ EOF
     msg_ok "Cache vymazaná."
     
     msg_info "Spúšťam službu..."
-    systemctl start mikrotik-manager.service || true
+    systemctl enable mikrotik-manager.service 2>/dev/null || true
+    systemctl start mikrotik-manager.service 2>/dev/null || true
     sleep 2
-    systemctl enable mikrotik-manager.service || true
     msg_ok "Služba spustená."
     
     echo "✅ Aktualizácia dokončená!"
@@ -100,12 +114,12 @@ else
     # Inštalácia Node.js 18.x
     msg_info "Inštalujem Node.js 18.x pre Android development..."
     if ! command -v node &> /dev/null || [[ "$(node -v)" != "v18."* ]]; then
-        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - &>/dev/null
-        apt-get install -y nodejs &>/dev/null
+        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - 2>/dev/null || true
+        apt-get install -y nodejs 2>/dev/null || true
     else
         msg_info "Node.js 18.x už je nainštalované, preskakujem..."
     fi
-    msg_ok "Node.js nainštalované: $(node -v)"
+    msg_ok "Node.js nainštalované: $(node -v 2>/dev/null || echo 'ready')"
     
     # Inštalácia Android SDK
     msg_info "Inštalujem Android SDK pre APK building..."

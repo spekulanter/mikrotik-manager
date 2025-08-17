@@ -1136,4 +1136,4 @@ Pre technickú podporu a aktualizácie navštívte GitHub repozitár alebo konta
 
 ---
 
-*Manuál pre MikroTik Manager - Verzia 1.0 - Január 2024*
+*Manuál pre MikroTik Manager*

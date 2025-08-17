@@ -27,6 +27,23 @@ command -v cordova >/dev/null 2>&1 || { msg_error "Cordova nie je nainštalovan�
 command -v gradle >/dev/null 2>&1 || { msg_error "Gradle nie je nainštalované!"; exit 1; }
 [ -z "$ANDROID_HOME" ] && { msg_error "ANDROID_HOME nie je nastavené!"; exit 1; }
 
+msg_info "Aktualizujem template súbory pred buildovaním..."
+# Kopírovanie najnovších template súborov
+if [ -d "/opt/mikrotik-manager/template" ]; then
+    # Kopírovanie www súborov
+    if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+        cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+    fi
+    # Kopírovanie config.xml
+    if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
+        cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
+    fi
+    # Kopírovanie resources
+    if [ -d "/opt/mikrotik-manager/template/res" ]; then
+        cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
+    fi
+fi
+
 msg_info "Buildng Android APK..."
 cd /opt/mikrotik-manager-app
 

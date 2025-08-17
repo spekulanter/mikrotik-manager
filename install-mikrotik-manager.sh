@@ -57,9 +57,20 @@ if [ -d "${APP_DIR}/.git" ]; then
     msg_ok "Závislosti aktualizované."
     
     # Aktualizácia Cordova template súborov
-    if [ -d "/opt/mikrotik-manager-app/www" ] && [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+    if [ -d "/opt/mikrotik-manager-app" ] && [ -d "/opt/mikrotik-manager/template" ]; then
         msg_info "Aktualizujem Cordova template súbory..."
-        cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+        # Kopírovanie www súborov
+        if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+            cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+        fi
+        # Kopírovanie config.xml
+        if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
+            cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
+        fi
+        # Kopírovanie resources
+        if [ -d "/opt/mikrotik-manager/template/res" ]; then
+            cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
+        fi
         msg_ok "Template súbory aktualizované."
     fi
     
@@ -194,9 +205,20 @@ EOF
         cordova platform add android >/dev/null 2>&1 || true
         cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1 || true
         
-        # Kopírovanie template index.html z repozitára ak existuje
-        if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
-            cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+        # Kopírovanie všetkých template súborov z repozitára
+        if [ -d "/opt/mikrotik-manager/template" ]; then
+            # Kopírovanie www súborov
+            if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+                cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+            fi
+            # Kopírovanie config.xml
+            if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
+                cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
+            fi
+            # Kopírovanie resources
+            if [ -d "/opt/mikrotik-manager/template/res" ]; then
+                cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
+            fi
         fi
         cd ${APP_DIR}
         msg_ok "Cordova projekt vytvorený."
@@ -380,9 +402,20 @@ PROFEOF
         cordova platform add android >/dev/null 2>&1
         cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1
         
-        # Kopírovanie template index.html z repozitára ak existuje
-        if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
-            cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+        # Kopírovanie všetkých template súborov z repozitára
+        if [ -d "/opt/mikrotik-manager/template" ]; then
+            # Kopírovanie www súborov
+            if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+                cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+            fi
+            # Kopírovanie config.xml
+            if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
+                cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
+            fi
+            # Kopírovanie resources
+            if [ -d "/opt/mikrotik-manager/template/res" ]; then
+                cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
+            fi
         fi
     fi
     msg_ok "Cordova projekt vytvorený."

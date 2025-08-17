@@ -56,6 +56,13 @@ if [ -d "${APP_DIR}/.git" ]; then
     deactivate
     msg_ok "Závislosti aktualizované."
     
+    # Aktualizácia Cordova template súborov
+    if [ -d "/opt/mikrotik-manager-app/www" ] && [ -f "/opt/mikrotik-manager/template/index.html" ]; then
+        msg_info "Aktualizujem Cordova template súbory..."
+        cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
+        msg_ok "Template súbory aktualizované."
+    fi
+    
     # Kontrola a aktualizácia Android development nástrojov
     msg_info "Kontrolujem Android development nástroje..."
     

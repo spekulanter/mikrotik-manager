@@ -1026,9 +1026,9 @@ A: Nie, ale silne odporúčané, especially pre:
 - Produkčné prostredie
 - Správu kritických zariadení
 
-**Q: Môžem používať LDAP/Active Directory?**
+**Q: Aké typy autentifikácie sú podporované?**
 
-A: Momentálne nie, iba lokálne používateľské účty. LDAP integrácia je plánovaná v budúcej verzii.
+A: Aplikácia podporuje lokálne používateľské účty s možnosťou 2FA autentifikácie.
 
 ### Technické otázky
 
@@ -1069,9 +1069,9 @@ server {
 
 ### Mobilná aplikácia
 
-**Q: Je dostupná iOS aplikácia?**
+**Q: Aké mobilné platformy sú podporované?**
 
-A: Momentálne iba Android APK. iOS verzia je v pláne.
+A: Momentálne je dostupná Android APK aplikácia.
 
 **Q: Ako aktualizovať mobilnú aplikáciu?**
 
@@ -1083,31 +1083,14 @@ A: Čiastočne - zobrazuje posledné známe dáta, ale vyžaduje pripojenie pre 
 
 ### Podpora a vývoj
 
-**Q: Kde môžem nahlásiť bug alebo požiadať o novú funkciu?**
+**Q: Aké sú plánované funkcie?**
 
-A: GitHub Issues: https://github.com/your-repo/mikrotik-manager/issues
-
-**Q: Je aplikácia open source?**
-
-A: Áno, MIT licencia. Príspevky sú vítané.
-
-**Q: Aká je roadmapa vývoja?**
-
-A: Plánované funkcie:
-- iOS aplikácia
-- LDAP integrácia  
+A: Roadmapa vývoja zahŕňa:
 - Dashboard customization
 - API pre tretie strany
 - Rozšírenie SNMP monitoring
 - Scheduled reports
-
-**Q: Môžem upraviť zdrojový kód?**
-
-A: Áno, pod MIT licenciou. Doporučujeme:
-- Fork repozitára
-- Vytvorenie feature branch
-- Pull request s popisom zmien
-- Testovanie pred submission
+- Performance optimizations
 
 ---
 
@@ -1122,7 +1105,7 @@ MikroTik Manager je komplexné riešenie pre správu MikroTik infraštruktúry. 
 - **Real-time monitoring** s grafickými reportmi
 - **Mobilný prístup** cez Android aplikáciu
 - **Bezpečnostné funkcie** s 2FA podporou
-- **Open source** riešenie s aktívnym vývojom
+- **Profesionálne riešenie** s aktívnym vývojom
 
 ### Ďalšie kroky:
 
@@ -1131,8 +1114,6 @@ MikroTik Manager je komplexné riešenie pre správu MikroTik infraštruktúry. 
 3. **Pridanie zariadení** do správy
 4. **Nastavenie monitoringu** a notifikácií
 5. **Pravidelné zálohovanie** kritických konfigurácií
-
-Pre technickú podporu a aktualizácie navštívte GitHub repozitár alebo kontaktujte vývojový tím.
 
 ---
 

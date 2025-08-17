@@ -47,7 +47,6 @@ cd /opt/mikrotik-manager
 - `template/index.html` - Hlavný obsah a UI aplikácie
 - `template/config.xml` - Konfigurácia aplikácie (názov, verzia, permissions)
 - `template/res/` - Ikony a splash screen obrázky
-- `template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md` - Inštrukcie pre APK
 
 ### 🔄 Synchronizácia zmien
 

@@ -10,7 +10,7 @@
                 margin: 0;
                 padding: 0;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: linear-gradient(135deg, #bfdbfe 0%, #dbeafe 100%);
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -18,7 +18,7 @@
             }
             .container {
                 text-align: center;
-                color: white;
+                color: #1e3a8a;
                 padding: 40px 20px;
                 max-width: 400px;
                 width: 90%;
@@ -122,6 +122,29 @@
                     // Vymaž všetky možné staré dáta pre čistý štart
                     localStorage.clear();
                 }
+                
+                // Smart back button handling - zabráni návratu na login ak je user prihlásený
+                document.addEventListener('backbutton', onBackKeyDown, false);
+            }
+            
+            function onBackKeyDown(e) {
+                // Ak je browser otvorený, nechaj default správanie
+                if (inAppBrowser) {
+                    return;
+                }
+                
+                // Ak máme uložený server (user už bol prihlásený), minimalizuj appku namiesto ukončenia
+                const savedServer = localStorage.getItem('mikrotik_server');
+                const appUsed = localStorage.getItem('app_first_used');
+                
+                if (savedServer && appUsed) {
+                    e.preventDefault();
+                    // Minimalizuj aplikáciu namiesto zatvorenia
+                    navigator.app.exitApp();
+                } else {
+                    // Pri prvom použití povoľ normálne zatvorenie
+                    navigator.app.exitApp();
+                }
             }
 
             document.getElementById('serverForm').addEventListener('submit', function(e) {
@@ -175,8 +198,18 @@
                 
                 inAppBrowser.addEventListener('exit', function() {
                     console.log('Browser closed');
-                    // Browser was closed, user is back to main screen
-                    // Server URL remains saved for next time
+                    inAppBrowser = null;
+                    
+                    // Ak má user uložený server, automaticky ho znovu otvor po krátkom čase
+                    const savedServer = localStorage.getItem('mikrotik_server');
+                    const appUsed = localStorage.getItem('app_first_used');
+                    
+                    if (savedServer && appUsed) {
+                        // Krátke oneskorenie pre lepší UX
+                        setTimeout(function() {
+                            connectToServer(savedServer);
+                        }, 1000);
+                    }
                 });
             }
             

@@ -12,6 +12,8 @@
 8. [Monitoring a grafy](#monitoring-a-grafy)
 9. [Nastavenia systému](#nastavenia-systému)
 10. [Bezpečnosť a 2FA](#bezpečnosť-a-2fa)
+    - [Dvojfaktorová autentifikácia](#dvojfaktorová-autentifikácia-2fa)
+    - [Správa používateľského účtu](#správa-používateľského-účtu)
 11. [Riešenie problémov](#riešenie-problémov)
 12. [Často kladené otázky](#často-kladené-otázky)
 
@@ -674,6 +676,76 @@ Kliknite na **Nastavenia** v hornej lište hlavnej stránky.
 2. **Potvrdenie:**
    - Kliknite "Vypnúť 2FA"
    - Všetky záložné kódy sa deaktivujú
+
+### Správa používateľského účtu
+
+**Prístup k správe účtu:**
+1. Prihláste sa do systému
+2. V hornej časti kliknite na **"Upraviť"** vedľa vášho používateľského mena
+3. Otvorí sa modálne okno s troma záložkami: **Používateľské meno**, **Heslo** a **2FA**
+
+#### Zmena používateľského mena
+
+**Kedy použiť:**
+- Pri migrácii databázy medzi LXC kontajnermi
+- Zmena identity administrátora
+- Zjednotenie názvu účtu
+
+**Postup zmeny:**
+1. **Otvorte správu účtu:** Kliknite na "Upraviť" → záložka "Používateľské meno"
+2. **Zadanie nových údajov:**
+   - **Aktuálne meno** - Zobrazí sa automaticky (len na čítanie)
+   - **Nové meno** - Zadajte nové používateľské meno (3-50 znakov)
+   - **Potvrdenie hesla** - Zadajte vaše aktuálne heslo na overenie
+3. **Validácia:**
+   - Povolené znaky: písmená (a-z, A-Z), číslice (0-9), podčiarkovník (_), pomlčka (-)
+   - Minimálne 3 znaky, maximálne 50 znakov
+   - Nové meno nesmie už existovať v systéme
+4. **Úspešná zmena:**
+   - Používateľské meno sa okamžite aktualizuje
+   - Zostanete prihlásení pod novým menom
+   - Zobrazí sa potvrdzovacie hlásenie
+
+#### Zmena hesla
+
+**Postup zmeny:**
+1. **Otvorte správu účtu:** Kliknite na "Upraviť" → záložka "Heslo"
+2. **Zadanie hesiel:**
+   - **Staré heslo** - Aktuálne heslo na overenie
+   - **Nové heslo** - Nové heslo (minimálne 8 znakov)
+   - **Potvrdenie** - Zopakujte nové heslo
+3. **Úspešná zmena:**
+   - Heslo sa okamžite aktualizuje
+   - Zostanete prihlásení
+   - Zobrazí sa potvrdzovacie hlásenie
+
+#### Správa 2FA
+
+**Prístup k 2FA nastaveniam:**
+1. **Otvorte správu účtu:** Kliknite na "Upraviť" → záložka "2FA"
+2. **Dostupné funkcie:**
+   - Zobrazenie počtu zostávajúcich záložných kódov
+   - Regenerovanie nových záložných kódov
+   - Správa 2FA nastavení
+
+**Praktické použitie pri LXC migrácii:**
+```bash
+# 1. Záloha databázy na starom LXC
+cp /opt/mikrotik-manager/mikrotik_manager.db /root/backup.db
+
+# 2. Inštalácia na novom LXC
+bash install_in_lxc.sh
+
+# 3. Kopírovanie databázy
+cp /root/backup.db /opt/mikrotik-manager/mikrotik_manager.db
+sudo chown mikrotik-manager:mikrotik-manager /opt/mikrotik-manager/mikrotik_manager.db
+
+# 4. Reštart služby
+sudo systemctl restart mikrotik-manager
+
+# 5. Zmena používateľského mena cez webové rozhranie
+# Prihláste sa → "Upraviť" → "Používateľské meno" → Zadajte nové meno
+```
 
 ### Šifrovanie hesiel
 

@@ -728,7 +728,7 @@ def get_snmp_data(ip, community='public'):
                     # Použijeme počet jadier z hrProcessorLoad tabuľky ako zdroj pravdy
                     results['cpu_count'] = str(core_count)
             except Exception as e:
-                print(f"DEBUG: SNMP hrProcessorLoad walk failed: {e}")
+                pass  # Ticho preskočiť chyby SNMP
         
         # Vypočítaj free memory a memory usage percentage
         if results.get('used_memory') != 'N/A' and results.get('total_memory') != 'N/A':
@@ -743,13 +743,10 @@ def get_snmp_data(ip, community='public'):
                 results['free_memory'] = str(free_mb)
                 results['memory_usage'] = str(usage_percent)
                 
-                print(f"DEBUG: Memory calc - Used: {used_mb}MB, Total: {total_mb}MB, Free: {free_mb}MB, Usage: {usage_percent}%")
             except Exception as e:
-                print(f"DEBUG: Memory calculation failed: {e}")
                 results['free_memory'] = 'N/A'
                 results['memory_usage'] = 'N/A'
         else:
-            print("DEBUG: Memory OIDy nedostupné, fallback na estimation")
             # Fallback estimation ak OIDy nefungujú
             results['total_memory'] = '1024'
             results['used_memory'] = '569'  # 55.6% usage
@@ -1031,6 +1028,52 @@ def change_password():
     
     add_log('info', f"Používateľ '{current_user.username}' si zmenil heslo.")
     return jsonify({'status': 'success', 'message': 'Heslo bolo úspešne zmenené.'})
+
+@app.route('/api/user/change-username', methods=['POST'])
+@login_required
+def change_username():
+    data = request.json
+    new_username = data.get('new_username')
+    password = data.get('password')
+
+    if not all([new_username, password]):
+        return jsonify({'status': 'error', 'message': 'Všetky polia sú povinné.'}), 400
+
+    # Validácia používateľského mena
+    if len(new_username) < 3:
+        return jsonify({'status': 'error', 'message': 'Používateľské meno musí mať aspoň 3 znaky.'}), 400
+    
+    if len(new_username) > 50:
+        return jsonify({'status': 'error', 'message': 'Používateľské meno môže mať maximálne 50 znakov.'}), 400
+    
+    # Povolené znaky: písmená, číslice, podčiarkovník a pomlčka
+    import re
+    if not re.match('^[a-zA-Z0-9_-]+$', new_username):
+        return jsonify({'status': 'error', 'message': 'Používateľské meno môže obsahovať len písmená, číslice, podčiarkovník a pomlčku.'}), 400
+
+    with get_db_connection() as conn:
+        # Overenie hesla
+        user_data = conn.execute('SELECT password FROM users WHERE id = ?', (current_user.id,)).fetchone()
+        if not user_data or not check_password_hash(user_data['password'], password):
+            return jsonify({'status': 'error', 'message': 'Heslo nie je správne.'}), 400
+
+        # Kontrola, či používateľské meno už existuje
+        existing_user = conn.execute('SELECT id FROM users WHERE username = ? AND id != ?', (new_username, current_user.id)).fetchone()
+        if existing_user:
+            return jsonify({'status': 'error', 'message': 'Používateľské meno už existuje.'}), 400
+
+        # Uloženie starého mena pre log
+        old_username = current_user.username
+        
+        # Aktualizácia používateľského mena
+        conn.execute('UPDATE users SET username = ? WHERE id = ?', (new_username, current_user.id))
+        conn.commit()
+    
+    # Aktualizácia objektu aktuálneho používateľa
+    current_user.username = new_username
+    
+    add_log('info', f"Používateľ '{old_username}' si zmenil používateľské meno na '{new_username}'.")
+    return jsonify({'status': 'success', 'message': f'Používateľské meno bolo úspešne zmenené na "{new_username}".'})
 
 @app.route('/api/user/backup-codes', methods=['GET', 'POST'])
 @login_required
@@ -2095,9 +2138,7 @@ with app.app_context():
 
 threading.Thread(target=run_scheduler, daemon=True).start()
 
-logger.info("Aplikácia MikroTik Backup Manager sa spúšťa...")
-
-logger.info("Aplikácia MikroTik Backup Manager sa spúšťa...")
+logger.info("Aplikácia MikroTik Manager sa spúšťa...")
 
 # === PING MONITORING FUNKCIE ===
 
@@ -2870,10 +2911,6 @@ def get_monitoring_history(device_id):
         logger.error(f"Stack trace: {traceback.format_exc()}")
         return jsonify({'status': 'error', 'message': f'Chyba servera. Skontrolujte logy servera pre viac detailov. (Zariadenie ID: {device_id})'}), 500
 
-if __name__ == '__main__':
-    logger.info("Server sa spúšťa v režime pre vývoj na http://0.0.0.0:5000")
-    socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
-
 @app.route('/api/backup/status', methods=['GET'])
 @login_required
 def backup_status():
@@ -2976,6 +3013,10 @@ start_ping_monitoring()
 
 if __name__ == '__main__':
     try:
+        # Nastavenie Flask produkčného prostredia
+        os.environ['FLASK_ENV'] = 'production'
+        app.config['ENV'] = 'production'
+        
         logger.info("Spúšťam MikroTik Manager...")
         
         # Inicializácia databázy

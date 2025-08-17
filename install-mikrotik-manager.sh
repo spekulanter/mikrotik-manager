@@ -271,10 +271,15 @@ else
         yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1
         /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "build-tools;34.0.0" >/dev/null 2>&1
     else
-        msg_info "Android SDK už je nainštalované, preskakujem..."
+        msg_info "Android SDK už je nainštalované, kontrolujem build-tools..."
         export ANDROID_HOME=/opt/android-sdk
         export ANDROID_SDK_ROOT=/opt/android-sdk
         export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
+        # Doainštaluj chýbajúce build-tools ak potrebné
+        if [ ! -d "/opt/android-sdk/build-tools/34.0.0" ]; then
+            msg_info "Inštalujem chýbajúce Android build-tools 34.0.0..."
+            /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" >/dev/null 2>&1
+        fi
     fi
     msg_ok "Android SDK nainštalované."
     

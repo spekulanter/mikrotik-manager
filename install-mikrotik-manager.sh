@@ -214,6 +214,21 @@ EOF
         msg_warn "APK nenájdený. Pre vytvorenie spusti: cd /opt/mikrotik-manager && ./build-apk.sh"
     fi
     
+    # Kontrola a doainštalácia Android build-tools ak potrebné
+    if [ -d "/opt/android-sdk" ]; then
+        msg_info "Kontrolujem Android build-tools..."
+        export ANDROID_HOME=/opt/android-sdk
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
+        if [ ! -d "/opt/android-sdk/build-tools/34.0.0" ]; then
+            msg_info "Inštalujem chýbajúce Android build-tools 34.0.0..."
+            /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0" >/dev/null 2>&1
+            msg_ok "Android build-tools 34.0.0 nainštalované."
+        else
+            msg_info "Android build-tools 34.0.0 už sú nainštalované."
+        fi
+    fi
+    
     # Vymazanie Python cache pre zaručené načítanie nového kódu
     msg_info "Čistím Python cache..."
     find ${APP_DIR} -name "*.pyc" -delete 2>/dev/null || true

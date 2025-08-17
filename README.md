@@ -3,6 +3,11 @@
 **Odporúčané prostredie:** LXC kontajner v Proxmox VE  
 **Testované na:** `debian-12-standard_12.7-1_amd64.tar.zst`
 
+### 🛠️ Odporúčaná LXC konfigurácia:
+- **CPU:** 2 cores
+- **RAM:** 6 GB  
+- **Disk:** 10 GB
+
 ```bash
 bash -c "$(wget -qLO - https://raw.githubusercontent.com/spekulanter/mikrotik-manager/main/install-mikrotik-manager.sh)"
 ```
@@ -52,3 +57,15 @@ Ak chcete skopírovať zmeny z Cordova projektu späť do template:
 cd /opt/mikrotik-manager
 ./sync-template.sh
 ```
+
+## 📖 Dokumentácia
+
+**Kompletný užívateľský manuál:** [manual.md](manual.md)
+
+Manuál obsahuje detailné informácie o:
+- Inštalácii a konfigurácii systému
+- Používaní webového rozhrania a mobilnej aplikácie
+- Správe zariadení a zálohovaní
+- Monitoringu a grafoch
+- Bezpečnostných nastaveniach a 2FA
+- Riešení problémov a FAQ

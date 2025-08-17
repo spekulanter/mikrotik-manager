@@ -269,7 +269,7 @@ else
         
         # Inštalácia Android SDK komponentov
         yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1
-        /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" >/dev/null 2>&1
+        /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "build-tools;34.0.0" >/dev/null 2>&1
     else
         msg_info "Android SDK už je nainštalované, preskakujem..."
         export ANDROID_HOME=/opt/android-sdk

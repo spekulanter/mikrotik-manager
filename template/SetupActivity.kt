@@ -13,6 +13,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class SetupActivity : AppCompatActivity() {
 
@@ -21,8 +22,9 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var preferences: SharedPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Switch to app theme immediately to avoid splash screen
-        setTheme(R.style.AppTheme_NoActionBar)
+        // Install splash screen with fast dismiss
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { false }
         
         super.onCreate(savedInstanceState)
 

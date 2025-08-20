@@ -19,14 +19,16 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">#111827</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">#111827</item>
     <!-- Edge-to-edge handled in code with WindowCompat.setDecorFitsSystemWindows(false) -->
     </style>
 
-    <!-- Android 12+ splash screen disabled theme -->
+    <!-- Lightweight splash theme without external dependencies -->
+        <!-- Fast splash screen with dark background - no icon -->
     <style name="SplashTheme" parent="Theme.SplashScreen">
         <item name="android:windowSplashScreenBackground">#111827</item>
         <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
-        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:windowSplashScreenAnimationDuration">200</item>
         <item name="android:windowSplashScreenIconBackgroundColor">#111827</item>
         <item name="android:windowSplashScreenBrandingImage">@android:color/transparent</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>

@@ -32,9 +32,12 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install splash screen and immediately hide it
+        // Install splash screen with fast dismiss
         val splashScreen = installSplashScreen()
-        splashScreen.setKeepOnScreenCondition { false }
+        splashScreen.setKeepOnScreenCondition { 
+            // Keep splash for minimal time - just until we start loading
+            false 
+        }
         
         super.onCreate(savedInstanceState)
         window.setFlags(
@@ -81,6 +84,12 @@ class MainActivity : AppCompatActivity() {
             enableFullscreen()
 
             webView = findViewById(R.id.webView)
+
+            // Set dark background immediately to prevent white flash
+            webView.setBackgroundColor(android.graphics.Color.parseColor("#111827"))
+            
+            // Make WebView invisible until content loads to prevent flash
+            webView.visibility = View.INVISIBLE
 
             // Remove overlay since we're using solid status bar
             // statusBarOverlay removed from layout and logic
@@ -174,6 +183,12 @@ class MainActivity : AppCompatActivity() {
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    
+                    // Show WebView only after content loads to prevent white flash
+                    if (webView.visibility != View.VISIBLE) {
+                        webView.visibility = View.VISIBLE
+                    }
+                    
                     // Force cookie sync after each page load
                     val cookieManager = CookieManager.getInstance()
                     cookieManager.flush()

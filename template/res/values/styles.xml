@@ -22,15 +22,17 @@
     <!-- Edge-to-edge handled in code with WindowCompat.setDecorFitsSystemWindows(false) -->
     </style>
 
-    <!-- Basic splash theme without any icons -->
-    <style name="SplashTheme" parent="Theme.AppCompat.Light.NoActionBar">
+    <!-- Android 12+ splash screen disabled theme -->
+    <style name="SplashTheme" parent="Theme.SplashScreen">
+        <item name="android:windowSplashScreenBackground">#111827</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#111827</item>
+        <item name="android:windowSplashScreenBrandingImage">@android:color/transparent</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:windowBackground">#111827</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowActionBar">false</item>
-        <item name="android:windowContentOverlay">@null</item>
         <item name="android:statusBarColor">#111827</item>
         <item name="android:navigationBarColor">#111827</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

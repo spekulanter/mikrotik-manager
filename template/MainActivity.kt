@@ -23,7 +23,7 @@ import androidx.core.view.ViewCompat
 import android.view.ViewGroup
 import android.animation.ValueAnimator
 import android.animation.ArgbEvaluator
-import android.graphics.drawable.ColorDrawable
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class MainActivity : AppCompatActivity() {
 
@@ -32,12 +32,11 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Switch to app theme immediately to avoid any splash screen
-        setTheme(R.style.AppTheme_NoActionBar)
+        // Install splash screen and immediately hide it
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { false }
         
         super.onCreate(savedInstanceState)
-
-        // Immediately hide any loading indicators
         window.setFlags(
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED

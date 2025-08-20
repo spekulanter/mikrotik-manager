@@ -104,9 +104,9 @@ Po úspešnej inštalácii je aplikácia dostupná na:
 - **Webové rozhranie:** `http://IP_SERVERA:5000`
 - **Mobilná aplikácia:** Nainštalujte APK súbor z `/opt/MT Manager.apk`
 
-### 2. Vytvorenie prvého účtu
+### 2. Vytvorenie účtu
 
-⚠️ **DÔLEŽITÉ:** Po vytvorení účtu musíte povinne nastaviť 2FA. Bez 2FA nie je možné používať aplikáciu.
+⚠️ **DÔLEŽITÉ:** Systém podporuje len jeden účet. Po vytvorení musíte povinne nastaviť 2FA.
 
 1. Otvorte webové rozhranie
 2. Kliknite na **"Vytvoriť nový účet"**
@@ -632,9 +632,9 @@ Kliknite na **Nastavenia** v hornej lište hlavnej stránky.
 ### Dvojfaktorová autentifikácia (2FA)
 
 ⚠️ **DÔLEŽITÉ UPOZORNENIE:**
-- **2FA je povinné pre všetky nové účty**
+- **2FA je povinné pre každý účet** (systém podporuje len jeden účet)
 - **2FA sa nedá vypnúť po aktivácii**
-- **Bez 2FA nie je možné vytvoriť účet**
+- **Bez 2FA nie je možné používať aplikáciu**
 - **Záložné kódy sú jediný spôsob obnovenia prístupu**
 
 #### Aktivácia 2FA

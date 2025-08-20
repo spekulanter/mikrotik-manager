@@ -12,50 +12,59 @@
 bash -c "$(wget -qLO - https://raw.githubusercontent.com/spekulanter/mikrotik-manager/main/install-mikrotik-manager.sh)"
 ```
 
-## 📱 Buildovanie Android APK
+## 📱 Buildovanie Native Android APK
 
-Po úspešnej inštalácii môžete vytvoriť Android APK súbor:
+Po úspešnej inštalácii môžete vytvoriť Native Android APK súbor:
 
 ```bash
 cd /opt/mikrotik-manager
-./build-apk.sh
+bash build-apk.sh
 ```
 
-APK súbor bude vytvorený v `/opt/MikroTikManager.apk`
+APK súbor bude vytvorený ako `/opt/MT Manager.apk`
 
-**⚡ Automatická aktualizácia:** Build script automaticky skopíruje najnovšie template súbory do Cordova projektu pred buildovaním, takže APK bude vždy obsahovať aktuálne zmeny z template adresára.
+**⚡ Native Android:** Aplikácia je teraz postavená na Native Android Kotlin WebView s optimalizovaným status bar handling a automatickou detekciou témy (dark/light mode).
 
-### 🔄 Aktualizácia APK template
+### 🎨 Úprava Android APK
 
-Pre úpravu vzhľadu alebo funkcionality APK upravte súbory v template adresári:
+Pre úpravu vzhľadu alebo funkcionality upravte súbory v template adresári:
 
 ```bash
-# Upraviť obsah a dizajn APK
-nano /opt/mikrotik-manager/template/index.html
+# Upraviť názov aplikácie
+nano /opt/mikrotik-manager/template/res/values/strings.xml
 
-# Upraviť konfiguráciu APK (názov, verzia, ikony)  
-nano /opt/mikrotik-manager/template/config.xml
+# Upraviť Android Manifest (permissions, konfigurácia)  
+nano /opt/mikrotik-manager/template/AndroidManifest.xml
+
+# Upraviť hlavnú Activity (status bar, WebView nastavenia)
+nano /opt/mikrotik-manager/template/MainActivity.kt
 
 # Vytvorenie novej APK s upravenými template súbormi
-# (automaticky skopíruje template → Cordova → build APK)
 cd /opt/mikrotik-manager
-./build-apk.sh
+bash build-apk.sh
 ```
 
-### 📋 Template súbory
+### 📋 Native Android Template súbory
 
-- `template/index.html` - Hlavný obsah a UI aplikácie
-- `template/config.xml` - Konfigurácia aplikácie (názov, verzia, permissions)
-- `template/res/` - Ikony a splash screen obrázky
+- `template/MainActivity.kt` - Hlavná aktivita s WebView a status bar handling
+- `template/SetupActivity.kt` - Setup obrazovka pre konfiguráciu
+- `template/AndroidManifest.xml` - Android manifest s permissions
+- `template/activity_main.xml` - Layout pre hlavnú obrazovku
+- `template/activity_setup.xml` - Layout pre setup obrazovku
+- `template/res/values/strings.xml` - Názov aplikácie a texty
+- `template/res/values/styles.xml` - Android témy a štýly
+- `template/build.gradle` - Android build konfigurácia
 
-### 🔄 Synchronizácia zmien
+### 🔄 Aktualizácia systému
 
-Ak chcete skopírovať zmeny z Cordova projektu späť do template:
+Pre aktualizáciu na najnovšiu verziu:
 
 ```bash
 cd /opt/mikrotik-manager
-./sync-template.sh
+bash update.sh
 ```
+
+**Automatická detekcia:** Inštalačný script automaticky rozpozná existujúcu inštaláciu a spustí aktualizačný proces namiesto novej inštalácie.
 
 ## 📖 Dokumentácia
 

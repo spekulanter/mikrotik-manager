@@ -102,7 +102,7 @@ python app.py
 
 Po úspešnej inštalácii je aplikácia dostupná na:
 - **Webové rozhranie:** `http://IP_SERVERA:5000`
-- **Mobilná aplikácia:** Nainštalujte APK súbor z `/opt/MikroTikManager.apk`
+- **Mobilná aplikácia:** Nainštalujte APK súbor z `/opt/MT Manager.apk`
 
 ### 2. Vytvorenie prvého účtu
 
@@ -202,13 +202,23 @@ Webové rozhranie je optimalizované pre:
 
 ---
 
-## Mobilná aplikácia (APK)
+## Mobilná aplikácia (Native Android APK)
+
+### Generovanie APK
+
+1. **Automatické buildovanie:**
+   ```bash
+   cd /opt/mikrotik-manager
+   bash build-apk.sh
+   ```
+   - APK súbor sa vytvorí ako `/opt/MT Manager.apk`
+   - Veľkosť: približne 3.6 MB
 
 ### Inštalácia APK
 
 1. **Stiahnutie:**
-   - APK súbor sa nachádza v `/opt/MikroTikManager.apk`
-   - Veľkosť: približne 3.4 MB
+   - APK súbor sa nachádza v `/opt/MT Manager.apk`
+   - Native Android aplikácia s Kotlin WebView
 
 2. **Inštalácia na Android:**
    - Povolte inštaláciu z neznámych zdrojov
@@ -224,18 +234,20 @@ Webové rozhranie je optimalizované pre:
    - Použite rovnaké prihlasovacie údaje ako vo webovom rozhraní
    - Podporuje 2FA autentifikáciu
 
-3. **Funkcie:**
-   - Plná funkcionalita webového rozhrania
-   - Optimalizované pre dotykové ovládanie
-   - Offline režim pre základné informácie
+3. **Native Android funkcie:**
+   - Automatická detekcia témy (dark/light mode)
+   - Optimalizovaný status bar handling
+   - Natívne Android WebView s lepšou výkonnosťou
+   - Správne zobrazenie na všetkých Android verziách
 
 ### Rozdiely oproti webovému rozhraniu
 
-**Výhody mobilnej aplikácie:**
-- Rychlejšie spustenie
-- Lepšia optimalizácia pre dotykovú obrazovku
-- Možnosť push notifikácií
-- Integrované s natívnymi Android funkciami
+**Výhody Native Android aplikácie:**
+- Rychlejšie spustenie a lepšia výkonnosť
+- Automatické prepínanie dark/light témy podľa systému
+- Optimalizovaný status bar pre moderný Android vzhľad
+- Lepšia integrácia s Android systémom
+- Natívne Android WebView namiesto browser wrappera
 
 **Obmedzenia:**
 - Vyžaduje internetové pripojenie
@@ -896,15 +908,16 @@ cp mikrotik_manager.db mikrotik_manager.db.backup
 sqlite3 mikrotik_manager.db "PRAGMA integrity_check;"
 ```
 
-#### 6. APK aplikácia sa nepripojí
+#### 6. Native Android APK aplikácia sa nepripojí
 
 **Príznaky:**
-- Connection timeout
+- Connection timeout  
 - SSL certificate errors
 - Network unreachable
+- Setup obrazovka sa nezobrazuje správne
 
 **Riešenie:**
-1. **Kontrola IP adresy servera**
+1. **Kontrola IP adresy servera v setup obrazovke**
 2. **Firewall nastavenia:**
    ```bash
    # Otvorenie portu 5000
@@ -1160,11 +1173,15 @@ proxy_redirect off;
 
 **Q: Aké mobilné platformy sú podporované?**
 
-A: Momentálne je dostupná Android APK aplikácia.
+A: Momentálne je dostupná Native Android APK aplikácia s Kotlin WebView.
 
 **Q: Ako aktualizovať mobilnú aplikáciu?**
 
-A: Stiahnuť novú APK verziu a preinštalovať. Dáta sa uchovávajú na serveri.
+A: Regenerovať APK cez `bash build-apk.sh` a preinštalovať. Dáta sa uchovávajú na serveri.
+
+**Q: Aký je rozdiel medzi Native Android APK a webovým rozhraním?**
+
+A: Native Android APK poskytuje lepšiu výkonnosť, automatickú detekciu témy a optimalizovaný status bar handling pre Android.
 
 **Q: Funguje aplikácia offline?**
 

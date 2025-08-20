@@ -165,17 +165,17 @@ EOF
     msg_info "  cd ${APP_DIR} && bash build-apk.sh"
     
     # Automatické skopírovanie pre-built APK
-    if [ ! -f "/opt/MikroTikManager.apk" ] && [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
+    if [ ! -f "/opt/MT Manager.apk" ] && [ -f "${APP_DIR}/MT Manager.apk" ]; then
         msg_info "Kopírujem pre-built Android APK..."
-        cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk
-        rm -f ${APP_DIR}/MikroTikManager.apk
-        msg_ok "APK skopírovaný z repozitára: /opt/MikroTikManager.apk"
-    elif [ -f "/opt/MikroTikManager.apk" ]; then
-        msg_info "Android APK už existuje: /opt/MikroTikManager.apk"
+        cp "${APP_DIR}/MT Manager.apk" "/opt/MT Manager.apk"
+        rm -f "${APP_DIR}/MT Manager.apk"
+        msg_ok "APK skopírovaný z repozitára: /opt/MT Manager.apk"
+    elif [ -f "/opt/MT Manager.apk" ]; then
+        msg_info "Android APK už existuje: /opt/MT Manager.apk"
         # Vymaž APK z repozitára ak existuje
-        rm -f ${APP_DIR}/MikroTikManager.apk
+        rm -f "${APP_DIR}/MT Manager.apk"
     else
-        msg_warn "APK nenájdený. Pre vytvorenie spusti: cd /opt/mikrotik-manager && ./build-apk.sh"
+        msg_warn "APK nenájdený. Pre vytvorenie spusti: cd /opt/mikrotik-manager && bash build-apk.sh"
     fi
     
     # Kontrola a doainštalácia Android build-tools ak potrebné
@@ -280,15 +280,6 @@ else
     export PATH=${PATH}:/opt/gradle/bin
     msg_ok "Gradle nainštalované: $(gradle -v 2>/dev/null | head -n1 || echo 'Gradle ready')"
     
-    # Inštalácia Cordova CLI
-    msg_info "Inštalujem Cordova CLI pre mobile app development..."
-    if ! command -v cordova &> /dev/null; then
-        npm install -g cordova &>/dev/null
-    else
-        msg_info "Cordova už je nainštalované, preskakujem..."
-    fi
-    msg_ok "Cordova nainštalované: $(cordova -v 2>/dev/null || echo 'Cordova ready')"
-    
     # Vytvorenie environment setup file
     msg_info "Vytváram environment setup súbor..."
     cat << 'ENVEOF' > /etc/environment
@@ -328,16 +319,16 @@ PROFEOF
     
     # Stiahnutie Android APK z repozitára
     msg_info "Pripravujem Android APK..."
-    if [ ! -f "/opt/MikroTikManager.apk" ]; then
-        if [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
-            cp ${APP_DIR}/MikroTikManager.apk /opt/MikroTikManager.apk
-            rm -f ${APP_DIR}/MikroTikManager.apk
-            msg_ok "APK skopírovaný z repozitára: /opt/MikroTikManager.apk"
+    if [ ! -f "/opt/MT Manager.apk" ]; then
+        if [ -f "${APP_DIR}/MT Manager.apk" ]; then
+            cp "${APP_DIR}/MT Manager.apk" "/opt/MT Manager.apk"
+            rm -f "${APP_DIR}/MT Manager.apk"
+            msg_ok "APK skopírovaný z repozitára: /opt/MT Manager.apk"
         else
-            msg_warn "Pre-built APK nenájdený v repozitári. Na vytvorenie APK spusti manuálne: ./build-apk.sh"
+            msg_warn "Pre-built APK nenájdený v repozitári. Na vytvorenie APK spusti manuálne: bash build-apk.sh"
         fi
     else
-        msg_ok "APK už existuje: /opt/MikroTikManager.apk"
+        msg_ok "APK už existuje: /opt/MT Manager.apk"
     fi
     
     # Vytvorenie Python Virtual Environment

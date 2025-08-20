@@ -23,7 +23,13 @@ bash build-apk.sh
 
 APK súbor bude vytvorený ako `/opt/MT Manager.apk`
 
-**⚡ Native Android:** Aplikácia je teraz postavená na Native Android Kotlin WebView s optimalizovaným status bar handling a automatickou detekciou témy (dark/light mode).
+**⚡ Native Android:** Aplikácia je teraz postavená na Native Android Kotlin WebView s optimalizovaným splash screen, vlastnou network-themed ikonou a eliminovanými blikaniami počas spúšťania (Android 15 kompatibilita).
+
+**📦 APK vlastnosti:**
+- **Veľkosť:** 6.2 MB (optimalizovaná splash screen knižnica)
+- **Ikona:** Vlastná network-themed ikona s MikroTik zariadeniami
+- **Splash screen:** Rýchly tmavý splash bez prebliknutí
+- **Kompatibilita:** Android 7+ (API 24+), optimalizované pre Android 15
 
 ### 🎨 Úprava Android APK
 

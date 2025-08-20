@@ -217,7 +217,8 @@ Webové rozhranie je optimalizované pre:
    bash build-apk.sh
    ```
    - APK súbor sa vytvorí ako `/opt/MT Manager.apk`
-   - Veľkosť: približne 3.6 MB
+   - Veľkosť: 6.2 MB (obsahuje optimalizovanú splash screen knižnicu)
+   - Kompatibilita: Android 7+ (API 24+), optimalizované pre Android 15
 
 ### Inštalácia APK
 
@@ -248,6 +249,23 @@ Aplikácia má vlastnú **network-themed ikonu** navrhnutú špeciálne pre Mikr
 
 Ikona vizuálne reprezentuje účel aplikácie - správu MikroTik sieťových zariadení a ich prepojenú topológiu.
 
+### Optimalizovaný splash screen
+
+Aplikácia používa **moderný splash screen** optimalizovaný pre Android 12+ a Android 15:
+
+**Vlastnosti splash screen:**
+- **Tmavé pozadie** - Konzistentné s webovou aplikáciou (#111827)
+- **Žiadna ikona** - Čistý tmavý splash screen bez prebliknutí
+- **Rýchle spustenie** - Animácia 200ms pre okamžité zobrazenie
+- **Eliminované blikania** - Žiadne biele flashy počas načítavania
+- **Android 15 kompatibilita** - Testované na OnePlus 13
+
+**Technické optimalizácie:**
+- Používa oficiálnu `androidx.core:core-splashscreen` knižnicu
+- WebView sa zobrazí až po úplnom načítaní obsahu
+- Konzistentné tmavé pozadie cez všetky aktivity
+- Optimalizované pre najnovšie Android zariadenia
+
 ### Použitie mobilnej aplikácie
 
 1. **Spustenie aplikácie:**
@@ -260,16 +278,20 @@ Ikona vizuálne reprezentuje účel aplikácie - správu MikroTik sieťových za
 
 3. **Native Android funkcie:**
    - Automatická detekcia témy (dark/light mode)
-   - Optimalizovaný status bar handling
+   - Optimalizovaný splash screen bez prebliknutí
+   - Vlastná network-themed ikona aplikácie
    - Natívne Android WebView s lepšou výkonnosťou
-   - Správne zobrazenie na všetkých Android verziách
+   - Správne zobrazenie na všetkých Android verziách (7+)
+   - Android 15 kompatibilita a optimalizácie
 
 ### Rozdiely oproti webovému rozhraniu
 
 **Výhody Native Android aplikácie:**
-- Rychlejšie spustenie a lepšia výkonnosť
+- Rýchlejšie spustenie a lepšia výkonnosť
 - Automatické prepínanie dark/light témy podľa systému
-- Optimalizovaný status bar pre moderný Android vzhľad
+- Optimalizovaný splash screen pre hladké spúšťanie
+- Vlastná network-themed ikona reprezentujúca sieťovú topológiu
+- Eliminované biele blikania počas načítavania (Android 15 fix)
 - Lepšia integrácia s Android systémom
 - Natívne Android WebView namiesto browser wrappera
 

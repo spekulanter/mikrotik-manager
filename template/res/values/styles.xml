@@ -22,20 +22,15 @@
     <!-- Edge-to-edge handled in code with WindowCompat.setDecorFitsSystemWindows(false) -->
     </style>
 
-    <!-- Smooth splash theme matching app background -->
+    <!-- Basic splash theme without any icons -->
     <style name="SplashTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="colorPrimary">#38bdf8</item>
-        <item name="colorPrimaryDark">#111827</item>
-        <item name="colorAccent">#38bdf8</item>
+        <item name="android:windowBackground">#111827</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">#111827</item>
         <item name="android:navigationBarColor">#111827</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowBackground">#111827</item>
-        <item name="android:windowAnimationStyle">@null</item>
-        <item name="android:windowDisablePreview">true</item>
     </style>
 </resources>

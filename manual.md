@@ -31,7 +31,7 @@
 - **SNMP monitoring** - Detailné sledovanie výkonu zariadení
 - **Ping monitoring** - Kontinuálne sledovanie dostupnosti siete
 - **Webové aj mobilné rozhranie** - Prístup cez prehliadač alebo Android aplikáciu
-- **Bezpečnostné funkcie** - 2FA autentifikácia, šifrovanie hesiel
+- **Bezpečnostné funkcie** - Povinná 2FA autentifikácia, šifrovanie hesiel
 - **Notifikácie** - Pushover notifikácie pri problémech
 - **FTP upload** - Automatické nahrávanie záloh na FTP server
 
@@ -106,12 +106,15 @@ Po úspešnej inštalácii je aplikácia dostupná na:
 
 ### 2. Vytvorenie prvého účtu
 
+⚠️ **DÔLEŽITÉ:** Po vytvorení účtu musíte povinne nastaviť 2FA. Bez 2FA nie je možné používať aplikáciu.
+
 1. Otvorte webové rozhranie
 2. Kliknite na **"Vytvoriť nový účet"**
 3. Zadajte:
    - **Používateľské meno** (4-50 znakov)
    - **Heslo** (minimálne 8 znakov)
 4. Kliknite **"Vytvoriť účet"**
+5. **Ihneď nastavte 2FA** (povinné)
 
 ### 3. Prvé prihlásenie
 
@@ -119,13 +122,15 @@ Po úspešnej inštalácii je aplikácia dostupná na:
 2. Kliknite **"Prihlásiť sa"**
 3. Budete presmerovaní na hlavnú stránku
 
-### 4. Nastavenie 2FA (odporúčané)
+### 4. Nastavenie 2FA (povinné)
+
+⚠️ **DÔLEŽITÉ:** 2FA je povinné pre všetky účty a nedá sa vypnúť po aktivácii.
 
 1. Prejdite do **Nastavenia**
 2. V sekcii **"Bezpečnosť"** kliknite **"Nastaviť 2FA"**
 3. Naskenujte QR kód pomocou aplikácie ako Google Authenticator
 4. Zadajte overovací kód a potvrďte
-5. Uložte si záložné kódy na bezpečné miesto
+5. **Uložte si záložné kódy na bezpečné miesto** - sú potrebné pre obnovenie prístupu
 
 ---
 
@@ -612,7 +617,7 @@ Kliknite na **Nastavenia** v hornej lište hlavnej stránky.
 **2FA nastavenie:**
 - QR kód pre Google Authenticator
 - Záložné kódy (uložte si ich!)
-- Vypnutie 2FA (vyžaduje aktuálne heslo)
+- ⚠️ **2FA sa nedá vypnúť** (je povinné pre všetky účty)
 
 ### Uloženie nastavení
 
@@ -625,6 +630,12 @@ Kliknite na **Nastavenia** v hornej lište hlavnej stránky.
 ## Bezpečnosť a 2FA
 
 ### Dvojfaktorová autentifikácia (2FA)
+
+⚠️ **DÔLEŽITÉ UPOZORNENIE:**
+- **2FA je povinné pre všetky nové účty**
+- **2FA sa nedá vypnúť po aktivácii**
+- **Bez 2FA nie je možné vytvoriť účet**
+- **Záložné kódy sú jediný spôsob obnovenia prístupu**
 
 #### Aktivácia 2FA
 

@@ -37,5 +37,9 @@
         <item name="android:windowBackground">#111827</item>
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@null</item>
+        <item name="android:windowSplashScreenBackground">#111827</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#111827</item>
+        <item name="android:windowSplashScreenBrandingImage">@null</item>
     </style>
 </resources>

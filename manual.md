@@ -229,6 +229,25 @@ Webové rozhranie je optimalizované pre:
    - Povolte inštaláciu z neznámych zdrojov
    - Otvorte APK súbor a potvrďte inštaláciu
 
+### Ikona aplikácie
+
+Aplikácia má vlastnú **network-themed ikonu** navrhnutú špeciálne pre MikroTik Manager:
+
+**Charakteristiky ikony:**
+- **Sieťová topológia** - Zobrazuje tri sieťové zariadenia (routery/switche) prepojené káblami
+- **Sky blue téma** - Farby zosúladené s webovou verziou (#38bdf8, #0ea5e9, #60a5fa)
+- **Tmavé pozadie** - Moderný dark theme (#0f172a)
+- **Profesionálny dizajn** - Čisté línie a connection points
+- **Android optimalizácia** - 108dp rozlíšenie pre adaptive icons
+
+**Vizuálna reprezentácia:**
+- Vrchné zariadenia reprezentujú edge routery/switche
+- Spodné zariadenie reprezentuje core switch/router  
+- Modré káble znázorňují network connections
+- Junction body označujú connection points v topológii
+
+Ikona vizuálne reprezentuje účel aplikácie - správu MikroTik sieťových zariadení a ich prepojenú topológiu.
+
 ### Použitie mobilnej aplikácie
 
 1. **Spustenie aplikácie:**

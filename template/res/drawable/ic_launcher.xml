@@ -5,58 +5,83 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Background circle with gradient -->
+    <!-- Clean gradient background without black borders -->
     <path
-        android:fillColor="#111827"
-        android:pathData="M0,0h108v108h-108z"/>
+        android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor" xmlns:aapt="http://schemas.android.com/aapt">
+            <gradient
+                android:startColor="#1e293b"
+                android:endColor="#0f172a"
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="54"/>
+        </aapt:attr>
+    </path>
     
-    <path
-        android:fillColor="#1f2937"
-        android:pathData="M54,54m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0"/>
-    
-    <!-- Network icon inspired by fa-network-wired -->
+    <!-- Larger, more prominent network design -->
     <group
         android:translateX="54"
         android:translateY="54">
         
-        <!-- Main network nodes (routers/switches) -->
+        <!-- Main router/switch nodes - larger and rounder -->
         <path
             android:fillColor="#38bdf8"
-            android:pathData="M-20,-15 L-12,-15 L-12,-7 L-20,-7 Z"/>
+            android:pathData="M-28,-20 L-12,-20 Q-8,-20 -8,-16 L-8,-8 Q-8,-4 -12,-4 L-28,-4 Q-32,-4 -32,-8 L-32,-16 Q-32,-20 -28,-20 Z"/>
         <path
             android:fillColor="#38bdf8"
-            android:pathData="M12,-15 L20,-15 L20,-7 L12,-7 Z"/>
+            android:pathData="M12,-20 L28,-20 Q32,-20 32,-16 L32,-8 Q32,-4 28,-4 L12,-4 Q8,-4 8,-8 L8,-16 Q8,-20 12,-20 Z"/>
         <path
             android:fillColor="#38bdf8"
-            android:pathData="M-8,7 L8,7 L8,15 L-8,15 Z"/>
+            android:pathData="M-12,8 L12,8 Q16,8 16,12 L16,20 Q16,24 12,24 L-12,24 Q-16,24 -16,20 L-16,12 Q-16,8 -12,8 Z"/>
         
-        <!-- Connection lines/cables -->
+        <!-- Connection indicator lights on devices -->
         <path
-            android:fillColor="#0ea5e9"
-            android:strokeColor="#0ea5e9"
-            android:strokeWidth="2"
-            android:pathData="M-12,-11 L12,-11"/>
+            android:fillColor="#10b981"
+            android:pathData="M-24,-16 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0"/>
         <path
-            android:fillColor="#0ea5e9"
-            android:strokeColor="#0ea5e9"
-            android:strokeWidth="2"
-            android:pathData="M-16,-7 L-16,0 L-4,0 L-4,7"/>
+            android:fillColor="#10b981"
+            android:pathData="M-24,-12 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0"/>
         <path
-            android:fillColor="#0ea5e9"
-            android:strokeColor="#0ea5e9"
-            android:strokeWidth="2"
-            android:pathData="M16,-7 L16,0 L4,0 L4,7"/>
+            android:fillColor="#10b981"
+            android:pathData="M24,-16 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0"/>
+        <path
+            android:fillColor="#10b981"
+            android:pathData="M24,-12 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0"/>
+        <path
+            android:fillColor="#10b981"
+            android:pathData="M-4,16 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0"/>
+        <path
+            android:fillColor="#10b981"
+            android:pathData="M4,16 m-2,0 a2,2 0,1 1,4 0 a2,2 0,1 1,-4 0"/>
         
-        <!-- Small connection dots -->
+        <!-- Thicker network connection cables -->
+        <path
+            android:strokeColor="#0ea5e9"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:pathData="M-8,-12 L8,-12"/>
+        <path
+            android:strokeColor="#0ea5e9"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:pathData="M-20,-4 L-20,2 L-6,2 L-6,8"/>
+        <path
+            android:strokeColor="#0ea5e9"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:pathData="M20,-4 L20,2 L6,2 L6,8"/>
+        
+        <!-- Connection junction points -->
         <path
             android:fillColor="#60a5fa"
-            android:pathData="M-16,-11 m-1.5,0 a1.5,1.5 0,1 1,3 0 a1.5,1.5 0,1 1,-3 0"/>
+            android:pathData="M-20,-4 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"/>
         <path
             android:fillColor="#60a5fa"
-            android:pathData="M16,-11 m-1.5,0 a1.5,1.5 0,1 1,3 0 a1.5,1.5 0,1 1,-3 0"/>
+            android:pathData="M20,-4 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"/>
         <path
             android:fillColor="#60a5fa"
-            android:pathData="M0,11 m-1.5,0 a1.5,1.5 0,1 1,3 0 a1.5,1.5 0,1 1,-3 0"/>
+            android:pathData="M0,2 m-3,0 a3,3 0,1 1,6 0 a3,3 0,1 1,-6 0"/>
         
     </group>
 </vector>

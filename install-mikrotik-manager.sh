@@ -55,25 +55,7 @@ if [ -d "${APP_DIR}/.git" ]; then
     pip install --quiet -r ${APP_DIR}/requirements.txt >/dev/null 2>&1
     deactivate
     msg_ok "Závislosti aktualizované."
-    
-    # Aktualizácia Cordova template súborov
-    if [ -d "/opt/mikrotik-manager-app" ] && [ -d "/opt/mikrotik-manager/template" ]; then
-        msg_info "Aktualizujem Cordova template súbory..."
-        # Kopírovanie www súborov
-        if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
-            cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
-        fi
-        # Kopírovanie config.xml
-        if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
-            cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
-        fi
-        # Kopírovanie resources
-        if [ -d "/opt/mikrotik-manager/template/res" ]; then
-            cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
-        fi
-        msg_ok "Template súbory aktualizované."
-    fi
-    
+
     # Kontrola a aktualizácia Android development nástrojov
     msg_info "Kontrolujem Android development nástroje..."
     
@@ -83,12 +65,7 @@ if [ -d "${APP_DIR}/.git" ]; then
         curl -fsSL https://deb.nodesource.com/setup_18.x | bash - >/dev/null 2>&1
         apt-get install -y nodejs >/dev/null 2>&1
     fi
-    
-    # Cordova CLI update
-    if command -v npm &> /dev/null; then
-        npm install -g cordova@latest >/dev/null 2>&1
-    fi
-    
+
     # Refresh environment setup files
     if [ ! -f "/etc/profile.d/android-dev.sh" ]; then
         msg_info "Obnovujem environment setup..."
@@ -139,12 +116,6 @@ PROFEOF
         cd ${APP_DIR}
     fi
     
-    # Cordova CLI check  
-    if ! command -v cordova &> /dev/null; then
-        msg_info "Inštalujem chýbajúci Cordova CLI..."
-        npm install -g cordova >/dev/null 2>&1 || true
-    fi
-    
     # Environment setup check
     if [ ! -f "/etc/profile.d/android-dev.sh" ]; then
         msg_info "Aktualizujem environment setup..."
@@ -189,45 +160,9 @@ EOF
     systemctl daemon-reload 2>/dev/null || true
     msg_ok "Systemd služba skontrolovaná."
     
-    # Kontrola a vytvorenie Cordova projektu ak neexistuje (aj pri update)
-    if [ ! -d "/opt/mikrotik-manager-app" ]; then
-        msg_info "Vytváram chýbajúci Cordova projekt pre Android APK..."
-        # Načítať Android environment
-        source /etc/profile.d/android-dev.sh 2>/dev/null || true
-        export ANDROID_HOME=/opt/android-sdk
-        export ANDROID_SDK_ROOT=/opt/android-sdk
-        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
-        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-        
-        cd /opt
-        cordova create mikrotik-manager-app com.mikrotik.manager "MikroTik Manager" >/dev/null 2>&1 || true
-        cd mikrotik-manager-app
-        cordova platform add android >/dev/null 2>&1 || true
-        cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1 || true
-        
-        # Kopírovanie všetkých template súborov z repozitára
-        if [ -d "/opt/mikrotik-manager/template" ]; then
-            # Kopírovanie www súborov
-            if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
-                cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
-            fi
-            # Kopírovanie config.xml
-            if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
-                cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
-            fi
-            # Kopírovanie resources
-            if [ -d "/opt/mikrotik-manager/template/res" ]; then
-                cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
-            fi
-        fi
-        cd ${APP_DIR}
-        msg_ok "Cordova projekt vytvorený."
-    fi
-    
-    # Kopírovanie APK instructions template do /opt/
-    if [ -f "/opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md" ]; then
-        cp /opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md /opt/ 2>/dev/null || true
-    fi
+    # APK building info
+    msg_info "Native Android APK build je dostupný cez:"
+    msg_info "  cd ${APP_DIR} && bash build-apk.sh"
     
     # Automatické skopírovanie pre-built APK
     if [ ! -f "/opt/MikroTikManager.apk" ] && [ -f "${APP_DIR}/MikroTikManager.apk" ]; then
@@ -386,44 +321,10 @@ PROFEOF
     git clone ${REPO_URL} ${APP_DIR} >/dev/null 2>&1
     msg_ok "Aplikácia stiahnutá."
     
-    # Vytvorenie Cordova projektu pre Android APK
-    msg_info "Vytváram Cordova projekt pre Android APK..."
-    if [ ! -d "/opt/mikrotik-manager-app" ]; then
-        # Načítať Android environment
-        source /etc/profile.d/android-dev.sh 2>/dev/null || true
-        export ANDROID_HOME=/opt/android-sdk
-        export ANDROID_SDK_ROOT=/opt/android-sdk
-        export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
-        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-        
-        cd /opt
-        cordova create mikrotik-manager-app com.mikrotik.manager "MikroTik Manager" >/dev/null 2>&1
-        cd mikrotik-manager-app
-        cordova platform add android >/dev/null 2>&1
-        cordova plugin add cordova-plugin-inappbrowser >/dev/null 2>&1
-        
-        # Kopírovanie všetkých template súborov z repozitára
-        if [ -d "/opt/mikrotik-manager/template" ]; then
-            # Kopírovanie www súborov
-            if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
-                cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
-            fi
-            # Kopírovanie config.xml
-            if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
-                cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
-            fi
-            # Kopírovanie resources
-            if [ -d "/opt/mikrotik-manager/template/res" ]; then
-                cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
-            fi
-        fi
-    fi
-    msg_ok "Cordova projekt vytvorený."
-    
-    # Kopírovanie APK instructions template do /opt/
-    if [ -f "/opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md" ]; then
-        cp /opt/mikrotik-manager/template/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md /opt/ 2>/dev/null || true
-    fi
+    # APK building info
+    msg_info "Native Android APK build je dostupný cez:"
+    msg_info "  cd ${APP_DIR} && bash build-apk.sh"
+    msg_ok "Android template pripravený."
     
     # Stiahnutie Android APK z repozitára
     msg_info "Pripravujem Android APK..."
@@ -488,10 +389,9 @@ EOF
     echo "   • Java $(java -version 2>&1 | head -n1 | cut -d'"' -f2 2>/dev/null || echo 'N/A')"
     echo "   • Android SDK v35.0.0"
     echo "   • Gradle $(gradle -v 2>/dev/null | head -n1 | awk '{print $2}' || echo 'N/A')"
-    echo "   • Cordova $(cordova -v 2>/dev/null || echo 'N/A')"
     echo ""
     echo "🛠️  APK Building:"
-    echo "   cd /opt/mikrotik-manager-app && cordova build android"
+    echo "   cd ${APP_DIR} && bash build-apk.sh"
     
 fi
 
@@ -502,8 +402,7 @@ echo "   Stav služby:       systemctl status mikrotik-manager.service"
 echo "   Logy služby:       journalctl -u mikrotik-manager.service -f"
 echo "   Manuálny update:   cd ${APP_DIR} && ./update.sh"
 echo ""
-echo "📱 Android APK Development:"
-echo "   Build APK:         cd ${APP_DIR} && ./build-apk.sh"
-echo "   Cordova projekt:   /opt/mikrotik-manager-app/"
-echo "   Finálny APK:       /opt/MikroTikManager.apk"
-echo "   APK Instructions:  /opt/MIKROTIK_MANAGER_APK_INSTRUCTIONS.md"
+echo "📱 Native Android APK Development:"
+echo "   Build APK:         cd ${APP_DIR} && bash build-apk.sh"
+echo "   Android template:  ${APP_DIR}/template/"
+echo "   Finálny APK:       /opt/MT Manager.apk"

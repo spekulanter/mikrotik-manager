@@ -16,15 +16,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 deactivate
 
-# Update Cordova project if it exists
-if [ -d "/opt/mikrotik-manager-app" ]; then
-    echo "🔄 Aktualizujem Cordova projekt..."
-    cd /opt/mikrotik-manager-app
-    npm update &>/dev/null || true
-    cordova platform update android &>/dev/null || true
-    cd /opt/mikrotik-manager
-fi
-
 # Clear Python cache to ensure fresh code loading
 echo "🧹 Čistím Python cache..."
 find /opt/mikrotik-manager -name "*.pyc" -delete 2>/dev/null || true
@@ -39,3 +30,4 @@ sleep 2
 systemctl restart mikrotik-manager.service
 
 echo "✅ Aplikácia bola úspešne aktualizovaná a reštartovaná."
+echo "📱 Pre build Android APK: cd /opt/mikrotik-manager && bash build-apk.sh"

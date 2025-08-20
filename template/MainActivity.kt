@@ -32,10 +32,16 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Switch to app theme immediately to avoid splash screen
+        // Switch to app theme immediately to avoid any splash screen
         setTheme(R.style.AppTheme_NoActionBar)
         
         super.onCreate(savedInstanceState)
+
+        // Immediately hide any loading indicators
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+        )
 
         try {
             // Initialize SharedPreferences

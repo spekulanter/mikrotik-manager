@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# MikroTik Manager - Android APK Builder
-# Builds Android APK from existing Cordova project
+# MikroTik Manager - Native Android APK Builder
+# Builds Native Android APK with WebView
 #
 set -e
 
@@ -15,53 +15,62 @@ function msg_info() { echo -e "\\033[1;34mINFO\\033[0m: $1"; }
 function msg_ok() { echo -e "\\033[1;32mSUCCESS\\033[0m: $1"; }
 function msg_error() { echo -e "\\033[1;31mERROR\\033[0m: $1"; }
 
-# Check if Cordova project exists
-if [ ! -d "/opt/mikrotik-manager-app" ]; then
-    msg_error "Cordova projekt neexistuje v /opt/mikrotik-manager-app"
-    msg_info "Najprv vytvorte Cordova projekt alebo ho skopírujte do /opt/"
-    exit 1
-fi
-
 # Check Android development tools
-command -v cordova >/dev/null 2>&1 || { msg_error "Cordova nie je nainštalované!"; exit 1; }
 command -v gradle >/dev/null 2>&1 || { msg_error "Gradle nie je nainštalované!"; exit 1; }
 [ -z "$ANDROID_HOME" ] && { msg_error "ANDROID_HOME nie je nastavené!"; exit 1; }
 
-msg_info "Aktualizujem template súbory pred buildovaním..."
-# Kopírovanie najnovších template súborov
+# Create Native Android project structure
+msg_info "Vytváram Native Android projekt..."
+mkdir -p /opt/mikrotik-manager-app
+mkdir -p /opt/mikrotik-manager-app/app/src/main/java/com/mikrotik/manager
+mkdir -p /opt/mikrotik-manager-app/app/src/main/res/layout
+mkdir -p /opt/mikrotik-manager-app/app/src/main/res/values
+mkdir -p /opt/mikrotik-manager-app/app/src/main/res/drawable
+mkdir -p /opt/mikrotik-manager-app/app/src/main/res/xml
+
+msg_info "Kopírujem template súbory..."
+# Copy template files to Native Android project structure
 if [ -d "/opt/mikrotik-manager/template" ]; then
-    # Kopírovanie www súborov
-    if [ -f "/opt/mikrotik-manager/template/index.html" ]; then
-        cp /opt/mikrotik-manager/template/index.html /opt/mikrotik-manager-app/www/ 2>/dev/null || true
-    fi
-    # Kopírovanie config.xml
-    if [ -f "/opt/mikrotik-manager/template/config.xml" ]; then
-        cp /opt/mikrotik-manager/template/config.xml /opt/mikrotik-manager-app/ 2>/dev/null || true
-    fi
-    # Kopírovanie resources
-    if [ -d "/opt/mikrotik-manager/template/res" ]; then
-        cp -r /opt/mikrotik-manager/template/res/* /opt/mikrotik-manager-app/res/ 2>/dev/null || true
-    fi
+    # Copy main Android files
+    cp /opt/mikrotik-manager/template/AndroidManifest.xml /opt/mikrotik-manager-app/app/src/main/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/MainActivity.kt /opt/mikrotik-manager-app/app/src/main/java/com/mikrotik/manager/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/SetupActivity.kt /opt/mikrotik-manager-app/app/src/main/java/com/mikrotik/manager/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/activity_main.xml /opt/mikrotik-manager-app/app/src/main/res/layout/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/activity_setup.xml /opt/mikrotik-manager-app/app/src/main/res/layout/ 2>/dev/null || true
+    
+    # Copy resources
+    cp /opt/mikrotik-manager/template/res/values/strings.xml /opt/mikrotik-manager-app/app/src/main/res/values/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/res/values/styles.xml /opt/mikrotik-manager-app/app/src/main/res/values/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/res/drawable/ic_launcher.xml /opt/mikrotik-manager-app/app/src/main/res/drawable/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/res/xml/network_security_config.xml /opt/mikrotik-manager-app/app/src/main/res/xml/ 2>/dev/null || true
+    
+    # Copy Gradle build files
+    cp /opt/mikrotik-manager/template/build.gradle /opt/mikrotik-manager-app/app/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/build.gradle.project /opt/mikrotik-manager-app/build.gradle 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/settings.gradle /opt/mikrotik-manager-app/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/gradle.properties /opt/mikrotik-manager-app/ 2>/dev/null || true
+    cp /opt/mikrotik-manager/template/gradlew /opt/mikrotik-manager-app/ 2>/dev/null || true
+    chmod +x /opt/mikrotik-manager-app/gradlew 2>/dev/null || true
 fi
 
-msg_info "Buildng Android APK..."
+msg_info "Building Native Android APK..."
 cd /opt/mikrotik-manager-app
 
-# Build APK
-msg_info "Spúšťam Cordova build pre Android..."
-cordova build android
+# Build APK using Gradle
+msg_info "Spúšťam Gradle build pre Android..."
+./gradlew assembleDebug
 
 # Copy to main directory
-if [ -f "platforms/android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-    cp platforms/android/app/build/outputs/apk/debug/app-debug.apk /opt/MikroTikManager.apk
-    msg_ok "APK vytvorený: /opt/MikroTikManager.apk"
-    ls -lah /opt/MikroTikManager.apk
+if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+    cp app/build/outputs/apk/debug/app-debug.apk "/opt/MT Manager.apk"
+    msg_ok "APK vytvorený: /opt/MT Manager.apk"
+    ls -lah "/opt/MT Manager.apk"
 else
     msg_error "APK súbor nebol vytvorený!"
     exit 1
 fi
 
 echo ""
-echo "✅ Android APK úspešne vytvorený!"
-echo "📱 Súbor: /opt/MikroTikManager.apk"
-echo "💾 Veľkosť: $(du -sh /opt/MikroTikManager.apk | cut -f1)"
+echo "✅ Native Android APK úspešne vytvorený!"
+echo "📱 Súbor: /opt/MT Manager.apk"
+echo "💾 Veľkosť: $(du -sh "/opt/MT Manager.apk" | cut -f1)"

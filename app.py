@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, session, g
 from flask_socketio import SocketIO, emit
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 import paramiko
 import difflib
 from ftplib import FTP
@@ -45,6 +46,10 @@ app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.'
 app.config['SECRET_KEY'] = os.urandom(32)
 # Nastavíme platnosť "remember me" cookie na 365 dní pre prakticky trvalé prihlásenie.
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
+
+# Pridanie ProxyFix pre správne spracovanie proxy hlavičiek (Nginx Proxy Manager)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 CORS(app)
 
@@ -70,7 +75,17 @@ def add_iframe_headers(response):
     # Pridať CORS hlavičky pre mobilné aplikácie
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, X-Forwarded-For, X-Forwarded-Proto'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    
+    # Pridať hlavičky pre Android WebView optimalizáciu
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    
+    # Hlavičky pre správne fungovanie za proxy
+    if request.headers.get('X-Forwarded-Proto'):
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     
     return response
 
@@ -970,6 +985,21 @@ def download_backup(filename):
 def index():
     if not current_user.totp_enabled:
         return redirect(url_for('setup_2fa'))
+    
+    # Detekcia Android WebView pre optimalizáciu
+    user_agent = request.headers.get('User-Agent', '')
+    is_android_webview = 'wv' in user_agent or 'Android' in user_agent
+    
+    # Logovanie proxy informácií pre debugging
+    forwarded_for = request.headers.get('X-Forwarded-For', 'N/A')
+    forwarded_proto = request.headers.get('X-Forwarded-Proto', 'N/A')
+    real_ip = request.remote_addr
+    
+    if is_android_webview:
+        logger.info(f"Android WebView prístup - User: {current_user.username}, "
+                   f"IP: {real_ip}, X-Forwarded-For: {forwarded_for}, "
+                   f"Proto: {forwarded_proto}, UA: {user_agent[:100]}")
+    
     return send_from_directory('.', 'index.html')
 
 @app.route('/monitoring.html')

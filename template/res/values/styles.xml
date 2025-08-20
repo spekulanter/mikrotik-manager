@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">#38bdf8</item>
+        <item name="colorPrimaryDark">#1e40af</item>
+        <item name="colorAccent">#38bdf8</item>
+    </style>
+
+    <!-- Universal solution with automatic padding -->
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#38bdf8</item>
+        <item name="colorPrimaryDark">#111827</item>
+        <item name="colorAccent">#38bdf8</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#111827</item>
+        <item name="android:windowLightStatusBar">false</item>
+    <!-- Edge-to-edge handled in code with WindowCompat.setDecorFitsSystemWindows(false) -->
+    </style>
+</resources>

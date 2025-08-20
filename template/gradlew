@@ -1,0 +1,12 @@
+#!/bin/sh
+
+##############################################################################
+# Gradle wrapper script
+##############################################################################
+
+# Use Gradle from /opt/gradle-8.5
+export GRADLE_HOME="/opt/gradle-8.5"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# Execute Gradle with all arguments
+exec gradle "$@"

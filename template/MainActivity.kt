@@ -32,6 +32,9 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Switch to app theme immediately to avoid splash screen
+        setTheme(R.style.AppTheme_NoActionBar)
+        
         super.onCreate(savedInstanceState)
 
         try {

@@ -6,7 +6,7 @@
 2. [Inštalácia](#inštalácia)
 3. [Prvé prihlásenie a nastavenie](#prvé-prihlásenie-a-nastavenie)
 4. [Webové rozhranie](#webové-rozhranie)
-5. [Mobilná aplikácia (APK)](#mobilná-aplikácia-apk)
+5. [Mobilná aplikácia (APK)](#mobilná-aplikácia-native-android-apk)
 6. [Správa zariadení](#správa-zariadení)
 7. [Zálohovanie](#zálohovanie)
 8. [Monitoring a grafy](#monitoring-a-grafy)
@@ -17,6 +17,7 @@
     - [Session Management a Cookie Persistence](#session-management-a-cookie-persistence)
 11. [Riešenie problémov](#riešenie-problémov)
 12. [Často kladené otázky](#často-kladené-otázky)
+13. [Záver](#záver)
 
 ---
 

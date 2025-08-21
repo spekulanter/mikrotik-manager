@@ -14,6 +14,7 @@
 10. [Bezpečnosť a 2FA](#bezpečnosť-a-2fa)
     - [Dvojfaktorová autentifikácia](#dvojfaktorová-autentifikácia-2fa)
     - [Správa používateľského účtu](#správa-používateľského-účtu)
+    - [Session Management a Cookie Persistence](#session-management-a-cookie-persistence)
 11. [Riešenie problémov](#riešenie-problémov)
 12. [Často kladené otázky](#často-kladené-otázky)
 
@@ -842,6 +843,122 @@ Pri prvom spustení novej verzie:
 - **Automatický logout** - Po vypršaní session
 - **Global logout** - Zrušenie všetkých aktívnych sessions
 
+### Session Management a Cookie Persistence
+
+#### Persistent SECRET_KEY
+
+**Nové vylepšenie bezpečnosti:**
+- Systém teraz používa **persistent SECRET_KEY** uložený v súbore
+- Kľúč sa ukladá do `/var/lib/mikrotik-manager/data/secret.key`
+- **Výhoda:** Sessions zostávajú platné aj po reštarte služby
+
+**Predchádzajúci problém:**
+```python
+# STARÝ SYSTÉM (problematický):
+app.config['SECRET_KEY'] = os.urandom(32)  # ❌ Nový kľúč pri každom reštarte
+```
+
+**Nové riešenie:**
+```python
+# NOVÝ SYSTÉM (bezpečný):
+app.config['SECRET_KEY'] = get_or_create_secret_key()  # ✅ Persistent kľúč
+```
+
+#### Session Lifetime
+
+**Nastavenie platnosti:**
+- **Platnosť cookie:** 1 rok (365 dní)
+- **Remember Me:** Automaticky zapnuté pre všetky prihlásenia
+- **Persistent sessions:** Prežijú reštart služby aj zariadenia
+
+#### Správanie v rôznych scenároch
+
+**🖥️ Web Browser:**
+```
+✅ Prihlásenie → platné 1 rok
+✅ Reštart služby → stále prihlásený
+✅ Zatvorenie prehliadača → stále prihlásený
+✅ Reštart počítača → stále prihlásený
+❌ Vymazanie cookies → nový login potrebný
+❌ Po 1 roku → nový login potrebný
+```
+
+**📱 Android APK:**
+```
+✅ Prihlásenie → platné 1 rok
+✅ Reštart služby → stále prihlásený
+✅ Zatvorenie aplikácie → stále prihlásený
+✅ Reštart telefónu → stále prihlásený
+❌ Vymazanie app dát → nový login potrebný
+❌ Po 1 roku → nový login potrebný
+```
+
+#### Bezpečnostné aspekty
+
+**Výhody persistent sessions:**
+- Pohodlie pre používateľov (žiadne náhodné logoutovania)
+- Stabilné fungovanie mobilnej aplikácie
+- Predvídateľné správanie systému
+- Žiadne interruption služieb pri maintenance
+
+**Bezpečnostné opatrenia:**
+- **2FA povinnosť** - Aj pri dlhých sessions je nutná 2FA
+- **Silné heslá** - Požiadavka na kvalitné heslá
+- **Automatické vypršanie** - Sessions sa invalidujú po 1 roku
+- **Secure file permissions** - SECRET_KEY súbor má práva 600 (read/write owner only)
+
+#### Technické detaily
+
+**Súbory a umiestnenia:**
+```bash
+# SECRET_KEY storage
+/var/lib/mikrotik-manager/data/secret.key
+
+# Android WebView cookies
+/data/data/com.mikrotik.manager/app_webview/Cookies
+/data/data/com.mikrotik.manager/app_webview/Local Storage/
+
+# Práva na SECRET_KEY súbor
+chmod 600 /var/lib/mikrotik-manager/data/secret.key
+```
+
+**Cookie parametry:**
+```python
+# Session konfigurácia
+PERMANENT_SESSION_LIFETIME = timedelta(days=365)  # 1 rok
+SESSION_COOKIE_SECURE = True  # Len cez HTTPS
+SESSION_COOKIE_HTTPONLY = False  # WebView compatibility
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+```
+
+#### Riešenie problémov s sessions
+
+**Ak sa sessions invalidujú:**
+1. Skontrolujte existenciu SECRET_KEY súboru
+2. Overte práva na súbor (600)
+3. Reštartujte službu pre vytvorenie nového kľúča
+
+**Pre reset sessions (ak je potrebný):**
+```bash
+# Zastavenie služby
+sudo systemctl stop mikrotik-manager
+
+# Odstránenie SECRET_KEY (vytvorí sa nový)
+sudo rm /var/lib/mikrotik-manager/data/secret.key
+
+# Spustenie služby
+sudo systemctl start mikrotik-manager
+```
+
+**Monitoring session aktivít:**
+```bash
+# Kontrola logov
+sudo journalctl -u mikrotik-manager -f
+
+# Sledovanie SECRET_KEY súboru
+ls -la /var/lib/mikrotik-manager/data/secret.key
+```
+
 ---
 
 ## Riešenie problémov
@@ -1166,6 +1283,59 @@ A: Nie, ale silne odporúčané, especially pre:
 **Q: Aké typy autentifikácie sú podporované?**
 
 A: Aplikácia podporuje lokálne používateľské účty s možnosťou 2FA autentifikácie.
+
+### Session Management a Prihlasovanie
+
+**Q: Prečo ma vyhodilo po reštarte služby?**
+
+A: V starších verziách sa SECRET_KEY generoval náhodne pri každom štarte. **Nová verzia** používa persistent SECRET_KEY, takže sessions zostávajú platné aj po reštarte.
+
+**Q: Ako dlho zostávam prihlásený?**
+
+A: Sessions majú platnosť **1 rok** a prežijú:
+- Reštart služby ✅
+- Zatvorenie prehliadača/APK ✅  
+- Reštart počítača/telefónu ✅
+- Invalidujú sa len po 1 roku alebo manuálnom logoute ❌
+
+**Q: Prečo sa mobilná aplikácia nepamätá login?**
+
+A: V novej verzii je implementovaný pokročilý cookie persistence systém pre Android WebView. Ak stále nefunguje:
+1. Vymaž dáta aplikácie v nastaveniach Android
+2. Prihláš sa znovu
+3. APK si už bude pamätať login
+
+**Q: Je 1-ročná session bezpečná?**
+
+A: Áno, pri správnej konfigurácii:
+- Požaduje sa 2FA ✅
+- Silné heslá sú povinné ✅  
+- SECRET_KEY je chránený (chmod 600) ✅
+- HTTPS komunikácia odporúčaná ✅
+
+**Q: Môžem zmeniť dĺžku session?**
+
+A: Áno, v súbore `app.py`:
+```python
+# Pre kratšie sessions (napr. 24 hodín):
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+
+# Pre dlhšie sessions (napr. 2 roky):
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=730)
+```
+
+**Q: Kde sa ukladá SECRET_KEY?**
+
+A: V súbore `/var/lib/mikrotik-manager/data/secret.key` s právami 600 (len owner read/write).
+
+**Q: Ako resetovať všetky sessions?**
+
+A: Odstráň SECRET_KEY súbor a reštartuj službu:
+```bash
+sudo systemctl stop mikrotik-manager
+sudo rm /var/lib/mikrotik-manager/data/secret.key
+sudo systemctl start mikrotik-manager
+```
 
 ### Technické otázky
 

@@ -41,10 +41,50 @@ from io import BytesIO
 from cryptography.fernet import Fernet
 import base64 as b64
 
+# --- Definície adresárov pred konfiguráciou aplikácie ---
+DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
+DB_PATH = os.path.join(DATA_DIR, 'mikrotik_manager.db')
+BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
+
 # --- Nastavenie aplikácie (upravené pre HTML šablóny) ---
 app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
-app.config['SECRET_KEY'] = os.urandom(32)
-# Nastavíme platnosť "remember me" cookie na 365 dní pre prakticky trvalé prihlásenie.
+
+# PERSISTENT SECRET KEY - Bezpečnostne optimalizované
+def get_or_create_secret_key():
+    """
+    Získa alebo vytvorí persistent SECRET_KEY pre aplikáciu.
+    Kľúč sa ukladá do súboru a je konzistentný medzi reštartami služby.
+    """
+    secret_key_file = os.path.join(DATA_DIR, 'secret.key')
+    
+    # Ensure DATA_DIR exists for secret key
+    os.makedirs(DATA_DIR, exist_ok=True)
+    
+    if os.path.exists(secret_key_file):
+        try:
+            with open(secret_key_file, 'rb') as f:
+                secret_key = f.read()
+                if len(secret_key) == 32:  # Platný kľúč
+                    return secret_key
+        except Exception as e:
+            print(f"Chyba pri čítaní SECRET_KEY súboru: {e}")
+    
+    # Vytvor nový SECRET_KEY
+    secret_key = os.urandom(32)
+    try:
+        with open(secret_key_file, 'wb') as f:
+            f.write(secret_key)
+        # Nastavenie správnych práv na súbor (600 - read/write owner only)
+        os.chmod(secret_key_file, 0o600)
+        print("Vytvorený nový persistent SECRET_KEY")
+        return secret_key
+    except Exception as e:
+        print(f"Chyba pri ukladaní SECRET_KEY: {e}")
+        # Fallback na session-only kľúč
+        return os.urandom(32)
+
+app.config['SECRET_KEY'] = get_or_create_secret_key()
+# PRAKTICKÉ NASTAVENIE: 1 rok platnosť cookie (s persistent SECRET_KEY je to bezpečné)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
 
 # Pridanie ProxyFix pre správne spracovanie proxy hlavičiek (Nginx Proxy Manager)
@@ -91,10 +131,6 @@ def add_iframe_headers(response):
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
-DB_PATH = os.path.join(DATA_DIR, 'mikrotik_manager.db')
-BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
 
 backup_tasks = {}
 sequential_backup_running = False

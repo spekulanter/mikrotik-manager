@@ -821,13 +821,13 @@ Systém automaticky šifruje:
 - **FTP heslá** - AES encryption
 - **Používateľské heslá** - bcrypt hashing
 
-#### Migrácia starých hesiel
+#### Automatická migrácia
 
-Pri prvom spustení novej verzie:
-1. Systém detekuje nešifrované heslá
-2. Automaticky ich zašifruje
-3. Zapíše log o migrácii
-4. Staré heslá sa prepíšu šifrovanými
+Systém automaticky zabezpečuje:
+1. Detekciu nešifrovaných hesiel
+2. Automatické šifrovanie pri prvom spustení
+3. Logovanie bezpečnostných operácií
+4. Bezpečné prepísanie pôvodných dát
 
 ### Session management
 
@@ -847,21 +847,17 @@ Pri prvom spustení novej verzie:
 
 #### Persistent SECRET_KEY
 
-**Nové vylepšenie bezpečnosti:**
-- Systém teraz používa **persistent SECRET_KEY** uložený v súbore
+#### Persistent SECRET_KEY
+
+**Bezpečnostné vlastnosti:**
+- Systém používa **persistent SECRET_KEY** uložený v súbore
 - Kľúč sa ukladá do `/var/lib/mikrotik-manager/data/secret.key`
-- **Výhoda:** Sessions zostávajú platné aj po reštarte služby
+- Sessions zostávajú platné aj po reštarte služby
+- Automatické vytvorenie kľúča pri prvom spustení
 
-**Predchádzajúci problém:**
+**Implementácia:**
 ```python
-# STARÝ SYSTÉM (problematický):
-app.config['SECRET_KEY'] = os.urandom(32)  # ❌ Nový kľúč pri každom reštarte
-```
-
-**Nové riešenie:**
-```python
-# NOVÝ SYSTÉM (bezpečný):
-app.config['SECRET_KEY'] = get_or_create_secret_key()  # ✅ Persistent kľúč
+app.config['SECRET_KEY'] = get_or_create_secret_key()  # Persistent kľúč
 ```
 
 #### Session Lifetime
@@ -875,31 +871,31 @@ app.config['SECRET_KEY'] = get_or_create_secret_key()  # ✅ Persistent kľúč
 
 **🖥️ Web Browser:**
 ```
-✅ Prihlásenie → platné 1 rok
-✅ Reštart služby → stále prihlásený
-✅ Zatvorenie prehliadača → stále prihlásený
-✅ Reštart počítača → stále prihlásený
-❌ Vymazanie cookies → nový login potrebný
-❌ Po 1 roku → nový login potrebný
+• Prihlásenie → platné 1 rok
+• Reštart služby → stále prihlásený
+• Zatvorenie prehliadača → stále prihlásený
+• Reštart počítača → stále prihlásený
+• Vymazanie cookies → vyžaduje nový login
+• Po 1 roku → vyžaduje nový login
 ```
 
 **📱 Android APK:**
 ```
-✅ Prihlásenie → platné 1 rok
-✅ Reštart služby → stále prihlásený
-✅ Zatvorenie aplikácie → stále prihlásený
-✅ Reštart telefónu → stále prihlásený
-❌ Vymazanie app dát → nový login potrebný
-❌ Po 1 roku → nový login potrebný
+• Prihlásenie → platné 1 rok
+• Reštart služby → stále prihlásený
+• Zatvorenie aplikácie → stále prihlásený
+• Reštart telefónu → stále prihlásený
+• Vymazanie app dát → vyžaduje nový login
+• Po 1 roku → vyžaduje nový login
 ```
 
 #### Bezpečnostné aspekty
 
 **Výhody persistent sessions:**
-- Pohodlie pre používateľov (žiadne náhodné logoutovania)
+- Pohodlie pre používateľov
 - Stabilné fungovanie mobilnej aplikácie
 - Predvídateľné správanie systému
-- Žiadne interruption služieb pri maintenance
+- Kontinuita služieb pri maintenance
 
 **Bezpečnostné opatrenia:**
 - **2FA povinnosť** - Aj pri dlhých sessions je nutná 2FA
@@ -1286,32 +1282,25 @@ A: Aplikácia podporuje lokálne používateľské účty s možnosťou 2FA aute
 
 ### Session Management a Prihlasovanie
 
-**Q: Prečo ma vyhodilo po reštarte služby?**
-
-A: V starších verziách sa SECRET_KEY generoval náhodne pri každom štarte. **Nová verzia** používa persistent SECRET_KEY, takže sessions zostávajú platné aj po reštarte.
-
 **Q: Ako dlho zostávam prihlásený?**
 
-A: Sessions majú platnosť **1 rok** a prežijú:
-- Reštart služby ✅
-- Zatvorenie prehliadača/APK ✅  
-- Reštart počítača/telefónu ✅
-- Invalidujú sa len po 1 roku alebo manuálnom logoute ❌
+A: Sessions majú platnosť **1 rok** a automaticky sa obnovujú pri:
+- Reštarte služby
+- Zatvorení prehliadača/APK  
+- Reštarte počítača/telefónu
+- Invalidujú sa po 1 roku alebo manuálnom logoute
 
-**Q: Prečo sa mobilná aplikácia nepamätá login?**
+**Q: Ako funguje session persistence?**
 
-A: V novej verzii je implementovaný pokročilý cookie persistence systém pre Android WebView. Ak stále nefunguje:
-1. Vymaž dáta aplikácie v nastaveniach Android
-2. Prihláš sa znovu
-3. APK si už bude pamätať login
+A: Systém používa persistent SECRET_KEY, ktorý zabezpečuje stabilné sessions. Cookie persistence systém je optimalizovaný pre Android WebView aj web prehliadače.
 
 **Q: Je 1-ročná session bezpečná?**
 
 A: Áno, pri správnej konfigurácii:
-- Požaduje sa 2FA ✅
-- Silné heslá sú povinné ✅  
-- SECRET_KEY je chránený (chmod 600) ✅
-- HTTPS komunikácia odporúčaná ✅
+- Požaduje sa 2FA
+- Silné heslá sú povinné  
+- SECRET_KEY je chránený (chmod 600)
+- HTTPS komunikácia odporúčaná
 
 **Q: Môžem zmeniť dĺžku session?**
 

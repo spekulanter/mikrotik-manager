@@ -817,17 +817,27 @@ sudo systemctl restart mikrotik-manager
 #### Automatické šifrovanie
 
 Systém automaticky šifruje:
-- **SSH heslá zariadení** - Fernet encryption
-- **FTP heslá** - AES encryption
-- **Používateľské heslá** - bcrypt hashing
+- **SSH heslá zariadení** - Fernet encryption (AES 128-bit v CBC mode)
+- **FTP heslá** - Fernet encryption (AES 128-bit v CBC mode)  
+- **Používateľské heslá** - bcrypt hashing (cost factor 12)
+
+#### Encryption Key Management
+
+**`/var/lib/mikrotik-manager/data/encryption.key`:**
+- **Algoritmus:** Fernet (AES 128-bit v CBC mode s HMAC SHA256)
+- **Veľkosť:** 44 bytes (32 bytes key + 12 bytes nonce)
+- **Generovanie:** `Fernet.generate_key()` pri prvom spustení
+- **Práva:** chmod 600 (read/write len pre owner)
+- **Použitie:** Šifrovanie SSH/FTP hesiel MikroTik zariadení
 
 #### Automatická migrácia
 
 Systém automaticky zabezpečuje:
-1. Detekciu nešifrovaných hesiel
-2. Automatické šifrovanie pri prvom spustení
+1. Detekciu nešifrovaných hesiel v databáze
+2. Automatické šifrovanie pri prvom spustení s novým kľúčom
 3. Logovanie bezpečnostných operácií
 4. Bezpečné prepísanie pôvodných dát
+5. Backward compatibility pre dešifrovanie
 
 ### Session management
 
@@ -907,16 +917,41 @@ app.config['SECRET_KEY'] = get_or_create_secret_key()  # Persistent kľúč
 
 **Súbory a umiestnenia:**
 ```bash
-# SECRET_KEY storage
-/var/lib/mikrotik-manager/data/secret.key
+# Adresárová štruktúra
+/var/lib/mikrotik-manager/data/
+├── secret.key           # Flask session encryption key (32 bytes)
+├── encryption.key       # Password encryption key pre zariadenia (44 bytes)
+├── mikrotik_manager.db  # SQLite databáza s aplikačnými dátami
+└── backups/            # Priečinok pre backup súbory
 
 # Android WebView cookies
 /data/data/com.mikrotik.manager/app_webview/Cookies
 /data/data/com.mikrotik.manager/app_webview/Local Storage/
 
-# Práva na SECRET_KEY súbor
+# Práva na kľúče
 chmod 600 /var/lib/mikrotik-manager/data/secret.key
+chmod 600 /var/lib/mikrotik-manager/data/encryption.key
 ```
+
+**Detailný popis súborov:**
+
+**`secret.key` (32 bytes):**
+- Flask SECRET_KEY pre session management
+- Podpisovanie a overovanie cookies
+- Automatické vytvorenie pri prvom štarte
+- Persistent medzi reštartami služby
+
+**`encryption.key` (44 bytes):**
+- Fernet encryption key pre heslá zariadení
+- Šifrovanie SSH hesiel MikroTik zariadení
+- Šifrovanie FTP hesiel pre backup upload
+- Automatická migrácia existujúcich hesiel
+
+**`mikrotik_manager.db` (SQLite):**
+- Hlavná databáza aplikácie
+- Všetky konfiguračné a monitoring dáta
+- Používateľské účty a 2FA nastavenia
+- História ping a SNMP monitoring
 
 **Cookie parametry:**
 ```python
@@ -953,6 +988,146 @@ sudo journalctl -u mikrotik-manager -f
 
 # Sledovanie SECRET_KEY súboru
 ls -la /var/lib/mikrotik-manager/data/secret.key
+```
+
+### Databázová štruktúra
+
+#### SQLite databáza `mikrotik_manager.db`
+
+Aplikácia používa SQLite databázu pre ukladanie všetkých konfiguračných a monitoring dát.
+
+**Umiestnenie:** `/var/lib/mikrotik-manager/data/mikrotik_manager.db`
+
+#### Štruktúra tabuliek
+
+**1. `devices` - MikroTik zariadenia**
+```sql
+CREATE TABLE devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT UNIQUE NOT NULL,           -- IP adresa zariadenia
+    name TEXT NOT NULL,                -- Popisný názov zariadenia
+    username TEXT NOT NULL,            -- SSH používateľské meno
+    password TEXT NOT NULL,            -- SSH heslo (šifrované)
+    low_memory BOOLEAN DEFAULT 0,      -- Režim pre zariadenia s málo RAM
+    snmp_community TEXT DEFAULT 'public', -- SNMP community string
+    status TEXT DEFAULT 'unknown',     -- Aktuálny stav zariadenia
+    last_backup TIMESTAMP,             -- Čas poslednej zálohy
+    last_snmp_data TEXT,              -- Posledné SNMP dáta (JSON)
+    snmp_interval_minutes INTEGER DEFAULT 0,     -- SNMP monitoring interval
+    last_snmp_check TIMESTAMP,         -- Čas poslednej SNMP kontroly
+    ping_interval_seconds INTEGER DEFAULT 0,     -- Ping monitoring interval
+    monitoring_paused BOOLEAN DEFAULT 0          -- Pozastavenie monitoringu
+);
+```
+
+**2. `users` - Používateľské účty**
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,     -- Používateľské meno
+    password TEXT NOT NULL,            -- Heslo (bcrypt hash)
+    totp_secret TEXT,                  -- 2FA TOTP tajný kľúč
+    totp_enabled BOOLEAN NOT NULL DEFAULT 0  -- Stav 2FA
+);
+```
+
+**3. `backup_codes` - 2FA záložné kódy**
+```sql
+CREATE TABLE backup_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,          -- Odkaz na users.id
+    code TEXT NOT NULL,                -- Záložný kód
+    created_at TIMESTAMP NOT NULL,     -- Čas vytvorenia
+    used BOOLEAN NOT NULL DEFAULT 0,   -- Stav použitia
+    used_at TIMESTAMP,                 -- Čas použitia
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+```
+
+**4. `ping_history` - História ping monitoringu**
+```sql
+CREATE TABLE ping_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER NOT NULL,        -- Odkaz na devices.id
+    timestamp DATETIME NOT NULL,       -- Čas merania
+    avg_latency REAL,                  -- Priemerná latencia (ms)
+    packet_loss INTEGER NOT NULL DEFAULT 0, -- Strata paketov (%)
+    status TEXT NOT NULL,              -- Stav (online/offline/error)
+    FOREIGN KEY (device_id) REFERENCES devices (id)
+);
+```
+
+**5. `snmp_history` - História SNMP monitoringu**
+```sql
+CREATE TABLE snmp_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER NOT NULL,        -- Odkaz na devices.id
+    timestamp DATETIME NOT NULL,       -- Čas merania
+    cpu_load INTEGER,                  -- Zaťaženie CPU (%)
+    temperature INTEGER,               -- Teplota (°C)
+    memory_usage INTEGER,              -- Využitie pamäte (%)
+    uptime INTEGER,                    -- Uptime (sekundy)
+    total_memory INTEGER,              -- Celková pamäť (bytes)
+    free_memory INTEGER,               -- Voľná pamäť (bytes)
+    FOREIGN KEY (device_id) REFERENCES devices (id)
+);
+```
+
+**6. `logs` - Systémové logy**
+```sql
+CREATE TABLE logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME NOT NULL,       -- Čas logu
+    level TEXT NOT NULL,               -- Úroveň (info/warning/error)
+    message TEXT NOT NULL,             -- Správa
+    device_ip TEXT DEFAULT NULL       -- IP zariadenia (ak relevantné)
+);
+```
+
+**7. `settings` - Systémové nastavenia**
+```sql
+CREATE TABLE settings (
+    key TEXT PRIMARY KEY,              -- Názov nastavenia
+    value TEXT                         -- Hodnota nastavenia
+);
+```
+
+#### Údržba databázy
+
+**Zálohování databázy:**
+```bash
+# Vytvorenie zálohy
+cp /var/lib/mikrotik-manager/data/mikrotik_manager.db /backup/mikrotik_db_$(date +%Y%m%d).db
+
+# Komprimovaná záloha
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db ".backup /backup/mikrotik_db_$(date +%Y%m%d).db"
+```
+
+**Optimalizácia databázy:**
+```bash
+# SQLite VACUUM operácia
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "VACUUM;"
+
+# Reindexovanie
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "REINDEX;"
+```
+
+**Štatistiky databázy:**
+```bash
+# Veľkosť tabuliek
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "
+SELECT name, COUNT(*) as records 
+FROM sqlite_master m LEFT JOIN (
+    SELECT 'devices' as name, COUNT(*) as cnt FROM devices UNION
+    SELECT 'users' as name, COUNT(*) as cnt FROM users UNION
+    SELECT 'ping_history' as name, COUNT(*) as cnt FROM ping_history UNION
+    SELECT 'snmp_history' as name, COUNT(*) as cnt FROM snmp_history UNION
+    SELECT 'logs' as name, COUNT(*) as cnt FROM logs
+) t ON m.name = t.name 
+WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%';"
+
+# Veľkosť databázového súboru
+ls -lh /var/lib/mikrotik-manager/data/mikrotik_manager.db
 ```
 
 ---
@@ -1325,6 +1500,53 @@ sudo systemctl stop mikrotik-manager
 sudo rm /var/lib/mikrotik-manager/data/secret.key
 sudo systemctl start mikrotik-manager
 ```
+
+### Databáza a údržba
+
+**Q: Kde sa ukladajú všetky dáta aplikácie?**
+
+A: V SQLite databáze `/var/lib/mikrotik-manager/data/mikrotik_manager.db` obsahujúcej:
+- Konfigurácia MikroTik zariadení (IP, mená, šifrované heslá)
+- Používateľské účty a 2FA nastavenia
+- História ping a SNMP monitoringu (30 dní predvolene)
+- Systémové logy a nastavenia
+
+**Q: Ako vytvoriť zálohu databázy?**
+
+A: Jednoduchým kopírovaním súboru:
+```bash
+sudo systemctl stop mikrotik-manager
+cp /var/lib/mikrotik-manager/data/mikrotik_manager.db /backup/
+sudo systemctl start mikrotik-manager
+```
+
+**Q: Aká je štruktúra databázy?**
+
+A: Databáza obsahuje 8 hlavných tabuliek:
+- `devices` - MikroTik zariadenia a ich konfigurácia
+- `users` - Používateľské účty s 2FA
+- `backup_codes` - 2FA záložné kódy  
+- `ping_history` - História ping monitoringu
+- `snmp_history` - História SNMP dát (CPU, RAM, teplota)
+- `logs` - Systémové logy aplikácie
+- `settings` - Konfiguračné nastavenia
+
+**Q: Ako optimalizovať výkon databázy?**
+
+A: Pravidelná údržba:
+```bash
+# Optimalizácia databázy
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "VACUUM; REINDEX;"
+
+# Vymazanie starých monitoring dát (starších ako 30 dní)
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "
+DELETE FROM ping_history WHERE timestamp < datetime('now', '-30 days');
+DELETE FROM snmp_history WHERE timestamp < datetime('now', '-30 days');"
+```
+
+**Q: Sú heslá zariadení bezpečne uložené?**
+
+A: Áno, všetky SSH/FTP heslá sú šifrované Fernet encryption (AES 128-bit) pomocou kľúča v `/var/lib/mikrotik-manager/data/encryption.key` s právami 600.
 
 ### Technické otázky
 

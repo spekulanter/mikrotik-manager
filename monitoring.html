@@ -10,7 +10,45 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- Font family Inter pre konzistentné vykreslenie hrúbky ako na index.html -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* Kompaktnejší header – jemné zmenšenie výšky a fontu */
+        :root {
+            --header-btn-height: 40px;
+            --header-btn-font: 13px;  /* základná veľkosť textu v akčných tlačidlách */
+            --header-btn-pad-y: 6px;
+            --header-btn-pad-x: 14px;
+            --header-icon-font: 14px;
+            --header-btn-strong-weight: 600; /* strednú hrúbku - medzi normálnym (400) a hrubým (800) */
+        }
+
+        /* Nastavenie globálneho fontu (ako na index.html) */
+        body { font-family: 'Inter', sans-serif; }
+
+        /* Globálne zjednotenie akčných tlačidiel v top bare (desktop aj mobile) */
+        .action-buttons > button {
+            font-size: var(--header-btn-font) !important;
+            font-weight: 400 !important;
+            line-height: 1.1 !important;
+        }
+        /* Zvýrazni len Obnoviť, Nastavenia, Späť (nie prepínač témy) */
+        .action-buttons > #refreshBtn,
+        .action-buttons > button[onclick*="settings.html"],
+        .action-buttons > button[onclick*="window.location.href='/'"] {
+            font-weight: var(--header-btn-strong-weight) !important; /* silné tlačidlá */
+        }
+        /* Dodatočné zabezpečenie hrúbky - prebije Tailwind utility classy */
+        .action-buttons > #refreshBtn span,
+        .action-buttons > button[onclick*="settings.html"] span,
+        .action-buttons > button[onclick*="window.location.href='/'"] span {
+            font-weight: var(--header-btn-strong-weight) !important;
+        }
+        /* Dropdown button: tenké písmo ale o 1px väčšie */
+        .custom-select-button {
+            font-weight: 400 !important;
+            font-size: calc(var(--header-btn-font) + 1px) !important;
+        }
         .card {
             background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
             border: 1px solid #374151;
@@ -140,6 +178,42 @@
             box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1) !important;
         }
         
+        /* Option elements v select dropdown - pre mobile zariadenia */
+        select option {
+            background-color: #374151 !important;
+            color: #ffffff !important;
+        }
+        
+        /* Option elements v svetlej téme */
+        body.light-theme select option {
+            background-color: #ffffff !important;
+            color: #334155 !important;
+        }
+        
+        /* Mobile WebView specific - force dark option styling */
+        @media screen and (max-width: 768px) {
+            select option {
+                background-color: #374151 !important;
+                color: #ffffff !important;
+            }
+            
+            body.light-theme select option {
+                background-color: #ffffff !important;
+                color: #334155 !important;
+            }
+        }
+        
+        /* WebKit specific option styling */
+        select option:checked {
+            background-color: #4b5563 !important;
+            color: #ffffff !important;
+        }
+        
+        body.light-theme select option:checked {
+            background-color: #e2e8f0 !important;
+            color: #334155 !important;
+        }
+        
         /* Time range buttons container */
         body.light-theme #timeRangeContainer > div {
             background-color: #f8fafc !important;
@@ -216,10 +290,7 @@
             color: var(--text-color) !important;
         }
         
-        /* Mobile refresh button - skryť na desktop pre obe témy */
-        .mobile-refresh-btn {
-            display: none !important;
-        }
+    /* Odstránená pôvodná mobilná varianta refresh tlačidla (zjednodušenie) */
         
         /* Mobile refresh button v svetlej téme */
         body.light-theme .mobile-refresh-btn {
@@ -436,131 +507,32 @@
         }
 
         @media (max-width: 768px) {
-            /* Stack header vertically on mobile */
-            .flex.justify-between.items-center {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 16px;
-                margin-bottom: 20px;
+            /* Jednoduchý mobilný layout pre header */
+            .flex.items-center.mb-6.gap-6 {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 16px !important;
             }
-            
-            /* First row: Title and device selector */
-            .flex.justify-between.items-center > div:first-child {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 12px;
+            .flex.items-center.mb-6.gap-6 > h1 {
+                align-self: center !important;
+                font-size: 1.25rem !important;
+                margin: 0 !important;
             }
-            
-            /* Title row */
-            .flex.justify-between.items-center > div:first-child > h1 {
-                align-self: center;
-                margin-bottom: 8px;
-            }
-            
-            /* Controls row - device selector and time range */
-            .flex.justify-between.items-center > div:first-child > select,
-            .flex.justify-between.items-center > div:first-child > #timeRangeContainer {
-                width: 100%;
-            }
-            
-            /* Refresh button will be moved to action buttons row */
-            .flex.justify-between.items-center > div:first-child > #refreshBtn {
-                display: none;
-            }
-            
-            #timeRangeContainer .bg-gray-700 {
-                justify-content: center;
-                flex-wrap: wrap;
-                padding: 8px;
-            }
-            
-            /* Action buttons row - include refresh button */
-            .flex.justify-between.items-center > div:last-child {
-                flex-direction: row;
-                justify-content: space-between;
-                gap: 6px;
-                margin-left: 0 !important; /* Remove margin on mobile */
-            }
-            
-            .flex.justify-between.items-center > div:last-child > button {
-                flex: 1;
-                font-size: 14px;
-                padding: 8px 12px;
-                min-width: 0;
-                min-height: 42px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s ease;
-            }
-            
-            .flex.justify-between.items-center > div:last-child > button:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-            }
-            
-            /* Hover effects for specific button types on mobile */
-            .flex.justify-between.items-center > div:last-child > button.bg-blue-600:hover {
-                background-color: var(--accent-color-hover) !important;
-                color: #ffffff !important;
-            }
-            
-            .flex.justify-between.items-center > div:last-child > button.bg-gray-600:hover,
-            .flex.justify-between.items-center > div:last-child > #themeToggle:hover,
-            .flex.justify-between.items-center > div:last-child > button[onclick*="/"]:hover,
-            .flex.justify-between.items-center > div:last-child > button[onclick*="settings.html"]:hover {
-                background-color: #cbd5e1 !important;
-                color: var(--text-color) !important;
-            }
-            
-            /* Create mobile refresh button - skryté na desktop */
-            .mobile-refresh-btn {
-                display: none !important;
-            }
-            
-            /* Show mobile refresh button only on mobile and hide desktop one */
-            @media (max-width: 768px) {
-                .mobile-refresh-btn {
-                    display: flex !important;
-                    flex: 1;
-                    font-size: 14px;
-                    padding: 8px 12px;
-                    min-width: 0;
-                    min-height: 42px;
-                    background-color: #2563eb !important;
-                    border: none;
-                    border-radius: 0.5rem;
-                    color: white;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 0.5rem;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                }
-                
-                .mobile-refresh-btn:hover {
-                    background-color: #1d4ed8 !important;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-                }
-                
-                /* Ensure desktop refresh button is completely hidden on mobile */
-                #refreshBtn {
-                    display: none !important;
-                }
-            }
-            
-            /* Hide text on smallest screens for action buttons */
-            @media (max-width: 480px) {
-                .flex.justify-between.items-center > div:last-child > button span:not(.sr-only) {
-                    display: none;
-                }
-                
-                .flex.justify-between.items-center > div:last-child > button,
-                .mobile-refresh-btn {
-                    justify-content: center;
-                    min-width: 44px;
-                }
+            .flex.items-center.mb-6.gap-6 .custom-select,
+            .flex.items-center.mb-6.gap-6 #timeRangeContainer { width:100% !important; }
+            /* Odstránenie medzery vpravo pri intervaloch */
+            #timeRangeContainer { margin-right:0 !important; }
+            #timeRangeContainer > div { width:100% !important; box-sizing:border-box !important; }
+            #timeRangeContainer .bg-gray-700 { width:100% !important; box-sizing:border-box !important; margin-right:0 !important; }
+            /* Refresh ostáva viditeľné (už len jedna verzia) */
+            /* Kontajner s menu zostane radový na desktop, na mobile plná šírka */
+            .flex.items-center.mb-6.gap-6 > .flex.items-center.gap-2.ml-auto { width:100% !important; flex-wrap:wrap; }
+            /* Action buttons wrapper - 4 tlačidlá v jednom riadku */
+            .action-buttons { width:100% !important; display:flex !important; gap:6px !important; }
+            .action-buttons > button { flex:1 1 0 !important; min-width:0 !important; padding:8px 4px !important; font-size:13px !important; justify-content:center !important; }
+            /* Na veľmi úzkych displejoch skryť text okrem accessibility */
+            @media (max-width:480px){
+                .action-buttons > button span:not(.sr-only){ display:none !important; }
             }
         }
         
@@ -683,10 +655,11 @@
 
         /* Header button normalization */
         .flex.justify-between.items-center .btn {
-            min-height: 42px;
-            padding: 8px 16px !important;
-            font-size: 14px;
-            font-weight: 500;
+            min-height: var(--header-btn-height);
+            height: var(--header-btn-height);
+            padding: var(--header-btn-pad-y) var(--header-btn-pad-x) !important;
+            font-size: var(--header-btn-font);
+            font-weight: 400; /* odstránené zvýraznenie */
             display: flex !important;
             align-items: center;
             justify-content: center;
@@ -698,11 +671,60 @@
             white-space: nowrap;
         }
 
+        /* Explicit uniform height + centering for theme toggle so it matches others */
+        #themeToggle {
+            min-height: var(--header-btn-height) !important;
+            height: var(--header-btn-height) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: var(--header-btn-pad-y) var(--header-btn-pad-x) !important;
+            font-size: var(--header-btn-font) !important;
+        }
+        #themeToggle i { line-height: 1 !important; }
+    /* Unifikácia textu v hlavných akčných tlačidlách */
+    .action-buttons > button span { font-size: inherit !important; font-weight: 400 !important; line-height: 1.1 !important; }
+    /* Ikony – jednotná veľkosť, aby text nevyzeral menší pri rôznych ikonách */
+    .action-buttons > button i { font-size: var(--header-icon-font) !important; line-height: 1 !important; }
+    /* Zabezpečiť že žiadny iný utility class (napr. text-sm/text-base) to nerozbije */
+    .action-buttons > button [class*="text-"]:not(.sr-only) { font-size: inherit !important; }
+        /* Mobile variant keeps same height but narrower padding already overridden */
+        @media (max-width: 768px) {
+            .action-buttons > #themeToggle { height:var(--header-btn-height) !important; min-height:var(--header-btn-height) !important; }
+        }
+        
+        /* ================= MOBILE UNIFIKÁCIA ŠTYROCH TLAČIDIEL ================= */
+        @media (max-width: 768px) {
+            /* Rovnaká (mierne znížená) výška pre všetky štyri */
+            .action-buttons > button { 
+                height:var(--header-btn-height) !important; 
+                min-height:var(--header-btn-height) !important; 
+                display:flex !important; 
+                align-items:center !important; 
+                justify-content:center !important; 
+                padding: var(--header-btn-pad-y) 8px !important; /* znížený vertikálny padding */
+                font-size: var(--header-btn-font) !important;
+            }
+            /* Rovnaká šírka (rozdelia sa rovnomerne) */
+            .action-buttons { gap:6px !important; }
+            .action-buttons > button { flex:1 1 25% !important; }
+            /* Skryť pretekanie a držať symetriu pri dlhších textoch */
+            .action-buttons > button span:not(.sr-only) { 
+                overflow:hidden; 
+                text-overflow:ellipsis; 
+                white-space:nowrap; 
+                max-width:100%;
+            }
+            /* Ikony zarovnať jednotne */
+            .action-buttons > button i { line-height:1 !important; }
+        }
+
         /* Ensure refresh button matches others */
         #refreshBtn {
-            min-height: 42px;
-            padding: 8px 16px !important;
-            font-size: 14px;
+            min-height: var(--header-btn-height);
+            height: var(--header-btn-height);
+            padding: var(--header-btn-pad-y) var(--header-btn-pad-x) !important;
+            font-size: var(--header-btn-font);
             font-weight: 500;
         }
 
@@ -753,6 +775,274 @@
         .chart-container {
             position: relative;
         }
+        
+        /* Custom Dropdown Styles */
+        .custom-select {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .custom-select-button {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+            color: #ffffff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 280px; /* Zväčšená minimálna šírka */
+            max-width: 500px; /* Maximálna šírka pre PC */
+            width: auto; /* Automatická šírka podľa obsahu */
+            user-select: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .custom-select-button:hover {
+            background-color: #4b5563;
+        }
+        
+        .custom-select-button:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #f97316;
+        }
+        
+        .custom-select-arrow {
+            margin-left: auto;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        
+        .custom-select.open .custom-select-arrow {
+            transform: rotate(180deg);
+        }
+        
+        .custom-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            margin-top: 4px;
+            z-index: 1000;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: none;
+            min-width: 280px; /* Minimálna šírka rovnaká ako button */
+            max-width: 500px; /* Maximálna šírka pre PC */
+        }
+        
+        /* PC verzia - väčšia výška, aby boli viditeľné všetky zariadenia */
+        @media (min-width: 769px) {
+            .custom-select {
+                min-width: 320px; /* Minimálna šírka pre PC */
+                max-width: 600px; /* Maximálna šírka pre PC */
+            }
+            
+            .custom-select-button {
+                min-width: 320px; /* Minimálna šírka button pre PC */
+                padding: var(--header-btn-pad-y) var(--header-btn-pad-x); /* Jemne menší padding */
+                height: var(--header-btn-height); /* Zarovnané s ostatnými */
+                line-height: 1.15rem; /* Trochu kompaktnejšie */
+                font-size: var(--header-btn-font); /* Menší font */
+            }
+            
+            .custom-select-dropdown {
+                max-height: 600px; /* Zväčšená výška pre viac zariadení súčasne */
+                overflow-y: auto;
+                min-width: 320px; /* Minimálna šírka pre PC */
+                max-width: 600px; /* Maximálna šírka pre PC */
+                padding: 0; /* Základný padding pre PC */
+            }
+            
+
+            /* Desktop: presná unifikácia výšky všetkých header prvkov */
+            .flex.items-center.mb-6.gap-6 .btn,
+            .flex.items-center.mb-6.gap-6 .custom-select-button,
+            .flex.items-center.mb-6.gap-6 .time-range-btn,
+            #timeRangeContainer .bg-gray-700 {
+                height: var(--header-btn-height) !important;
+                min-height: var(--header-btn-height) !important;
+                max-height: var(--header-btn-height) !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: var(--header-btn-pad-y) var(--header-btn-pad-x) !important;
+                box-sizing: border-box !important;
+                line-height: 1.2 !important;
+            }
+            .flex.items-center.mb-6.gap-6 .custom-select-button {
+                line-height: 1.2 !important;
+                font-size: calc(var(--header-btn-font) + 1px) !important;
+                gap: 8px !important;
+            }
+            /* Time range container presná výška */
+            #timeRangeContainer > div {
+                height: var(--header-btn-height) !important;
+                min-height: var(--header-btn-height) !important;
+                padding: 2px !important;
+            }
+            /* Time range buttons presná výška */
+            #timeRangeContainer .time-range-btn {
+                height: calc(var(--header-btn-height) - 4px) !important;
+                min-height: calc(var(--header-btn-height) - 4px) !important;
+                padding: 4px 12px !important;
+                font-size: var(--header-btn-font) !important;
+                line-height: 1.1 !important;
+            }
+        }
+        
+        /* Mobile verzia - optimalizovaná šírka a priestor */
+        @media (max-width: 768px) {
+            .custom-select {
+                width: 100%; /* Celá šírka kontajnera */
+                max-width: calc(100vw - 16px); /* Zmenšený margin pre viac priestoru */
+                margin-left: 0; /* Zarovnanie úplne vľavo */
+                position: relative;
+            }
+            
+            .custom-select-button {
+                width: 100%;
+                max-width: calc(100vw - 16px); /* Zmenšený margin pre viac priestoru */
+                min-width: auto;
+                padding: 6px 8px; /* Zmenšený padding pre viac priestoru */
+                margin-left: 0; /* Zarovnanie úplne vľavo */
+            }
+            
+            .custom-select-dropdown {
+                max-height: 80vh; /* 80% výšky displeja pre väčšie dropdown */
+                overflow-y: auto;
+                width: 100%;
+                max-width: calc(100vw - 16px); /* Zmenšený margin pre viac priestoru */
+                left: 0;
+                right: auto;
+                padding: 0 !important; /* FORCE odstránenie všetkého paddingu */
+                margin-left: 0; /* Zarovnanie úplne vľavo */
+                border-radius: 6px; /* Menší border radius pre kompaktnosť */
+                box-sizing: border-box; /* Include border in width calculation */
+            }
+            
+            .custom-select-option {
+                padding: 8px 4px 8px 4px; /* Malá medzierka 4px od ľavého okraja */
+                font-size: 14px;
+                line-height: 1.4;
+                /* Kompaktnejší text layout pre mobile */
+                display: flex;
+                align-items: center;
+                gap: 2px; /* Zmenšená medzera medzi guličkou a textom */
+                text-align: left; /* Explicitné zarovnanie vľavo */
+                justify-content: flex-start; /* Obsah zarovnaný vľavo */
+                margin-left: 0; /* Žiadny margin */
+                border: none; /* Žiadny border */
+            }
+            
+            /* EXTRA override pre konzistentné zarovnanie */
+            .custom-select-dropdown .custom-select-option {
+                padding-left: 4px !important; /* Malá medzierka od ľavého okraja */
+                margin-left: 0 !important;
+                text-indent: 0 !important;
+            }
+            
+            /* Odstránené ::before pseudo-element aby sa nezobrazovali duplikátne ikony */
+        }
+        
+        /* Custom scrollbar pre dropdown - podobne ako v activity log */
+        .custom-select-dropdown::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .custom-select-dropdown::-webkit-scrollbar-track {
+            background: #1f2937;
+            border-radius: 4px;
+        }
+        
+        .custom-select-dropdown::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border-radius: 4px;
+            border: 1px solid #374151;
+        }
+        
+        .custom-select-dropdown::-webkit-scrollbar-thumb:hover {
+            background-color: #6b7280;
+        }
+        
+        .custom-select.open .custom-select-dropdown {
+            display: block;
+        }
+        
+        .custom-select-option {
+            padding: 8px 16px; /* Padding 8px zhora/zdola */
+            color: #ffffff;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid #4b5563;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 14px; /* Štandardná veľkosť fontu */
+            line-height: 1.25; /* Riadkovanie (vzdialenosť medzi riadkami) */
+        }
+        
+        .custom-select-option:last-child {
+            border-bottom: none;
+        }
+        
+        .custom-select-option:hover {
+            background-color: #4b5563;
+        }
+        
+        .custom-select-option.selected {
+            background-color: #f97316;
+        }
+        
+        /* Light theme custom select */
+        body.light-theme .custom-select-button {
+            background-color: #ffffff;
+            border-color: #cbd5e1;
+            color: #334155;
+        }
+        
+        body.light-theme .custom-select-button:hover {
+            background-color: #f8fafc;
+        }
+        
+        body.light-theme .custom-select-dropdown {
+            background-color: #ffffff;
+            border-color: #cbd5e1;
+        }
+        
+        /* Light theme scrollbar */
+        body.light-theme .custom-select-dropdown::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        body.light-theme .custom-select-dropdown::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border: 1px solid #e2e8f0;
+        }
+        
+        body.light-theme .custom-select-dropdown::-webkit-scrollbar-thumb:hover {
+            background-color: #94a3b8;
+        }
+        
+        body.light-theme .custom-select-option {
+            color: #334155;
+            border-bottom-color: #e2e8f0;
+        }
+        
+        body.light-theme .custom-select-option:hover {
+            background-color: #f1f5f9;
+        }
+        
+        body.light-theme .custom-select-option.selected {
+            background-color: #0369a1;
+            color: #ffffff;
+        }
 
         /* Zoom selection overlay */
         .chart-zoom-selection {
@@ -768,17 +1058,27 @@
 <body class="bg-gray-900 text-white min-h-screen">
     <div class="container mx-auto px-4 py-6">
         <!-- Header -->
-        <div class="flex justify-between items-center mb-6">
-            <div class="flex items-center gap-3">
-                <h1 class="text-xl font-semibold text-white flex items-center leading-none">
-                    <i class="fas fa-chart-line text-orange-500 mr-4 text-lg"></i>
-                    <span class="text-lg">MikroTik Monitoring</span>
-                </h1>
-                <select id="deviceSelector" class="bg-gray-700 border border-gray-600 text-white px-4 py-2 rounded-lg focus:ring-2 focus:ring-orange-500">
-                    <option value="">Vyberte zariadenie...</option>
-                </select>
+        <div class="flex items-center mb-6 gap-6">
+            <!-- Názov aplikácie -->
+            <h1 class="text-xl font-semibold text-white flex items-center leading-none">
+                <i class="fas fa-chart-line text-orange-500 mr-4 text-lg"></i>
+                <span class="text-lg">MikroTik Monitoring</span>
+            </h1>
+            
+            <!-- Všetky menu prvky v jednej skupine -->
+            <div class="flex items-center gap-2 ml-auto">
+                <!-- Custom Device Selector -->
+                <div class="custom-select" id="deviceSelectorContainer">
+                    <div class="custom-select-button" id="deviceSelectorButton">
+                        <span id="deviceSelectorText">Vyberte zariadenie...</span>
+                        <i class="fas fa-chevron-down custom-select-arrow"></i>
+                    </div>
+                    <div class="custom-select-dropdown" id="deviceSelectorDropdown">
+                        <div class="custom-select-option" data-value="">Vyberte zariadenie...</div>
+                    </div>
+                </div>
                 <!-- Modern Time Range Selector - Uptime Kuma style -->
-                <div id="timeRangeContainer" class="hidden">
+                <div id="timeRangeContainer" class="hidden mr-3">
                     <div class="bg-gray-700 border border-gray-600 rounded-lg p-1 flex gap-1">
                         <button class="time-range-btn" data-range="30m">30m</button>
                         <button class="time-range-btn" data-range="3h">3h</button>
@@ -791,24 +1091,20 @@
                         <button class="time-range-btn" data-range="1y">1y</button>
                     </div>
                 </div>
-                <button id="refreshBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 ml-3">
-                    <i class="fas fa-sync"></i> Obnoviť
-                </button>
-            </div>
-            <div class="flex items-center gap-3" style="margin-left: 20px;">
-                <!-- Mobile refresh button - umiestnený na začiatok pre mobile layout -->
-                <button class="mobile-refresh-btn" onclick="document.getElementById('refreshBtn').click()">
-                    <i class="fas fa-sync"></i> <span>Obnoviť</span>
-                </button>
-                <button onclick="window.location.href='/settings.html'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Nastavenia">
-                    <i class="fas fa-cog"></i> <span>Nastavenia</span>
-                </button>
-                <button id="themeToggle" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Prepnúť tému">
-                    <i class="fas fa-moon" id="themeIcon"></i> <span class="sr-only">Téma</span>
-                </button>
-                <button onclick="window.location.href='/'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
-                    <i class="fas fa-arrow-left"></i> <span>Späť</span>
-                </button>
+                <div class="action-buttons flex items-center gap-2">
+                    <button id="refreshBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Obnoviť">
+                        <i class="fas fa-sync text-base"></i> <span>Obnoviť</span>
+                    </button>
+                    <button onclick="window.location.href='/settings.html'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Nastavenia">
+                        <i class="fas fa-cog text-base"></i> <span>Nastavenia</span>
+                    </button>
+                    <button id="themeToggle" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Prepnúť tému">
+                        <i class="fas fa-moon text-base" id="themeIcon"></i> <span class="sr-only">Téma</span>
+                    </button>
+                    <button onclick="window.location.href='/'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Späť">
+                        <i class="fas fa-arrow-left text-base"></i> <span>Späť</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -3257,6 +3553,265 @@
                 }
             }
         }
+        
+        // Force styling on mobile devices - especially for WebView
+        function applyMobileSelectStyling() {
+            const selects = document.querySelectorAll('select');
+            selects.forEach(select => {
+                // Force styling on option elements
+                const options = select.querySelectorAll('option');
+                options.forEach(option => {
+                    // Check if we're in light theme
+                    const isLightTheme = document.body.classList.contains('light-theme');
+                    
+                    if (isLightTheme) {
+                        option.style.backgroundColor = '#ffffff';
+                        option.style.color = '#334155';
+                    } else {
+                        option.style.backgroundColor = '#374151';
+                        option.style.color = '#ffffff';
+                    }
+                });
+                
+                // Apply styling on focus/click events
+                select.addEventListener('focus', function() {
+                    setTimeout(() => applyMobileSelectStyling(), 50);
+                });
+                
+                select.addEventListener('click', function() {
+                    setTimeout(() => applyMobileSelectStyling(), 50);
+                });
+            });
+        }
+        
+        // Apply mobile styling on page load and theme changes
+        document.addEventListener('DOMContentLoaded', applyMobileSelectStyling);
+        
+        // Re-apply when theme changes
+        const originalToggleTheme = window.toggleTheme;
+        if (originalToggleTheme) {
+            window.toggleTheme = function() {
+                originalToggleTheme();
+                setTimeout(applyMobileSelectStyling, 100);
+            };
+        }
+        
+        // Custom Dropdown Functionality
+        function initializeCustomDropdown() {
+            const container = document.getElementById('deviceSelectorContainer');
+            const button = document.getElementById('deviceSelectorButton');
+            const dropdown = document.getElementById('deviceSelectorDropdown');
+            const textElement = document.getElementById('deviceSelectorText');
+            
+            let selectedValue = '';
+            
+            // Toggle dropdown
+            button.addEventListener('click', function(e) {
+                e.stopPropagation();
+                container.classList.toggle('open');
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!container.contains(e.target)) {
+                    container.classList.remove('open');
+                }
+            });
+            
+            // Handle option selection
+            dropdown.addEventListener('click', function(e) {
+                if (e.target.classList.contains('custom-select-option')) {
+                    const value = e.target.getAttribute('data-value');
+                    const deviceName = e.target.getAttribute('data-name');
+                    const deviceIp = e.target.getAttribute('data-ip');
+                    
+                    // Update selected value
+                    selectedValue = value;
+                    
+                    // Pre mobile verziu v button zobraz len názov, pre PC názov + IP
+                    const isMobile = window.innerWidth <= 768;
+                    const buttonText = value ? 
+                        (isMobile ? deviceName : e.target.textContent) : 
+                        'Vyberte zariadenie...';
+                    
+                    textElement.textContent = buttonText;
+                    
+                    // Update visual selection
+                    dropdown.querySelectorAll('.custom-select-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                    e.target.classList.add('selected');
+                    
+                    // Close dropdown
+                    container.classList.remove('open');
+                    
+                    // Trigger change event for compatibility
+                    if (window._deviceChangeHandler) {
+                        window._deviceChangeHandler({
+                            target: { value: value }
+                        });
+                    }
+                }
+            });
+            
+            // Expose methods for compatibility with existing code
+            window.customDeviceSelector = {
+                setValue: function(value) {
+                    selectedValue = value;
+                    const option = dropdown.querySelector(`[data-value="${value}"]`);
+                    if (option) {
+                        const deviceName = option.getAttribute('data-name');
+                        const deviceIp = option.getAttribute('data-ip');
+                        
+                        // Pre mobile verziu v button zobraz len názov, pre PC názov + IP
+                        const isMobile = window.innerWidth <= 768;
+                        const buttonText = value ? 
+                            (isMobile && deviceName ? deviceName : option.textContent) : 
+                            'Vyberte zariadenie...';
+                        
+                        textElement.textContent = buttonText;
+                        
+                        // Update visual selection
+                        dropdown.querySelectorAll('.custom-select-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        option.classList.add('selected');
+                    }
+                },
+                getValue: function() {
+                    return selectedValue;
+                },
+                populateOptions: function(devices) {
+                    dropdown.innerHTML = '<div class="custom-select-option" data-value="">Vyberte zariadenie...</div>';
+                    
+                    let maxWidth = 0;
+                    const tempElement = document.createElement('div');
+                    tempElement.style.visibility = 'hidden';
+                    tempElement.style.position = 'absolute';
+                    tempElement.style.whiteSpace = 'nowrap';
+                    tempElement.style.font = getComputedStyle(button).font;
+                    document.body.appendChild(tempElement);
+                    
+                    devices.forEach(device => {
+                        const option = document.createElement('div');
+                        option.className = 'custom-select-option';
+                        option.setAttribute('data-value', device.id);
+                        option.setAttribute('data-name', device.name);
+                        option.setAttribute('data-ip', device.ip);
+                        option.setAttribute('data-paused', device.monitoring_paused ? 'true' : 'false');
+                        
+                        // Use device status from database or default to unknown
+                        const status = device.status || 'unknown';
+                        const isPaused = device.monitoring_paused;
+                        
+                        // Generate status indicator
+                        let statusIndicator;
+                        if (isPaused) {
+                            statusIndicator = '⏸️'; // Pause symbol
+                        } else {
+                            switch (status) {
+                                case 'online':
+                                    statusIndicator = '🟢'; // Green dot
+                                    break;
+                                case 'offline':
+                                    statusIndicator = '🔴'; // Red dot
+                                    break;
+                                default:
+                                    statusIndicator = '⚪'; // White dot for unknown
+                            }
+                        }
+                        
+                        const optionText = `${statusIndicator} ${device.name} (${device.ip})`;
+                        option.textContent = optionText;
+                        option.dataset.status = status;
+                        option.dataset.paused = isPaused;
+                        
+                        // Measure text width for PC only
+                        if (window.innerWidth > 768) {
+                            tempElement.textContent = optionText;
+                            const textWidth = tempElement.offsetWidth + 60; // Add padding and arrow space
+                            maxWidth = Math.max(maxWidth, textWidth);
+                        }
+                        
+                        dropdown.appendChild(option);
+                    });
+                    
+                    document.body.removeChild(tempElement);
+                    // Set width with constraints - only for PC
+                    if (window.innerWidth > 768) {
+                        // Also measure the placeholder text
+                        const tempElement2 = document.createElement('div');
+                        tempElement2.style.visibility = 'hidden';
+                        tempElement2.style.position = 'absolute';
+                        tempElement2.style.whiteSpace = 'nowrap';
+                        tempElement2.style.font = getComputedStyle(button).font;
+                        document.body.appendChild(tempElement2);
+                        
+                        tempElement2.textContent = 'Vyberte zariadenie...';
+                        const placeholderWidth = tempElement2.offsetWidth + 60;
+                        maxWidth = Math.max(maxWidth, placeholderWidth);
+                        
+                        document.body.removeChild(tempElement2);
+                        
+                        const finalWidth = Math.min(Math.max(maxWidth, 280), 500); // Min 280px, Max 500px
+                        button.style.width = finalWidth + 'px';
+                        dropdown.style.width = finalWidth + 'px';
+                    } else {
+                        // Mobile - responsive width
+                        button.style.width = '100%';
+                        dropdown.style.width = '100%';
+                    }
+                },
+                updateDeviceStatus: function(deviceId, status, isPaused = null) {
+                    const options = dropdown.querySelectorAll('.custom-select-option[data-value]');
+                    options.forEach(option => {
+                        if (option.getAttribute('data-value') == deviceId) {
+                            const deviceName = option.getAttribute('data-name');
+                            const deviceIp = option.getAttribute('data-ip');
+                            
+                            const pausedStatus = isPaused !== null ? isPaused : (option.getAttribute('data-paused') === 'true');
+                            
+                            // Generate status indicator
+                            let statusIndicator;
+                            if (pausedStatus) {
+                                statusIndicator = '⏸️'; // Pause symbol
+                            } else {
+                                switch (status) {
+                                    case 'online':
+                                        statusIndicator = '🟢'; // Green dot
+                                        break;
+                                    case 'offline':
+                                        statusIndicator = '🔴'; // Red dot
+                                        break;
+                                    default:
+                                        statusIndicator = '⚪'; // White dot for unknown
+                                }
+                            }
+                            
+                            option.textContent = `${statusIndicator} ${deviceName} (${deviceIp})`;
+                            option.dataset.status = status;
+                            option.dataset.paused = pausedStatus;
+                            
+                            // Update button text if this is the selected device
+                            if (option.getAttribute('data-value') === selectedValue) {
+                                // Pre mobile verziu v button zobraz len názov, pre PC názov + IP
+                                const isMobile = window.innerWidth <= 768;
+                                const buttonText = isMobile ? 
+                                    `${statusIndicator} ${deviceName}` : 
+                                    `${statusIndicator} ${deviceName} (${deviceIp})`;
+                                textElement.textContent = buttonText;
+                            }
+                        }
+                    });
+                }
+            };
+        }
+        
+        // Initialize custom dropdown on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCustomDropdown();
+            applyMobileSelectStyling();
+        });
     </script>
 </body>
 </html>

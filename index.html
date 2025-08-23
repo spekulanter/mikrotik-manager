@@ -654,22 +654,23 @@
         }
         
         #tabPasswordContent .password-toggle {
+            /* Center the eye icon perfectly inside the input field height */
             position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #9ca3af;
-            font-size: 16px;
-            z-index: 10;
-            transition: color 0.2s ease;
+            top: 0;
+            bottom: 0;
+            right: 10px;
+            margin: auto 0; /* vertical centering */
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 24px;
-            height: 24px;
-            line-height: 1;
-            pointer-events: auto;
+            height: 100%;
+            width: 2rem; /* click target size */
+            cursor: pointer;
+            color: #9ca3af;
+            font-size: 18px; /* slightly larger for clarity */
+            z-index: 10;
+            transition: color 0.2s ease;
+            line-height: 1; /* prevent extra vertical bias */
         }
         
         #tabPasswordContent .password-toggle:hover {

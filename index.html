@@ -1705,7 +1705,6 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.disabled = true;
             api.get(`snmp/${device.id}`).catch(error => {
                 // Pri chybe zastavíme spinning manuálne
-                console.log(`SNMP chyba pre zariadenie ${device.id}:`, error);
                 icon.classList.remove('fa-spin');
                 btn.disabled = false;
             });
@@ -3049,10 +3048,10 @@ function debugLog(debugType, message, ...args) {
         return;
     }
     
-    // Always log to console
-    console.log(`[${debugType.toUpperCase()}]`, message, ...args);
+    // Only log to console if explicitly enabled (no automatic console logging)
+    // console.log(`[${debugType.toUpperCase()}]`, message, ...args);
     
-    // If debug panel is enabled, also log to panel
+    // If debug panel is enabled, log to panel
     if (debugSettings.debug_chart_frontend_panel === 'true' || debugSettings.debug_master_switch === 'true') {
         addLogToPanel(debugType, message, args);
     }

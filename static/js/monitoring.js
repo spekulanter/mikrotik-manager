@@ -39,7 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (isEnabled) {
             // Always log to console
-            console.log(`[${debugType.toUpperCase()}]`, message, ...args);
             
             // If debug panel is enabled, also add to panel
             if (debugPanelEnabled && debugSettings.debug_terminal === 'true') {
@@ -259,10 +258,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Chart.js availability will be logged only if debug is enabled
-    // debugLog('debug_chart_operations', 'Chart.js available:', typeof Chart !== 'undefined');
 
     const API_URL = '';
-    const deviceSelector = document.getElementById('deviceSelector');
+    // Custom device selector elements
+    const deviceSelectorContainer = document.getElementById('deviceSelectorContainer');
+    const deviceSelectorButton = document.getElementById('deviceSelectorButton');
+    const deviceSelectorText = document.getElementById('deviceSelectorText');
+    const deviceSelectorDropdown = document.getElementById('deviceSelectorDropdown');
+    // Legacy reference for compatibility
+    const deviceSelector = {
+        value: '',
+        innerHTML: '',
+        querySelector: (selector) => deviceSelectorDropdown.querySelector(selector),
+        querySelectorAll: (selector) => deviceSelectorDropdown.querySelectorAll(selector),
+        addEventListener: (event, handler) => {
+            if (event === 'change') {
+                window._deviceChangeHandler = handler;
+            }
+        }
+    };
     const deviceInfoPanel = document.getElementById('deviceInfoPanel');
     const chartsContainer = document.getElementById('chartsContainer');
     const noDeviceSelected = document.getElementById('noDeviceSelected');
@@ -287,6 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let pingUpdateInterval = null;
     let socket = null;
     let isLoadingData = false; // Flag to prevent multiple simultaneous requests
+    let lastTotalMemoryValue = null; // For real-time forward-fill
     
     // Export charts to window for access from monitoring.html
     window.charts = charts;
@@ -329,6 +344,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const updateDeviceStatusInSelector = (deviceId, status, isPaused = null) => {
+        // Use custom dropdown API if available
+        if (window.customDeviceSelector) {
+            window.customDeviceSelector.updateDeviceStatus(deviceId, status, isPaused);
+            return;
+        }
+        
+        // Legacy fallback
         const options = deviceSelector.querySelectorAll('option[value]');
         options.forEach(option => {
             if (option.value == deviceId) {
@@ -379,7 +401,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.dataset.status = status;
                 option.dataset.paused = pausedStatus;
                 
-                debugLog('debug_device_operations', `Updated device ${deviceId} status to ${status} (paused: ${pausedStatus}) in selector: "${statusIndicator} ${deviceText}"`);
             }
         });
     };
@@ -429,15 +450,12 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         
         get: async function(endpoint) {
-            debugLog('debug_api_calls', `API GET: /api/${endpoint}`);
             const res = await fetch(`${API_URL}/api/${endpoint}`);
             const result = await this._handleResponse(res);
-            debugLog('debug_api_calls', `API GET response: /api/${endpoint}`, result);
             return result;
         },
         
         post: async function(endpoint, data) {
-            debugLog('debug_api_calls', `API POST: /api/${endpoint}`, data);
             const res = await fetch(`${API_URL}/api/${endpoint}`, {
                 method: 'POST',
                 headers: {
@@ -446,7 +464,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(data)
             });
             const result = await this._handleResponse(res);
-            debugLog('debug_api_calls', `API POST response: /api/${endpoint}`, result);
             return result;
         }
     };
@@ -456,11 +473,9 @@ document.addEventListener('DOMContentLoaded', () => {
         socket = io();
         
         socket.on('connect', () => {
-            debugLog('debug_websocket_frontend', 'WebSocket pripojenie nadviazané.');
         });
         
         socket.on('disconnect', () => {
-            debugLog('debug_websocket_frontend', 'WebSocket pripojenie prerušené.');
         });
         
         // Listen for ping updates
@@ -481,7 +496,6 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.on('snmp_update', (data) => {
             // Only process SNMP updates if page is visible
             if (document.visibilityState === 'visible') {
-                debugLog('debug_websocket_frontend', 'SNMP update received:', data);
                 const deviceId = data.device_id || data.id; // Support both formats
                 if (deviceId === currentDeviceId) {
                     updateSNMPCharts(data.data || data);
@@ -494,33 +508,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadDevices = async () => {
         try {
             const devices = await api.get('devices');
-            deviceSelector.innerHTML = '<option value="">Vyberte zariadenie...</option>';
             
-            devices.forEach(device => {
-                const option = document.createElement('option');
-                option.value = device.id;
+            // Use custom dropdown API
+            if (window.customDeviceSelector) {
+                window.customDeviceSelector.populateOptions(devices);
+            } else {
+                // Fallback for legacy compatibility
+                deviceSelector.innerHTML = '<option value="">Vyberte zariadenie...</option>';
                 
-                // Store original device info in data attributes for safe retrieval
-                option.setAttribute('data-name', device.name);
-                option.setAttribute('data-ip', device.ip);
-                option.setAttribute('data-paused', device.monitoring_paused ? 'true' : 'false');
-                
-                // Use device status from database or default to unknown
-                const status = device.status || 'unknown';
-                const isPaused = device.monitoring_paused;
-                const statusIndicator = getStatusIndicator(status, isPaused);
-                
-                // Cache the status
-                updateDeviceStatus(device.id, status);
-                
-                option.textContent = `${statusIndicator} ${device.name} (${device.ip})`;
-                option.dataset.status = status;
-                option.dataset.paused = isPaused;
-                
-                deviceSelector.appendChild(option);
-            });
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    
+                    // Store original device info in data attributes for safe retrieval
+                    option.setAttribute('data-name', device.name);
+                    option.setAttribute('data-ip', device.ip);
+                    option.setAttribute('data-paused', device.monitoring_paused ? 'true' : 'false');
+                    
+                    // Use device status from database or default to unknown
+                    const status = device.status || 'unknown';
+                    const isPaused = device.monitoring_paused;
+                    
+                    // Generate status indicator
+                    let statusIndicator;
+                    if (isPaused) {
+                        statusIndicator = '⏸️'; // Pause symbol
+                    } else {
+                        switch (status) {
+                            case 'online':
+                                statusIndicator = '🟢'; // Green dot
+                                break;
+                            case 'offline':
+                                statusIndicator = '🔴'; // Red dot
+                                break;
+                            default:
+                                statusIndicator = '⚪'; // White dot for unknown
+                        }
+                    }
+                    
+                    option.textContent = `${statusIndicator} ${device.name} (${device.ip})`;
+                    option.dataset.status = status;
+                    option.dataset.paused = isPaused;
+                    
+                    deviceSelector.appendChild(option);
+                });
+            }
             
-            debugLog('debug_device_operations', 'Devices loaded with status indicators');
         } catch (error) {
             console.error('Chyba pri načítaní zariadení:', error);
         }
@@ -676,7 +709,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize charts
     const initializeCharts = () => {
-        debugLog('debug_chart_operations', 'Initializing charts...');
         
         const getChartOptions = (timeRange = currentTimeRange) => {
             const timeFormats = getTimeFormats(timeRange);
@@ -761,7 +793,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const max = Math.max(...values);
             const range = max - min;
 
-            debugLog('debug_chart_operations', `Y-axis optimization for ${chartType}: min=${min}, max=${max}, range=${range}`);
 
             // Chart-specific optimizations
             switch (chartType) {
@@ -919,7 +950,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Apply optimization to Y-axis
                 Object.assign(chart.options.scales.y, optimization);
                 
-                debugLog('debug_chart_operations', `Applied Y-axis optimization for ${chartType}:`, optimization);
                 
                 // Update chart to apply new axis settings
                 chart.update('none');
@@ -958,7 +988,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         stopYAxisOptimization();
                     }
                 }, 30000); // 30 seconds
-                debugLog('debug_chart_operations', 'Y-axis optimization started (30s interval)');
             }
         };
 
@@ -966,7 +995,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (yAxisOptimizationInterval) {
                 clearInterval(yAxisOptimizationInterval);
                 yAxisOptimizationInterval = null;
-                debugLog('debug_chart_operations', 'Y-axis optimization stopped');
             }
         };
 
@@ -978,16 +1006,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 // Page became visible - restart optimizations and refresh data if device selected
-                debugLog('debug_chart_operations', 'Page became visible - restarting optimizations');
                 if (currentDeviceId) {
                     startYAxisOptimization();
                     // Refresh current device data to get latest updates
-                    debugLog('debug_device_operations', 'Refreshing data for device:', currentDeviceId);
                     loadHistoricalData(currentDeviceId);
                 }
             } else {
                 // Page became hidden - stop optimizations to save CPU
-                debugLog('debug_chart_operations', 'Page became hidden - stopping optimizations');
                 stopYAxisOptimization();
             }
         });
@@ -1201,11 +1226,61 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        debugLog('debug_chart_operations', 'Charts initialized:', Object.keys(charts));
-        debugLog('debug_chart_operations', 'Ping chart:', charts.ping ? 'OK' : 'FAILED');
-        debugLog('debug_chart_operations', 'CPU chart:', charts.cpu ? 'OK' : 'FAILED');
-        debugLog('debug_chart_operations', 'Temperature chart:', charts.temperature ? 'OK' : 'FAILED');
-        debugLog('debug_chart_operations', 'Memory chart:', charts.memory ? 'OK' : 'FAILED');
+
+        // Nastaviť mobilné správanie tooltipov (zabrániť "zaseknutiu")
+        setupMobileTooltipDismiss();
+    };
+
+    // Pomocná funkcia: skryť všetky tooltippy na všetkých grafoch
+    const hideAllChartTooltips = () => {
+        if (!charts) return;
+        Object.values(charts).forEach(ch => {
+            if (ch && ch.tooltip && typeof ch.tooltip.setActiveElements === 'function') {
+                ch.tooltip.setActiveElements([], { x: 0, y: 0 });
+                try { ch.update(); } catch (_) {}
+            }
+        });
+    };
+
+    // Inicializácia listenerov pre mobil – druhé ťuknutie alebo ťuk mimo graf skryje tooltip
+    const setupMobileTooltipDismiss = () => {
+        if (!("ontouchstart" in window)) return; // len mobil / touch zariadenia
+        if (window._mobileTooltipHandlersAdded) return; // zabráni duplicite pri re-init
+        window._mobileTooltipHandlersAdded = true;
+
+        // Tap mimo grafik – schovať všetko
+        document.addEventListener('touchstart', (e) => {
+            if (!e.target.closest('.chart-container')) {
+                hideAllChartTooltips();
+            }
+        }, { passive: true });
+
+        // Tap vnútri konkrétneho grafu ale nie na dátový bod – schovať (toggle)
+        Object.values(charts).forEach(ch => {
+            if (!ch || !ch.canvas) return;
+            const canvas = ch.canvas;
+            canvas.addEventListener('touchstart', (evt) => {
+                // Zistíme, či je aktuálne aktívny tooltip
+                const hasActive = ch.tooltip && ch.tooltip.getActiveElements && ch.tooltip.getActiveElements().length > 0;
+                // Zistíme, či je pod dotykom nejaký element dát
+                let elementsAtPoint = [];
+                try {
+                    elementsAtPoint = ch.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true) || [];
+                } catch (_) {}
+                // Ak tooltip je aktívny a teraz ťuk nemá žiadny dátový bod -> schovať (toggle)
+                if (hasActive && elementsAtPoint.length === 0) {
+                    hideAllChartTooltips();
+                }
+            }, { passive: true });
+        });
+
+        // Voliteľné auto‑skrytie po čase (napr. 6s) ak zostane visieť
+        document.addEventListener('touchend', () => {
+            if (window._mobileTooltipAutoHideTimer) clearTimeout(window._mobileTooltipAutoHideTimer);
+            window._mobileTooltipAutoHideTimer = setTimeout(() => {
+                hideAllChartTooltips();
+            }, 6000);
+        }, { passive: true });
     };
     
     // Update ping chart with new data
@@ -1224,7 +1299,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Check if this is historical data (array) or real-time data (single point)
         if (pingData.history && Array.isArray(pingData.history)) {
-            debugLog('debug_chart_operations', 'Updating ping chart with historical data:', pingData.history.length, 'points');
             
             // Prepare data array for batch processing
             const pingPoints = [];
@@ -1309,8 +1383,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Update SNMP charts
     const updateSNMPCharts = (snmpData) => {
-        debugLog('debug_chart_operations', 'updateSNMPCharts called with:', snmpData);
-        
         if (typeof addDebugLog === 'function') {
             if (snmpData.history && Array.isArray(snmpData.history)) {
                 addDebugLog(`📊 updateSNMPCharts: ${snmpData.history.length} historických SNMP bodov`);
@@ -1321,9 +1393,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Check if this is historical data (array) or real-time data (single point)  
         if (snmpData.history && Array.isArray(snmpData.history)) {
-            debugLog('debug_chart_operations', 'Updating SNMP charts with historical data:', snmpData.history.length, 'points');
-            debugLog('debug_chart_operations', 'Sample SNMP record:', snmpData.history[0]);
-            
             // Prepare data arrays for batch processing
             const cpuData = [];
             const tempData = [];
@@ -1332,6 +1401,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let cpuCount = 0;
             let tempCount = 0;
             let memoryCount = 0;
+            let lastTotalMem = null; // Forward-fill for Total Memory
             
             // Single pass through data for all charts
             snmpData.history.forEach(point => {
@@ -1356,23 +1426,36 @@ document.addEventListener('DOMContentLoaded', () => {
                             tempCount++;
                         }
 
-                        // Memory data (v MB) - simple lines
-                        if (point.used_memory !== null && point.used_memory !== undefined && 
-                            point.total_memory !== null && point.total_memory !== undefined) {
+                        // Memory data (v MB) - process independently to avoid truncation
+                        if (point.used_memory !== null && point.used_memory !== undefined) {
                             const usedMem = parseFloat(point.used_memory);
+                            if (!isNaN(usedMem)) {
+                                // Dataset 0: Used Memory (red line)
+                                usedMemData.push({
+                                    x: timestamp,
+                                    y: usedMem
+                                });
+                                memoryCount++;
+                            }
+                        }
+                        
+                        // Total Memory with forward-fill to prevent truncation
+                        if (point.total_memory !== null && point.total_memory !== undefined) {
                             const totalMem = parseFloat(point.total_memory);
-                            
-                            // Dataset 0: Used Memory (red line)
-                            usedMemData.push({
-                                x: timestamp,
-                                y: usedMem
-                            });
-                            // Dataset 1: Total Memory (blue line)
+                            if (!isNaN(totalMem)) {
+                                lastTotalMem = totalMem;
+                                // Dataset 1: Total Memory (blue line)
+                                totalMemData.push({
+                                    x: timestamp,
+                                    y: totalMem
+                                });
+                            }
+                        } else if (lastTotalMem !== null && point.used_memory !== null && point.used_memory !== undefined) {
+                            // Forward-fill: use last known Total Memory value when used_memory is present but total_memory is missing
                             totalMemData.push({
                                 x: timestamp,
-                                y: totalMem
+                                y: lastTotalMem
                             });
-                            memoryCount++;
                         }
                     } else {
                         console.warn('Invalid timestamp for SNMP data:', point.timestamp);
@@ -1387,7 +1470,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     charts.cpu.data.datasets[0].data = cpuData;
                     adjustPointSizes(charts.cpu, cpuData.length, currentTimeRange);
                     applyYAxisOptimization(charts.cpu, 'cpu');
-                    debugLog('debug_chart_operations', 'CPU chart updated with', cpuCount, 'data points');
                     charts.cpu.update('none');
                 } else if (charts.cpu) {
                     charts.cpu.data.datasets[0].data = [];
@@ -1399,20 +1481,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     charts.temperature.data.datasets[0].data = tempData;
                     adjustPointSizes(charts.temperature, tempData.length, currentTimeRange);
                     applyYAxisOptimization(charts.temperature, 'temperature');
-                    debugLog('debug_chart_operations', 'Temperature chart updated with', tempCount, 'data points');
                     charts.temperature.update('none');
                 } else if (charts.temperature) {
                     charts.temperature.data.datasets[0].data = [];
                     charts.temperature.update('none');
                 }
 
-                // Update memory chart (simple lines)
-                if (charts.memory && usedMemData.length > 0 && totalMemData.length > 0) {
+                // Update memory chart (independent datasets)
+                if (charts.memory && (usedMemData.length > 0 || totalMemData.length > 0)) {
                     charts.memory.data.datasets[0].data = usedMemData;  // Used Memory (red line)
                     charts.memory.data.datasets[1].data = totalMemData;  // Total Memory (blue line)
-                    adjustPointSizes(charts.memory, usedMemData.length, currentTimeRange);
+                    
+                    // Update lastTotalMemoryValue for real-time forward-fill
+                    if (totalMemData.length > 0) {
+                        lastTotalMemoryValue = totalMemData[totalMemData.length - 1].y;
+                    }
+                    
+                    adjustPointSizes(charts.memory, Math.max(usedMemData.length, totalMemData.length), currentTimeRange);
                     applyYAxisOptimization(charts.memory, 'memory');
-                    debugLog('debug_chart_operations', 'Memory chart updated with', memoryCount, 'data points');
                     charts.memory.update('none');
                 } else if (charts.memory) {
                     charts.memory.data.datasets[0].data = [];
@@ -1431,7 +1517,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } else {
             // Real-time single data point - lightweight update
-            debugLog('debug_chart_operations', 'Updating SNMP charts with real-time data:', snmpData);
             const now = new Date();
             
             // Update device model and RouterOS version if available
@@ -1469,7 +1554,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     charts.cpu.update('none');
-                    debugLog('debug_chart_operations', 'Real-time CPU updated:', snmpData.cpu_load);
                 }
                 
                 // Update temperature chart
@@ -1485,34 +1569,55 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     charts.temperature.update('none');
-                    debugLog('debug_chart_operations', 'Real-time temperature updated:', snmpData.temperature);
                 }
 
-                // Update memory chart
-                if (charts.memory && snmpData.used_memory !== undefined && snmpData.total_memory !== undefined) {
-                    const usedMem = parseFloat(snmpData.used_memory);
-                    const totalMem = parseFloat(snmpData.total_memory);
+                // Update memory chart (independent datasets for real-time)
+                if (charts.memory) {
+                    let memoryUpdated = false;
                     
-                    // Used Memory (dataset 0, red line)
-                    charts.memory.data.datasets[0].data.push({
-                        x: now,
-                        y: usedMem
-                    });
-                    
-                    // Total Memory (dataset 1, blue line) 
-                    charts.memory.data.datasets[1].data.push({
-                        x: now,
-                        y: totalMem
-                    });
-                    
-                    // Keep only reasonable amount of real-time data
-                    if (charts.memory.data.datasets[0].data.length > 1000) {
-                        charts.memory.data.datasets[0].data.shift();
-                        charts.memory.data.datasets[1].data.shift();
+                    // Update Used Memory if available
+                    if (snmpData.used_memory !== undefined) {
+                        const usedMem = parseFloat(snmpData.used_memory);
+                        if (!isNaN(usedMem)) {
+                            charts.memory.data.datasets[0].data.push({
+                                x: now,
+                                y: usedMem
+                            });
+                            memoryUpdated = true;
+                        }
                     }
                     
-                    charts.memory.update('none');
-                    debugLog('debug_chart_operations', 'Real-time memory updated - Used:', usedMem, 'MB, Total:', totalMem, 'MB');
+                    // Update Total Memory if available, or forward-fill if used memory is present
+                    if (snmpData.total_memory !== undefined) {
+                        const totalMem = parseFloat(snmpData.total_memory);
+                        if (!isNaN(totalMem)) {
+                            lastTotalMemoryValue = totalMem;
+                            charts.memory.data.datasets[1].data.push({
+                                x: now,
+                                y: totalMem
+                            });
+                            memoryUpdated = true;
+                        }
+                    } else if (lastTotalMemoryValue !== null && snmpData.used_memory !== undefined) {
+                        // Forward-fill: use last known Total Memory when used_memory is present but total_memory is missing
+                        charts.memory.data.datasets[1].data.push({
+                            x: now,
+                            y: lastTotalMemoryValue
+                        });
+                        memoryUpdated = true;
+                    }
+                    
+                    if (memoryUpdated) {
+                        // Keep only reasonable amount of real-time data for both datasets
+                        if (charts.memory.data.datasets[0].data.length > 1000) {
+                            charts.memory.data.datasets[0].data.shift();
+                        }
+                        if (charts.memory.data.datasets[1].data.length > 1000) {
+                            charts.memory.data.datasets[1].data.shift();
+                        }
+                        
+                        charts.memory.update('none');
+                    }
                 }
             });
         }
@@ -1523,7 +1628,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateAvailabilityChart = async (deviceId) => {
         if (!charts.availability) return;
         
-        debugLog('debug_device_operations', 'Loading availability data for device:', deviceId);
         
         try {
             const response = await fetch(`/api/monitoring/availability/${deviceId}`);
@@ -1532,7 +1636,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const availabilityData = await response.json();
-            debugLog('debug_device_operations', 'Received availability data:', availabilityData);
             
             if (Array.isArray(availabilityData) && availabilityData.length > 0) {
                 const labels = availabilityData.map(item => item.date);
@@ -1542,13 +1645,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 charts.availability.data.datasets[0].data = data;
                 charts.availability.update('resize');
                 
-                debugLog('debug_chart_operations', 'Availability chart updated with', availabilityData.length, 'data points');
             } else {
                 // Clear chart if no data
                 charts.availability.data.labels = [];
                 charts.availability.data.datasets[0].data = [];
                 charts.availability.update('none');
-                debugLog('debug_chart_operations', 'No availability data, chart cleared');
             }
             
         } catch (error) {
@@ -1620,7 +1721,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const oldMs = getTimeRangeMs(oldTimeRange);
         const newMs = getTimeRangeMs(newTimeRange);
         
-        debugLog('debug_chart_operations', `Time range transition: ${oldTimeRange} (${oldMs}ms) -> ${newTimeRange} (${newMs}ms)`);
         
         // Reset zoom on all charts first
         if (typeof resetAllChartsZoom === 'function') {
@@ -1641,15 +1741,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (newMs < oldMs) {
             // Zooming in (shorter time range)
-            debugLog('debug_chart_operations', 'Applying zoom-in animation');
             animateZoomIn(charts);
         } else if (newMs > oldMs) {
             // Zooming out (longer time range)
-            debugLog('debug_chart_operations', 'Applying zoom-out animation');
             animateZoomOut(charts);
         } else {
             // Same range, no animation needed
-            debugLog('debug_chart_operations', 'Same time range, no animation needed');
         }
     };
     
@@ -1657,13 +1754,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const getSelectedTimeRange = () => {
         // Ak je aktívny single chart zoom-out, použij currentTimeRange namiesto UI
         if (window._singleChartZoomOut) {
-            debugLog('debug_chart_operations', 'Single chart zoom-out active, using currentTimeRange:', window.currentTimeRange);
             return window.currentTimeRange;
         }
         
         const activeBtn = document.querySelector('.time-range-btn.active');
         const range = activeBtn ? activeBtn.dataset.range : currentTimeRange;
-        debugLog('debug_chart_operations', 'Getting selected time range:', range);
         return range;
     };
     
@@ -1671,7 +1766,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const setActiveTimeRange = (timeRange) => {
         // Check if global time range changes are blocked during single chart expansion
         if (window._blockGlobalTimeRangeChanges) {
-            debugLog('debug_chart_operations', 'setActiveTimeRange blocked - single chart expansion in progress');
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`🚫 setActiveTimeRange blokovaný - window._blockGlobalTimeRangeChanges = true`);
             }
@@ -1718,7 +1812,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof addDebugLog === 'function') {
             addDebugLog(`✨ setActiveTimeRange: Dokončené pre ${timeRange}`);
         }
-        debugLog('debug_chart_operations', 'Set active time range to:', timeRange);
     };
 
     // Update time formatting for all charts based on time range
@@ -1761,7 +1854,6 @@ document.addEventListener('DOMContentLoaded', () => {
             addDebugLog(`✅ updateChartTimeFormats: Dokončené pre ${timeRange}`);
         }
         
-        debugLog('debug_chart_operations', 'Updated chart time formats and point sizes for range:', timeRange);
         
         } catch (error) {
             if (typeof addDebugLog === 'function') {
@@ -1775,6 +1867,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateChartTitles = (timeRange) => {
         const timeRangeLabels = {
             'recent': 'Posledná hodina',
+            '30m': 'Posledných 30 minút',
             '3h': 'Posledné 3 hodiny',
             '6h': 'Posledných 6 hodín',
             '12h': 'Posledných 12 hodín', 
@@ -1786,7 +1879,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         const label = timeRangeLabels[timeRange] || 'Posledných 24 hodín';
-        debugLog('debug_chart_operations', 'Updating chart titles to:', label);
         
         // Update chart subtitles - find them by their position in the card
         const chartCards = document.querySelectorAll('.card');
@@ -1801,7 +1893,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isAvailabilityChart = card.textContent.includes('Availability');
                     if (!isAvailabilityChart) {
                         subtitle.textContent = label;
-                        debugLog('debug_chart_operations', 'Updated chart subtitle to:', label);
                     }
                 }
             }
@@ -1847,7 +1938,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (isLoadingData) {
-            debugLog('debug_device_operations', 'Already loading data, skipping...');
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`⏸️ Načítanie preskočené - už prebieha pre iné zariadenie`);
             }
@@ -1855,11 +1945,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         isLoadingData = true;
-        debugLog('debug_device_operations', `=== LOADING HISTORICAL DATA for device ${deviceId} ===`);
         
         try {
             const timeRange = getSelectedTimeRange();
-            debugLog('debug_device_operations', `Time range: ${timeRange}`);
             
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`📅 Aktuálny časový rozsah: ${timeRange}`);
@@ -1872,13 +1960,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Pre single chart zoom-out VŽDY použijeme plný rozsah - bez akejkoľvek optimalizácie
             if (window._singleChartZoomOut || window._isZoomOutExpansion) {
                 optimizedRange = timeRange;
-                debugLog('debug_chart_operations', 'Single chart zoom-out/expansion detected, forcing full range:', optimizedRange);
             } else if ((timeRange === '24h' || timeRange === '7d' || timeRange === '30d')) {
                 // Pri prvom načítaní použijeme Recent (1 hodina) pre rýchlejší start
                 const hasData = charts.ping && charts.ping.data.datasets[0].data.length > 0;
                 if (!hasData) {
                     optimizedRange = 'recent';
-                    debugLog('debug_device_operations', 'First load detected, using optimized range:', optimizedRange);
                 }
             }
             
@@ -1894,7 +1980,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Upravená URL pre nový API endpoint - bez 'monitoring/' prefix
             const apiUrl = `api/monitoring/history/${deviceId}?range=${apiRange}`;
-            debugLog('debug_api_calls', `API call: ${apiUrl}`);
             
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`🌐 API volanie: /${apiUrl}`);
@@ -1919,7 +2004,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const data = await response.json();
-            debugLog('debug_api_calls', 'Received API response:', data);
             
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`📦 API dáta prijaté, status: ${data.status}`);
@@ -1928,14 +2012,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.status === 'success') {
                 if (data.ping_data && data.ping_data.length > 0) {
-                    debugLog('debug_chart_operations', 'Processing ping data:', data.ping_data.length, 'points');
                     if (typeof addDebugLog === 'function') {
                         addDebugLog(`🏓 Spracovávam ping dáta: ${data.ping_data.length} bodov`);
                     }
                     updatePingChart({ device_id: deviceId, history: data.ping_data });
-                    debugLog('debug_chart_operations', 'Ping chart updated');
                 } else {
-                    debugLog('debug_chart_operations', 'No ping data received, clearing chart');
                     if (typeof addDebugLog === 'function') {
                         addDebugLog(`❌ Žiadne ping dáta - čistím graf`);
                     }
@@ -1947,15 +2028,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 if (data.snmp_data && data.snmp_data.length > 0) {
-                    debugLog('debug_chart_operations', 'Processing SNMP data:', data.snmp_data.length, 'points');
-                    debugLog('debug_chart_operations', 'First SNMP record:', data.snmp_data[0]);
                     if (typeof addDebugLog === 'function') {
                         addDebugLog(`📈 Spracovávam SNMP dáta: ${data.snmp_data.length} bodov`);
                     }
                     updateSNMPCharts({ history: data.snmp_data });
-                    debugLog('debug_chart_operations', 'SNMP charts updated');
                 } else {
-                    debugLog('debug_chart_operations', 'No SNMP data received, clearing charts. Data available:', !!data.snmp_data, 'Length:', data.snmp_data?.length);
                     // Clear SNMP charts if no data
                     if (charts.cpu) {
                         charts.cpu.data.datasets[0].data = [];
@@ -1978,7 +2055,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Ak sme používali optimized range, načítaj postupne plné dáta na pozadí
                 // VÝNIMKA: Nerobí background loading počas single chart zoom-out alebo zoom-out expansion
                 if (optimizedRange !== timeRange && !window._singleChartZoomOut && !window._isZoomOutExpansion) {
-                    debugLog('debug_device_operations', 'Loading full data in background for range:', timeRange);
                     setTimeout(async () => {
                         try {
                             // Map frontend range names to backend range names
@@ -1988,18 +2064,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (fullResponse.ok) {
                                 const fullData = await fullResponse.json();
                                 if (fullData.status === 'success') {
-                                    debugLog('debug_device_operations', 'Background loading - Full data received:', {
-                                        ping_records: fullData.ping_data?.length || 0,
-                                        snmp_records: fullData.snmp_data?.length || 0
-                                    });
                                     // Aktualizuj grafy s plnými dátami
                                     if (fullData.ping_data && fullData.ping_data.length > 0) {
                                         updatePingChart({ device_id: deviceId, history: fullData.ping_data });
-                                        debugLog('debug_chart_operations', 'Background: Ping chart updated with', fullData.ping_data.length, 'points');
                                     }
                                     if (fullData.snmp_data && fullData.snmp_data.length > 0) {
                                         updateSNMPCharts({ history: fullData.snmp_data });
-                                        debugLog('debug_chart_operations', 'Background: SNMP charts updated with', fullData.snmp_data.length, 'points');
                                     }
                                     
                                     // Apply full time range horizon after background loading
@@ -2009,7 +2079,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                         }, 100);
                                     }
                                     
-                                    debugLog('debug_device_operations', 'Background full data loading completed');
                                 }
                             }
                         } catch (bgError) {
@@ -2030,7 +2099,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 optimizeAllChartsYAxes();
             }, 200);
             
-            debugLog('debug_device_operations', '=== HISTORICAL DATA LOADING COMPLETE ===');
             
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`✅ Načítanie historických dát dokončené pre ${deviceId}`);
@@ -2083,7 +2151,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const pingResult = await api.post(`monitoring/ping/manual/${deviceId}`, {});
             if (pingResult) {
                 updatePingStatus(pingResult);
-                debugLog('debug_device_operations', 'Manuálny ping vykonaný');
             }
         } catch (error) {
             console.error('Chyba pri manuálnom ping:', error);
@@ -2130,7 +2197,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Show success message
                 const action = isPaused ? 'pozastavené' : 'spustené';
-                debugLog('debug_device_operations', `Monitoring zariadenia ${action}`);
                 
                 // If monitoring was resumed, reload data and trigger immediate ping
                 if (!isPaused) {
@@ -2158,7 +2224,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Device selection handler
     const selectDevice = async (deviceId) => {
-        debugLog('debug_device_operations', `Selecting device: ${deviceId}`);
         
         // Stop Y-axis optimization for previous device
         stopYAxisOptimization();
@@ -2199,7 +2264,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (document.visibilityState === 'visible') {
                     startYAxisOptimization();
                 } else {
-                    debugLog('debug_chart_operations', 'Page not visible - Y-axis optimization will start when page becomes visible');
                 }
             }
         } catch (error) {
@@ -2234,7 +2298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         requestAnimationFrame(() => {
             if (deviceName) deviceName.textContent = device.name;
-            if (deviceIp) deviceIp.textContent = device.ip;
+            if (deviceIp) deviceIp.textContent = device.ip; // IP sa zobrazí len na mobile cez CSS
             
             // Display model and RouterOS version from last_snmp_data if available
             if (deviceModel) {
@@ -2256,7 +2320,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     } catch (e) {
-                        debugLog('debug_device_operations', 'Failed to parse last_snmp_data:', e);
                     }
                 }
                 deviceModel.textContent = modelText || 'N/A';
@@ -2273,7 +2336,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Nebudeme spúšťať vlastný interval - spoliehame sa na backend ping monitoring
         // Backend už pinguje zariadenia podľa nastavených intervalov
-        debugLog('debug_device_operations', `Ping monitoring pre zariadenie ${deviceId} sa spolieha na backend`);
     };
     
     // Show/hide sections
@@ -2343,7 +2405,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const initializePingUpdates = () => {
         // Initialize real-time ping updates for the selected device
         // This will be handled by WebSocket events
-        debugLog('debug_device_operations', `Initialized ping updates for device ${currentDeviceId}`);
     };
     
     const showLoading = (show) => {
@@ -2382,12 +2443,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof addDebugLog === 'function') {
                         addDebugLog(`❌ Globálna zmena času blokovaná - single chart expansion aktívny`);
                     }
-                    debugLog('debug_chart_operations', 'Time range change blocked - single chart expansion in progress');
                     return;
                 }
                 
                 const newTimeRange = e.target.dataset.range;
-                debugLog('debug_chart_operations', 'Time range button clicked:', newTimeRange);
                 
                 // Get current time range for animation direction
                 const currentTimeRange = getSelectedTimeRange();
@@ -2424,11 +2483,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 setActiveTimeRange(newTimeRange);
                 
-                // Add loading state to clicked button
+                // (Odstránené loading spinner na tlačidle – vizuálne rušivé)
                 if (typeof addDebugLog === 'function') {
-                    addDebugLog(`⏳ Pridávam loading state na tlačidlo: ${newTimeRange}`);
+                    addDebugLog(`⏳ (Preskočené) loading state na tlačidlo: ${newTimeRange}`);
                 }
-                e.target.classList.add('loading');
                 
                 if (typeof addDebugLog === 'function') {
                     addDebugLog(`🔍 Kontrola currentDeviceId: ${currentDeviceId || 'undefined'}`);
@@ -2448,17 +2506,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             addDebugLog(`❌ Chyba pri načítaní historických dát: ${error.message}`);
                         }
                     } finally {
-                        // Remove loading state
-                        if (typeof addDebugLog === 'function') {
-                            addDebugLog(`🔚 Odstraňujem loading state z tlačidla: ${newTimeRange}`);
-                        }
-                        e.target.classList.remove('loading');
+                        // Žiadny loading state na odstránenie
                     }
                 } else {
                     if (typeof addDebugLog === 'function') {
-                        addDebugLog(`⚠️ Žiadny currentDeviceId - odstraňujem loading state`);
+                        addDebugLog(`⚠️ Žiadny currentDeviceId - loading state nebol použitý`);
                     }
-                    e.target.classList.remove('loading');
+                    // nič
                 }
             }
         });    refreshBtn.addEventListener('click', async (e) => {
@@ -2495,7 +2549,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }, 50);
             
-            debugLog('debug_device_operations', 'Monitoring data úspešne obnovená');
         } catch (error) {
             console.error('Chyba pri obnovovaní:', error);
             // V prípade chyby stále zobrazíme notifikáciu
@@ -2560,7 +2613,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result.status === 'success') {
                 closeModal();
                 // Odstránené alert - len zatvorí okno
-                debugLog('debug_device_operations', 'Nastavenia boli úspešne uložené');
             } else {
                 console.error('Chyba pri ukladaní:', result.message);
                 // Len v prípade chyby môžeme zobraziť alert
@@ -2574,73 +2626,67 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize
     const initialize = async () => {
-        console.log('=== STARTING MONITORING INITIALIZATION ===');
         
         // Cache DOM elements for better performance
         cacheDOM();
-        console.log('DOM elements cached');
         
         await loadDevices();
-        console.log('Devices loaded');
         
         initializeCharts();
-        console.log('Charts initialized');
         
         initializeSocket();
-        console.log('Socket initialized');
         
         // Restore saved state
         const savedState = loadState();
-        console.log('Saved state:', savedState);
         
         if (savedState) {
-            console.log('Restoring saved state:', savedState);
             
             if (savedState.timeRange) {
-                console.log('Setting time range to:', savedState.timeRange);
                 setActiveTimeRange(savedState.timeRange);
             }
             
             if (savedState.deviceId) {
-                console.log('Selecting saved device:', savedState.deviceId);
                 // Set device selector value
-                deviceSelector.value = savedState.deviceId;
+                if (window.customDeviceSelector) {
+                    window.customDeviceSelector.setValue(savedState.deviceId);
+                } else {
+                    deviceSelector.value = savedState.deviceId;
+                }
                 // Trigger device selection
                 await selectDevice(savedState.deviceId);
-                console.log('Device selection completed');
             } else {
-                console.log('No saved device, showing no device selected');
                 showNoDeviceSelected();
             }
         } else {
-            console.log('No saved state found');
             // Set default time range formatting
             setActiveTimeRange(currentTimeRange);
             
             // Auto-select first device if available
-            const firstOption = deviceSelector.querySelector('option[value]:not([value=""])');
+            const firstOption = window.customDeviceSelector ? 
+                document.querySelector('#deviceSelectorDropdown .custom-select-option[data-value]:not([data-value=""])') :
+                deviceSelector.querySelector('option[value]:not([value=""])');
             if (firstOption) {
-                const firstDeviceId = firstOption.value;
-                console.log('Auto-selecting first device:', firstDeviceId);
-                deviceSelector.value = firstDeviceId;
+                const firstDeviceId = window.customDeviceSelector ? 
+                    firstOption.getAttribute('data-value') : 
+                    firstOption.value;
+                if (window.customDeviceSelector) {
+                    window.customDeviceSelector.setValue(firstDeviceId);
+                } else {
+                    deviceSelector.value = firstDeviceId;
+                }
                 await selectDevice(firstDeviceId);
-                console.log('First device auto-selected');
             } else {
-                console.log('No devices available');
                 showNoDeviceSelected();
             }
         }
         
-        console.log('=== MONITORING INITIALIZATION COMPLETE ===');
     };
     
     // Page Visibility API - pause optimization when page is not visible
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            console.log('Page hidden - stopping Y-axis optimization');
             stopYAxisOptimization();
         } else if (document.visibilityState === 'visible' && currentDeviceId) {
-            console.log('Page visible - restarting Y-axis optimization');
             // Small delay to ensure everything is ready
             setTimeout(() => {
                 startYAxisOptimization();

@@ -200,6 +200,45 @@
             text-decoration: none;
         }
         
+        .btn-delete {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .btn-delete:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+        }
+        
+        .btn-delete-compact {
+            padding: 8px;
+            min-width: auto;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
         .btn-back {
             background: linear-gradient(135deg, #6b7280, #4b5563);
             border: none;
@@ -524,10 +563,15 @@
                         <td class="file-size">{{ "%.2f"|format(file.size / 1024 / 1024) }} MB</td>
                         <td>{{ file.modified.strftime('%d.%m.%Y %H:%M') }}</td>
                         <td>
-                            <a href="/download_backup/{{ file.name }}" class="btn-download">
-                                <i class="fas fa-download"></i>
-                                Stiahnuť
-                            </a>
+                            <div class="action-buttons">
+                                <a href="/download_backup/{{ file.name }}" class="btn-download">
+                                    <i class="fas fa-download"></i>
+                                    Stiahnuť
+                                </a>
+                                <button onclick="confirmDeleteBackup('{{ file.name }}')" class="btn-delete btn-delete-compact" title="Vymazať zálohu">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -567,8 +611,9 @@
     </div>
     
     <script>
-        let currentSort = 'name';
-        let sortDirection = 'asc';
+    // Predvolené zoradenie: podľa dátumu (najnovšie hore)
+    let currentSort = 'date';
+    let sortDirection = 'desc';
         let currentFilter = 'all';
         let currentPage = 1;
         const itemsPerPage = 50;
@@ -802,35 +847,164 @@
         
         // Inicializácia pri načítaní stránky
         document.addEventListener('DOMContentLoaded', function() {
-            // Inicializuj tému
             initTheme();
-            
-            // Ulož všetky riadky
             const tbody = document.getElementById('filesTableBody');
-            if (tbody) {
-                allRows = Array.from(tbody.getElementsByTagName('tr'));
+            if (!tbody) return;
+            
+            allRows = Array.from(tbody.getElementsByTagName('tr'));
+            // Zoradenie je už urobené server-side (mtime desc), klient tu už iba pripraví animáciu
+            
+            // Animácia až po správnom poradí
+            allRows.forEach((row, index) => {
+                row.style.opacity = '0';
+                row.style.transform = 'translateY(14px)';
+                setTimeout(() => {
+                    row.style.transition = 'all 0.35s ease';
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateY(0)';
+                }, index * 20);
+            });
+            
+            updateSortHeaders();
+            filterAndPaginate();
+            updateFileCounts();
+        });
+        
+        // Funkcia pre potvrdenie vymazania zálohy
+        function confirmDeleteBackup(filename) {
+            if (confirm(`Naozaj chcete vymazať záložný súbor "${filename}"?\n\nTento súbor bude vymazaný lokálne aj z FTP servera (ak je nakonfigurovaný).`)) {
+                deleteBackup(filename);
+            }
+        }
+        
+        // Funkcia pre vymazanie zálohy
+        async function deleteBackup(filename) {
+            try {
+                // Zobraz loading indikátor
+                const deleteButton = event.target.closest('button');
+                const originalText = deleteButton.innerHTML;
+                deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mazanie...';
+                deleteButton.disabled = true;
                 
-                // Animácie pri načítaní
-                allRows.forEach((row, index) => {
-                    row.style.opacity = '0';
-                    row.style.transform = 'translateY(20px)';
-                    setTimeout(() => {
-                        row.style.transition = 'all 0.5s ease';
-                        row.style.opacity = '1';
-                        row.style.transform = 'translateY(0)';
-                    }, index * 50);
+                const response = await fetch(`/api/delete_backup/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
                 });
                 
-                // Inicializuj zobrazenie
-                setTimeout(() => {
-                    // Nastav počiatočné zoradenie na názov
-                    currentSort = 'name';
-                    sortDirection = 'asc';
-                    updateSortHeaders();
-                    filterAndPaginate();
-                }, allRows.length * 50 + 200);
+                const result = await response.json();
+                
+                if (response.ok && result.status === 'success') {
+                    // Úspešné vymazanie - odstráň riadok(y) z tabuľky
+                    const clickedRow = deleteButton.closest('tr');
+                    const baseName = filename.replace(/(\.backup|\.rsc)$/i, '');
+                    // Nájdeme všetky riadky, ktoré patria k rovnakému základu názvu (môžu byť max 2)
+                    const relatedRows = allRows.filter(r => {
+                        const fn = r.getAttribute('data-filename');
+                        if (!fn) return false;
+                        return fn.replace(/(\.backup|\.rsc)$/i, '') === baseName;
+                    });
+                    // Animuj a odstráň všetky súvisiace riadky (vrátane druhého súboru páru)
+                    relatedRows.forEach((row, idx) => {
+                        row.style.transition = 'all 0.3s ease';
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(-100%)';
+                        setTimeout(() => {
+                            if (row.parentNode) row.remove();
+                            if (idx === relatedRows.length - 1) {
+                                // Po odstránení posledného prepočítaj
+                                const tbody = document.getElementById('filesTableBody');
+                                allRows = Array.from(tbody.getElementsByTagName('tr'));
+                                filterAndPaginate();
+                                updateFileCounts();
+                            }
+                        }, 300 + (idx * 40));
+                    });
+                    
+                } else {
+                    // Chyba - obnov tlačidlo
+                    deleteButton.innerHTML = originalText;
+                    deleteButton.disabled = false;
+                }
+                
+            } catch (error) {
+                console.error('Chyba pri vymazávaní súboru:', error);
+                // Obnov tlačidlo
+                const deleteButton = event.target.closest('button');
+                deleteButton.innerHTML = '<i class="fas fa-trash"></i> Vymazať';
+                deleteButton.disabled = false;
             }
-        });
+        }
+        
+        // Funkcia pre zobrazenie notifikácií
+        function showNotification(message, type = 'info') {
+            // Vytvor notifikačný element
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                <span>${message}</span>
+            `;
+            
+            // Pridaj štýly pre notifikáciu (ak ešte neexistujú)
+            if (!document.getElementById('notification-styles')) {
+                const style = document.createElement('style');
+                style.id = 'notification-styles';
+                style.textContent = `
+                    .notification {
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        background: var(--card-bg);
+                        border: 1px solid var(--border-color);
+                        border-radius: 8px;
+                        padding: 12px 16px;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                        z-index: 10000;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        min-width: 300px;
+                        animation: slideIn 0.3s ease;
+                    }
+                    .notification-success { border-left: 4px solid var(--success-color); }
+                    .notification-error { border-left: 4px solid #ef4444; }
+                    .notification-info { border-left: 4px solid var(--accent-color); }
+                    @keyframes slideIn {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOut {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(100%); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // Pridaj do dokumentu
+            document.body.appendChild(notification);
+            
+            // Automaticky odstráň po 5 sekundách
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
+        }
+        
+        // Funkcia pre aktualizáciu počítadiel súborov
+        function updateFileCounts() {
+            const totalFiles = allRows.length;
+            const visibleFiles = filteredRows.length;
+            
+            document.getElementById('totalFiles').textContent = totalFiles;
+            document.getElementById('visibleFiles').textContent = Math.min(visibleFiles, itemsPerPage);
+        }
     </script>
 </body>
 </html>

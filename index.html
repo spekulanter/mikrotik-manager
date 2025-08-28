@@ -1264,7 +1264,7 @@
                                 <div><label for="log_retention_days" class="block mb-1 font-semibold">Počet dní uchovávania logov</label><input type="number" id="log_retention_days" name="log_retention_days" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="30" min="1" max="365"><small class="text-gray-400 block mt-1">Logy staršie ako tento počet dní budú automaticky vymazané. Rozsah: 1-365 dní</small></div>
                                 <div><label for="ping_retention_days" class="block mb-1 font-semibold">Počet dní uchovávania ping dát</label><input type="number" id="ping_retention_days" name="ping_retention_days" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="30" min="1" max="365"><small class="text-gray-400 block mt-1">Ping história pre grafy. Viac dní = väčšia databáza. Rozsah: 1-365 dní</small></div>
                                 <div><label for="snmp_retention_days" class="block mb-1 font-semibold">Počet dní uchovávania SNMP dát</label><input type="number" id="snmp_retention_days" name="snmp_retention_days" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="30" min="1" max="365"><small class="text-gray-400 block mt-1">SNMP história (CPU, teplota, pamäť). Viac dní = väčšia databáza. Rozsah: 1-365 dní</small></div>
-                                <div><label for="log_max_entries" class="block mb-1 font-semibold">Maximum logov v pamäti</label><input type="number" id="log_max_entries" name="log_max_entries" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="1000" min="100" max="5000"><small class="text-gray-400 block mt-1">Maximálny počet logov načítaných do prehliadača. Vyššie číslo = viac RAM. Rozsah: 100-5000</small></div>
+                                <div><label for="log_max_entries" class="block mb-1 font-semibold">Maximum logov v pamäti</label><input type="number" id="log_max_entries" name="log_max_entries" class="w-full p-2 rounded bg-gray-800 border border-gray-600" value="2000" min="100" max="20000"><small class="text-gray-400 block mt-1">Maximálny počet logov načítaných do prehliadača. Vyššie číslo = viac RAM. Rozsah: 100-20000</small></div>
                             </div>
                         </div>
                     </div>
@@ -1509,6 +1509,35 @@ document.addEventListener('DOMContentLoaded', () => {
         notify_reboot_detected: "🔄 Reboot detekovaný", notify_version_change: "🆕 Zmena verzie OS",
     };
 
+    // Formátovanie času zálohy – korekcia ak backend posiela "naive" lokálny čas
+    function formatLocalDate(value) {
+        try {
+            if(!value) return '';
+            // Ak už reťazec obsahuje 'Z' alebo +/-, necháme JS spracovať priamo
+            const hasTZ = /[zZ]|[\+\-]\d{2}:?\d{2}$/.test(value);
+            let dateObj;
+            if (hasTZ) {
+                dateObj = new Date(value);
+            } else {
+                // Predpoklad: backend uložil timestamp ako lokálny server čas (napr. UTC) bez 'Z'
+                // Zoberieme komponenty a vytvoríme Date v lokálnej zóne, potom zobrazíme lokálne
+                // Ak je to ISO bez ms: YYYY-MM-DDTHH:MM:SS
+                const isoLike = value.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+                if (isoLike) {
+                    // Rozdelíme a vytvoríme ako local
+                    dateObj = new Date(value.replace(' ', 'T'));
+                } else {
+                    dateObj = new Date(value);
+                }
+            }
+            if (isNaN(dateObj.getTime())) return value;
+            return dateObj.toLocaleString('sk-SK', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        } catch(e){ return value; }
+    }
+
     // --- Štandardizovaný pomocník pre API volania ---
     const api = {
         _handleResponse: async (res) => {
@@ -1697,7 +1726,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><strong>Teplota:</strong> <span class="font-mono text-gray-300">${snmpData.temperature || 'N/A'} °C</span></p>
                 <p><strong>CPU jadrá:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_count || 'N/A'}</span></p>
                 <p><strong>SNMP interval:</strong> <span class="font-mono text-gray-300">${device.snmp_interval_minutes ? device.snmp_interval_minutes + 'min' : 'globálny'}</span></p>
-                <div><strong>Posl. záloha:</strong><br><span class="font-mono text-gray-300 last-backup-val">${device.last_backup ? new Date(device.last_backup).toLocaleString('sk-SK') : 'Nikdy'}</span></div>
+                <div><strong>Posl. záloha:</strong><br><span class="font-mono text-gray-300 last-backup-val">${device.last_backup ? formatLocalDate(device.last_backup) : 'Nikdy'}</span></div>
             </div>
             <div class="flex gap-2 mt-auto pt-4 border-t border-gray-700">
                 <button class="backup-btn btn flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1 px-1.5 rounded-lg device-btn-text flex items-center justify-center gap-1.5"><i class="fas fa-save device-btn-icon"></i> Zálohovať</button>
@@ -1783,20 +1812,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Pushover notifikácie majú prioritu a zostávajú v kategórii notification
         if (msgLower.includes('notifikácia') || msgLower.includes('notification') || msgLower.includes('pushover')) return 'notification';
         // Všetky zálohovacie správy vrátane "spúšťam pokročilú zálohu" (okrem Pushover)
-        if (msgLower.includes('záloha') || msgLower.includes('backup') || msgLower.includes('spúšťam pokročilú zálohu')) return 'backup';
+        if (msgLower.includes('záloha') || msgLower.includes('backup') || 
+            msgLower.includes('spúšťam pokročilú zálohu') || msgLower.includes('spúšťam zálohu')) return 'backup';
         // Online/Offline správy (okrem Pushover notifikácií)
         if (msgLower.includes('online') || msgLower.includes('offline') || msgLower.includes('pripojené') || msgLower.includes('nedostupné')) return 'status';
         return 'system';
     };
 
     const addLogToContainer = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
-        // Upravíme level pre zelené správy
-        if (message.includes('Automatické zálohovanie je aktívne:') || 
-            message.includes('Automatické zálohovanie je v nastaveniach vypnuté.') ||
-            message.includes('Nastavenia boli uložené.')) {
-            level = 'info'; // Zmena z 'success' na 'info'
-        }
-        
         // Offline správy budú warning
         if (message.toLowerCase().includes('offline') || message.toLowerCase().includes('nedostupné')) {
             level = 'warning';
@@ -1845,13 +1868,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Úplne ignorujeme startup správy
         if (message.includes('MikroTik Backup Manager') && message.includes('úspešne načítaný!')) {
             return; // Túto správu už nezobrazujeme vôbec
-        }
-        
-        // Upravíme level pre zelené správy
-        if (message.includes('Automatické zálohovanie je aktívne:') || 
-            message.includes('Automatické zálohovanie je v nastaveniach vypnuté.') ||
-            message.includes('Nastavenia boli uložené.')) {
-            level = 'info'; // Zmena z 'success' na 'info'
         }
         
         // Offline správy budú warning

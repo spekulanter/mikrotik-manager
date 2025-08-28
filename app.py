@@ -423,10 +423,15 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('log_retention_days', '30'))  # Pridané: uchovávanie logov
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retention_days', '30'))  # Pridané: uchovávanie ping dát
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_retention_days', '30'))  # Pridané: uchovávanie SNMP dát
-        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('log_display_limit', '200'))  # Pridané: limit zobrazených logov
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('log_max_entries', '2000'))  # Pridané: limit zobrazených logov
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('notify_backup_success', 'false'))  # Notifikácie úspešných záloh
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('notify_backup_failure', 'false'))  # Notifikácie neúspešných záloh
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_check_interval_seconds', '120'))  # Ping monitoring interval v sekundách
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_monitor_enabled', 'true'))  # Povoliť/zakázať ping monitoring
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('debug_terminal', 'false'))  # Pridané: debug terminál v monitoringu
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retry_interval', '20'))  # Retry interval pri výpadku v sekundách
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retries', '3'))  # Počet neúspešných pokusov pred označením offline
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_timeout', '5'))  # Timeout pre jeden ping
         conn.commit()
         logger.info("Databáza úspešne inicializovaná.")
 
@@ -541,7 +546,8 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
                 add_log('info', "Žiadne zmeny v konfigurácii. Záloha sa preskakuje.", ip)
             return False
     except Exception as e:
-        add_log('error', f"Chyba pri porovnávaní záloh pre {ip}: {e}", ip)
+        # IP je už vo vizuálnom log prefixe, netreba ju v texte
+        add_log('error', f"Chyba pri porovnávaní záloh: {e}", ip)
         return True
 
 def run_backup_logic(device, is_sequential=False):
@@ -555,11 +561,16 @@ def run_backup_logic(device, is_sequential=False):
     
     detailed_logging = settings.get('backup_detailed_logging', 'false').lower() == 'true'
     
-    # Základná správa o spustení zálohy
-    if is_sequential:
-        add_log('info', f"Záloha {ip} - spúšťam", ip)
+    # Základná správa o spustení zálohy (zjednotená pre konzistentnosť)
+    # Vždy komunikujeme, že ide o pokročilú zálohu; pri sekvenčnej doplníme info a pri low-memory režime upozorníme na dlhšie časy
+    # Neuvádzame IP priamo v texte (frontend ju má už v hlavičke logu)
+    prefix = "Záloha - " if is_sequential else ""
+    if low_memory:
+        add_log('info', f"{prefix}Spúšťam zálohu pre 16MB zariadenie (predĺžené časy)", ip)
+        if detailed_logging:
+            add_log('info', "Režim 16MB: predĺžené čakacie intervaly (backup ~30s, export ~180s).", ip)
     else:
-        add_log('info', "Spúšťam pokročilú zálohu", ip)
+        add_log('info', f"{prefix}Spúšťam zálohu", ip)
     
     socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'starting'})
     client = None
@@ -577,9 +588,9 @@ def run_backup_logic(device, is_sequential=False):
         if not compare_with_local_backup(ip, remote_config, detailed_logging):
             # Záverečná správa o preskočení zálohy
             if is_sequential:
-                add_log('info', f"Záloha {ip} - preskočená (žiadne zmeny)", ip)
+                add_log('info', f"Záloha - preskočená (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
             else:
-                add_log('info', "Záloha preskočená - konfigurácia nezmenená", ip)
+                add_log('info', f"Záloha preskočená (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
             socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'skipped'})
             return
         _, stdout, _ = client.exec_command('/system identity print')
@@ -599,7 +610,7 @@ def run_backup_logic(device, is_sequential=False):
         
         if detailed_logging:
             add_log('info', "Cleanup starých backup súborov dokončený.", ip)
-        date_str = datetime.now().strftime("%Y%m%d-%H%M%S")
+        date_str = datetime.now().strftime("%Y%m%d-%H%M")
         base_filename = f"{safe_identity}_{ip}_{date_str}"
         backup_path = f"flash/{base_filename}.backup" if has_flash else f"{base_filename}.backup"
         rsc_path = f"flash/{base_filename}.rsc" if has_flash else f"{base_filename}.rsc"
@@ -608,8 +619,12 @@ def run_backup_logic(device, is_sequential=False):
             add_log('info', f"Vytváram súbory {base_filename}.backup a .rsc...", ip)
         
         client.exec_command(f'/system backup save name="{backup_path}" dont-encrypt=yes')
+        if detailed_logging and low_memory:
+            add_log('info', "Čakám (low-memory) 30s na dokončenie /system backup save...", ip)
         time.sleep(30 if low_memory else 20)
         client.exec_command(f'/export file="{rsc_path}"')
+        if detailed_logging and low_memory:
+            add_log('info', "Čakám (low-memory) 180s na dokončenie /export...", ip)
         time.sleep(180 if low_memory else 30)
         with client.open_sftp() as sftp:
             sftp.get(backup_path, os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
@@ -625,9 +640,9 @@ def run_backup_logic(device, is_sequential=False):
         
         # Záverečná správa o dokončení zálohy
         if is_sequential:
-            add_log('success', f"Záloha {ip} - dokončená úspešne", ip)
+            add_log('info', f"Záloha - dokončená úspešne{' (16MB)' if low_memory else ''}", ip)
         else:
-            add_log('success', f"Záloha pre {ip} dokončená.", ip)
+            add_log('info', f"Záloha dokončená{' (16MB)' if low_memory else ''}.", ip)
         
         # Odoslanie notifikácie o úspešnej zálohe
         with get_db_connection() as conn:
@@ -646,6 +661,16 @@ def run_backup_logic(device, is_sequential=False):
     except Exception as e:
         add_log('error', f"Chyba pri zálohe: {e}", ip)
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'error', 'message': str(e)})
+        
+        # Odoslanie notifikácie o neúspechu zálohy
+        try:
+            with get_db_connection() as conn:
+                settings_fail = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+            if settings_fail.get('notify_backup_failure', 'false').lower() == 'true':
+                device_name = device.get('name', ip)
+                send_pushover_notification(f"Záloha MikroTik {ip} ({device_name}) zlyhala: {e}", title="Zlyhaná záloha")
+        except Exception as notif_e:
+            add_log('error', f"Notifikácia o zlyhaní zálohy sa nepodarila: {notif_e}", ip)
     finally:
         if client: client.close()
         if ip in backup_tasks: del backup_tasks[ip]
@@ -990,17 +1015,28 @@ def logout():
 @app.route('/backups')
 @login_required
 def list_backups():
+    """Dynamický výpis záloh: zoradené podľa mtime (najnovšie prvé)."""
     try:
-        files_with_details = []
-        for filename in sorted(os.listdir(BACKUP_DIR), reverse=True):
+        entries = []
+        for filename in os.listdir(BACKUP_DIR):
             filepath = os.path.join(BACKUP_DIR, filename)
             if os.path.isfile(filepath):
-                files_with_details.append({
-                    'name': filename,
-                    'size': os.path.getsize(filepath),
-                    'modified': datetime.fromtimestamp(os.path.getmtime(filepath))
-                })
-        return render_template('backups.html', files=files_with_details)
+                try:
+                    mtime = os.path.getmtime(filepath)
+                    entries.append({
+                        'name': filename,
+                        'size': os.path.getsize(filepath),
+                        'modified': datetime.fromtimestamp(mtime),
+                        '_mtime': mtime
+                    })
+                except OSError:
+                    continue
+        # Server-side zoradenie podľa mtime desc
+        entries.sort(key=lambda x: x['_mtime'], reverse=True)
+        # Odstráň pomocný kľúč
+        for e in entries:
+            e.pop('_mtime', None)
+        return render_template('backups.html', files=entries)
     except Exception as e:
         logger.error(f"Chyba pri načítaní zoznamu záloh: {e}")
         return "Chyba pri načítaní zoznamu záloh.", 500
@@ -1015,6 +1051,108 @@ def download_backup(filename):
     except Exception as e:
         logger.error(f"Chyba pri sťahovaní súboru '{filename}': {e}")
         return "Chyba pri sťahovaní súboru.", 500
+
+@app.route('/api/delete_backup/<path:filename>', methods=['DELETE'])
+@login_required
+def delete_backup(filename):
+    """API endpoint pre vymazanie záložného súboru lokálne aj z FTP servera."""
+    try:
+        # Bezpečnostná kontrola - povoliť iba .backup a .rsc súbory
+        if not (filename.endswith('.backup') or filename.endswith('.rsc')):
+            return jsonify({'status': 'error', 'message': 'Nepovolený typ súboru.'}), 400
+        
+        # Získanie základného názvu súboru bez prípony
+        base_filename = os.path.splitext(filename)[0]
+        backup_file = base_filename + '.backup'
+        rsc_file = base_filename + '.rsc'
+        
+        # Zoznam súborov na vymazanie
+        files_to_delete = []
+        if os.path.exists(os.path.join(BACKUP_DIR, backup_file)):
+            files_to_delete.append(backup_file)
+        if os.path.exists(os.path.join(BACKUP_DIR, rsc_file)):
+            files_to_delete.append(rsc_file)
+        
+        deleted_local = []
+        deleted_ftp = []
+        
+        # Vymazanie lokálnych súborov
+        for file_to_delete in files_to_delete:
+            local_file_path = os.path.join(BACKUP_DIR, file_to_delete)
+            try:
+                os.remove(local_file_path)
+                deleted_local.append(file_to_delete)
+            except Exception as e:
+                add_log('warning', f"Nepodarilo sa vymazať lokálny súbor {file_to_delete}: {e}")
+        
+        # Pokus o vymazanie z FTP servera
+        try:
+            with get_db_connection() as conn:
+                settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+            
+            # Kontrola FTP nastavení
+            if all(k in settings and settings[k] for k in ['ftp_server', 'ftp_username', 'ftp_password']):
+                from ftplib import FTP
+                with FTP(settings['ftp_server']) as ftp:
+                    ftp.login(settings['ftp_username'], settings['ftp_password'])
+                    
+                    # Ak je nastavený adresár, prejdeme doň
+                    if 'ftp_directory' in settings and settings['ftp_directory']:
+                        ftp.cwd(settings['ftp_directory'])
+                    
+                    # Pokus o vymazanie oboch súborov z FTP
+                    for file_to_delete in files_to_delete:
+                        try:
+                            ftp.delete(file_to_delete)
+                            deleted_ftp.append(file_to_delete)
+                        except Exception as ftp_e:
+                            # Ignoruj chyby ak súbor neexistuje na FTP
+                            pass
+        except Exception as ftp_connection_e:
+            add_log('warning', f"Nepodarilo sa pripojiť na FTP server pre vymazanie súborov: {ftp_connection_e}")
+        
+        # Vytvorenie zlúčených log správ
+        if deleted_local:
+            local_files_str = ', '.join(deleted_local)
+            if deleted_ftp:
+                ftp_files_str = ', '.join(deleted_ftp)
+                add_log('info', f"Záložné súbory vymazané lokálne aj z FTP: {local_files_str}")
+            else:
+                add_log('info', f"Záložné súbory vymazané lokálne: {local_files_str}")
+        
+        # Aktualizácia databázy - kontrola či po vymazaní súboru ešte existujú zálohy pre zariadenie
+        try:
+            # Extrakcia IP adresy zo súboru (formát: RouterName_IP_timestamp.backup)
+            import re
+            ip_match = re.search(r'_(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})_', filename)
+            if ip_match:
+                device_ip = ip_match.group(1)
+                
+                # Kontrola, či ešte existujú nejaké zálohy pre toto zariadenie
+                existing_backups = [f for f in os.listdir(BACKUP_DIR) 
+                                  if f.endswith('.backup') and device_ip in f and os.path.isfile(os.path.join(BACKUP_DIR, f))]
+                
+                if not existing_backups:
+                    # Žiadne zálohy už neexistujú, vynuluj last_backup v databáze
+                    with get_db_connection() as conn:
+                        conn.execute('UPDATE devices SET last_backup = NULL WHERE ip = ?', (device_ip,))
+                        conn.commit()
+        except Exception as db_e:
+            add_log('warning', f"Nepodarilo sa aktualizovať databázu po vymazaní zálohy: {db_e}")
+        
+        # Vytvorenie odpovede
+        all_deleted = deleted_local + deleted_ftp
+        if all_deleted:
+            unique_deleted = list(set(all_deleted))  # Odstránenie duplikátov
+            message = f"Súbory úspešne vymazané: {', '.join(unique_deleted)}"
+            return jsonify({'status': 'success', 'message': message})
+        else:
+            return jsonify({'status': 'warning', 'message': 'Súbory neboli nájdené ani lokálne ani na FTP serveri.'}), 404
+            
+    except Exception as e:
+        logger.error(f"Chyba pri vymazávaní záložného súboru '{filename}': {e}")
+        add_log('error', f"Chyba pri vymazávaní záložného súboru {filename}: {e}")
+        return jsonify({'status': 'error', 'message': f'Chyba pri vymazávaní súboru: {str(e)}'}), 500
 
 @app.route('/')
 @login_required
@@ -1048,9 +1186,10 @@ def monitoring():
 @app.route('/backups.html')
 @login_required
 def backups_page():
+    """Presmerovanie na dynamickú route, aby sa vždy zobrazili aktuálne a správne zoradené dáta."""
     if not current_user.totp_enabled:
         return redirect(url_for('setup_2fa'))
-    return send_from_directory('.', 'backups.html')
+    return redirect(url_for('list_backups'))
 
 @app.route('/settings.html')
 @login_required
@@ -1333,7 +1472,7 @@ def backup_device(device_id):
 @login_required
 def backup_all_devices():
     with get_db_connection() as conn:
-        devices = [dict(row) for row in conn.execute('SELECT * FROM devices').fetchall()]
+        devices = [dict(row) for row in conn.execute('SELECT * FROM devices ORDER BY name').fetchall()]
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     
     # Získame nastavenie oneskorenia medzi zálohami (predvolené 30 sekúnd)
@@ -1367,10 +1506,10 @@ def run_sequential_backup(devices, delay_seconds):
                 
             ip = device['ip']
             if ip in backup_tasks:
-                add_log('warning', f"Záloha pre {ip} už prebieha, preskakujem.", ip)
+                add_log('warning', "Záloha už prebieha, preskakujem.", ip)
                 continue
             
-            add_log('info', f"Spúšťam zálohu {i}/{total_devices} pre {ip}...", ip)
+            add_log('info', f"Spúšťam zálohu {i}/{total_devices}...", ip)
             backup_tasks[ip] = True
             
             # Spustíme zálohu s príznakom sekvenčnej zálohy a počkáme na jej dokončenie
@@ -1587,7 +1726,7 @@ def handle_settings():
             for key, value in request.json.items():
                 conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
             conn.commit()
-            add_log('success', "Nastavenia boli uložené.")
+            add_log('info', "Nastavenia boli uložené.")
             add_log('info', "Nastavenia boli aktualizované.")
             
             # Kontrola či sa zmenili ping nastavenia
@@ -1618,7 +1757,7 @@ def handle_settings():
             # Pridáme info o pláne priamo do databázy logov
             schedule_info = get_schedule_info()
             if schedule_info:
-                add_log('success', schedule_info)
+                add_log('info', schedule_info)
             
             return jsonify({
                 'status': 'success'
@@ -1733,7 +1872,7 @@ def get_logs():
         with get_db_connection() as conn:
             # Získame nastavenie pre limit zobrazených logov
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
-            log_limit = int(settings.get('log_display_limit', 200))
+            log_limit = int(settings.get('log_max_entries', 2000))
             
             # Vraciame posledných X záznamov, najnovšie prvé
             logs = conn.execute('SELECT * FROM logs ORDER BY timestamp DESC LIMIT ?', (log_limit,)).fetchall()
@@ -2131,13 +2270,13 @@ def setup_scheduler(log_schedule_info=False):
         if settings.get('backup_schedule_type', 'daily') == 'daily':
             schedule.every().day.at(schedule_time).do(scheduled_backup_job)
             if log_schedule_info:
-                add_log('success', f"Automatické zálohovanie je aktívne: Denne o {schedule_time}.")
+                add_log('info', f"Automatické zálohovanie je aktívne: Denne o {schedule_time}.")
         else:
             day = settings.get('backup_schedule_day', 'sunday').lower()
             day_sk = {'monday': 'Pondelok', 'tuesday': 'Utorok', 'wednesday': 'Streda', 'thursday': 'Štvrtok', 'friday': 'Piatok', 'saturday': 'Sobota', 'sunday': 'Nedeľa'}.get(day, day.capitalize())
             getattr(schedule.every(), day).at(schedule_time).do(scheduled_backup_job)
             if log_schedule_info:
-                add_log('success', f"Automatické zálohovanie je aktívne: Každý {day_sk} o {schedule_time}.")
+                add_log('info', f"Automatické zálohovanie je aktívne: Každý {day_sk} o {schedule_time}.")
     except ValueError as e:
         if log_schedule_info:
             add_log('error', f"Chyba pri nastavení automatického zálohovania: Neplatný čas '{schedule_time}'. Použite formát HH:MM.")
@@ -2208,12 +2347,19 @@ logger.info("Aplikácia MikroTik Manager sa spúšťa...")
 
 # === PING MONITORING FUNKCIE ===
 
-def ping_device(ip, count=1):
+def ping_device(ip, count=1, timeout=None):
     """Ping zariadenie a vráť štatistiky - optimalizované pre rýchle intervaly"""
     try:
-        # Pre rýchle intervaly používame len 1 ping s kratším timeout
-        result = subprocess.run(['ping', '-c', str(count), '-W', '1', ip], 
-                              capture_output=True, text=True, timeout=3)
+        # Použiť timeout z parametra alebo default hodnotu
+        if timeout is None:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                timeout_setting = cursor.execute('SELECT value FROM settings WHERE key = ?', ('ping_timeout',)).fetchone()
+                timeout = int(timeout_setting['value']) if timeout_setting else 1
+        
+        # Pre rýchle intervaly používame len 1 ping s nastaveným timeout
+        result = subprocess.run(['ping', '-c', str(count), '-W', str(timeout), ip], 
+                              capture_output=True, text=True, timeout=timeout + 2)  # Pridáme +2s buffer pre subprocess timeout
         
         if result.returncode == 0:
             # Parsovanie výsledkov
@@ -2262,6 +2408,10 @@ def save_ping_result(device_id, ping_result):
                 VALUES (?, ?, ?, ?, ?)
             ''', (device_id, ping_result['timestamp'], ping_result['avg_latency'], 
                   ping_result['packet_loss'], ping_result['status']))
+            
+            # Aktualizujeme stav zariadenia v devices tabuľke
+            cursor.execute('UPDATE devices SET status = ? WHERE id = ?', (ping_result['status'], device_id))
+            
             conn.commit()
             
             # Vyčistíme staré záznamy podľa nastavenia (default 30 dní pre ping history)
@@ -2305,18 +2455,27 @@ def ping_monitoring_loop():
     # Slovník pre sledovanie posledného ping času každého zariadenia v pamäti
     device_last_ping = {}
     
+    # Slovník pre sledovanie stavu zariadení a počtu neúspešných pingov
+    device_status_tracker = {}
+    
     while not ping_thread_stop_flag.is_set():
         try:
             # Načítame nastavenia pre ping monitoring
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                settings_rows = cursor.execute('SELECT key, value FROM settings WHERE key IN (?, ?)', 
-                                                                   ('ping_check_interval_seconds', 'ping_monitor_enabled')).fetchall()
+                settings_rows = cursor.execute('''
+                    SELECT key, value FROM settings 
+                    WHERE key IN (?, ?, ?, ?, ?)
+                ''', ('ping_check_interval_seconds', 'ping_monitor_enabled', 'ping_retry_interval', 
+                     'ping_retries', 'ping_timeout')).fetchall()
                 settings = {row['key']: row['value'] for row in settings_rows}
                 
                 # Kontrola či je ping monitoring povolený
                 ping_enabled = settings.get('ping_monitor_enabled', 'true').lower() == 'true'
                 global_ping_interval = int(settings.get('ping_check_interval_seconds', '120'))  # Default 2 minúty
+                retry_interval = int(settings.get('ping_retry_interval', '20'))  # Default 20 sekúnd
+                max_retries = int(settings.get('ping_retries', '3'))  # Default 3 pokusy
+                ping_timeout = int(settings.get('ping_timeout', '5'))  # Default 5 sekúnd
                 
                 if not ping_enabled:
                     logger.info("Ping monitoring je zakázaný")
@@ -2327,7 +2486,7 @@ def ping_monitoring_loop():
                 
                 # Získaj zariadenia s ich ping interval nastaveniami (okrem paused zariadení)
                 cursor.execute('''
-                    SELECT id, ip, ping_interval_seconds
+                    SELECT id, ip, ping_interval_seconds, status
                     FROM devices
                     WHERE monitoring_paused = 0 OR monitoring_paused IS NULL
                 ''')
@@ -2340,10 +2499,23 @@ def ping_monitoring_loop():
                 shortest_interval = global_ping_interval
                 
                 for device in devices:
-                    device_id, ip, device_ping_interval = device
+                    device_id, ip, device_ping_interval, db_status = device
+                    
+                    # Iniciálne nastavenie tracker-a pre zariadenie ak neexistuje
+                    if device_id not in device_status_tracker:
+                        device_status_tracker[device_id] = {
+                            'status': db_status or 'unknown',
+                            'failed_count': 0,
+                            'last_status_change': current_time,
+                            'in_retry_mode': False
+                        }
                     
                     # Použij device-specific interval, ak je nastavený, inak global
                     effective_interval = device_ping_interval if device_ping_interval and device_ping_interval > 0 else global_ping_interval
+                    
+                    # Ak je zariadenie v retry mode, použijeme retry interval namiesto normálneho
+                    if device_status_tracker[device_id]['in_retry_mode']:
+                        effective_interval = retry_interval
                     
                     # Sleduj najkratší interval
                     if effective_interval < shortest_interval:
@@ -2362,13 +2534,19 @@ def ping_monitoring_loop():
                         
                         if seconds_since_ping >= effective_interval:
                             should_ping = True
-                            debug_log('debug_ping_monitoring', f"Device {ip} (ID: {device_id}): {seconds_since_ping:.2f}s od posledného pingu (interval: {effective_interval}s)")
+                            if device_status_tracker[device_id]['in_retry_mode']:
+                                debug_log('debug_ping_monitoring', 
+                                          f"Device {ip} (ID: {device_id}): retry ping, failed count: {device_status_tracker[device_id]['failed_count']}")
+                            else:
+                                debug_log('debug_ping_monitoring', 
+                                          f"Device {ip} (ID: {device_id}): {seconds_since_ping:.2f}s od posledného pingu (interval: {effective_interval}s)")
                         else:
                             remaining = effective_interval - seconds_since_ping
-                            debug_log('debug_ping_monitoring', f"Device {ip} (ID: {device_id}): zostáva {remaining:.2f}s do ďalšieho pingu")
+                            debug_log('debug_ping_monitoring', 
+                                      f"Device {ip} (ID: {device_id}): zostáva {remaining:.2f}s do ďalšieho pingu")
                     
                     if should_ping:
-                        devices_to_ping.append((device_id, ip, effective_interval))
+                        devices_to_ping.append((device_id, ip, effective_interval, retry_interval, max_retries, ping_timeout))
                 
                 # Ping všetky zariadenia, ktoré potrebujú ping - spustíme ich paralelne pre presnosť
                 if devices_to_ping:
@@ -2376,15 +2554,67 @@ def ping_monitoring_loop():
                     import threading
                     
                     def ping_single_device(device_info):
-                        device_id, ip, interval = device_info
+                        device_id, ip, interval, retry_interval, max_retries, ping_timeout = device_info
                         try:
                             # Zaznačíme čas PRED pingom pre presnosť
                             ping_time = datetime.now()
                             device_last_ping[device_id] = ping_time
                             
                             # Pre krátke intervaly používame rýchly ping
-                            ping_result = ping_device(ip, count=1 if interval <= 10 else 2)
+                            ping_result = ping_device(ip, count=1 if interval <= 10 else 2, timeout=ping_timeout)
+                            
+                            # Spracovanie výsledku pingu
+                            current_status = device_status_tracker[device_id]['status']
+                            in_retry_mode = device_status_tracker[device_id]['in_retry_mode']
+                            failed_count = device_status_tracker[device_id]['failed_count']
+                            
+                            if ping_result['status'] == 'online':
+                                # Úspešný ping - zariadenie je online
+                                if current_status == 'offline':
+                                    # Zariadenie bolo offline a teraz je online - zmena stavu
+                                    add_log('info', f"Zariadenie {ip} je opäť online")
+                                    send_pushover_notification(f"Zariadenie {ip} je opäť online", title="MikroTik Monitor - Zariadenie Online")
+                                
+                                # Reset retry counter and mode
+                                device_status_tracker[device_id] = {
+                                    'status': 'online',
+                                    'failed_count': 0,
+                                    'last_status_change': datetime.now(),
+                                    'in_retry_mode': False
+                                }
+                            else:
+                                # Neúspešný ping
+                                if not in_retry_mode:
+                                    # Prvý neúspešný ping - prejdi do retry mode
+                                    device_status_tracker[device_id]['in_retry_mode'] = True
+                                    device_status_tracker[device_id]['failed_count'] = 1
+                                    debug_log('debug_ping_monitoring', 
+                                              f"Device {ip} (ID: {device_id}): Prvý neúspešný ping - prejdem do retry mode (1/{max_retries})")
+                                else:
+                                    # Už v retry mode - zvýš počítadlo
+                                    device_status_tracker[device_id]['failed_count'] += 1
+                                    debug_log('debug_ping_monitoring', 
+                                              f"Device {ip} (ID: {device_id}): Neúspešný ping {device_status_tracker[device_id]['failed_count']}/{max_retries}")
+                                
+                                # Kontrola či sme dosiahli maximálny počet neúspešných pokusov
+                                if device_status_tracker[device_id]['failed_count'] >= max_retries:
+                                    if current_status != 'offline':
+                                        # Zmena stavu na offline
+                                        device_status_tracker[device_id]['status'] = 'offline'
+                                        device_status_tracker[device_id]['last_status_change'] = datetime.now()
+                                        add_log('error', f"Zariadenie {ip} je offline (po {max_retries} neúspešných pokusoch)")
+                                        send_pushover_notification(f"Zariadenie {ip} je offline", title="MikroTik Monitor - Zariadenie Offline")
+                                        # Naďalej zostávame v retry mode pre monitoring
+                            
+                            # Uložíme výsledok a aktuálny status
+                            ping_result['status'] = device_status_tracker[device_id]['status']
                             save_ping_result(device_id, ping_result)
+                            
+                            # Aktualizujeme stav v databáze
+                            with get_db_connection() as conn:
+                                conn.execute('UPDATE devices SET status = ? WHERE id = ?', 
+                                             (device_status_tracker[device_id]['status'], device_id))
+                                conn.commit()
                             
                             # Pošleme update cez WebSocket
                             debug_emit('ping_update', {
@@ -2584,8 +2814,12 @@ def manual_ping_device(device_id):
             if not device:
                 return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
             
+            # Načítaj ping_timeout nastavenie
+            ping_timeout = conn.execute('SELECT value FROM settings WHERE key = ?', ('ping_timeout',)).fetchone()
+            timeout = int(ping_timeout['value']) if ping_timeout else 5
+            
             ip, name = device
-            ping_result = ping_device(ip)
+            ping_result = ping_device(ip, timeout=timeout)
             save_ping_result(device_id, ping_result)
             
             # Pošleme update cez WebSocket
@@ -2696,14 +2930,20 @@ def get_current_ping_status(device_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            
+            # Získaj zariadenie a ping timeout nastavenie
             cursor.execute('SELECT ip FROM devices WHERE id = ?', (device_id,))
             result = cursor.fetchone()
             
             if not result:
                 return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+            
+            # Načítaj ping_timeout nastavenie
+            ping_timeout = cursor.execute('SELECT value FROM settings WHERE key = ?', ('ping_timeout',)).fetchone()
+            timeout = int(ping_timeout['value']) if ping_timeout else 5
                 
             ip = result[0]
-            ping_result = ping_device(ip)
+            ping_result = ping_device(ip, timeout=timeout)
             save_ping_result(device_id, ping_result)
             
             return jsonify(ping_result)

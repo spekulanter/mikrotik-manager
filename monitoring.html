@@ -1364,10 +1364,10 @@
                 <div class="card p-3 rounded-lg">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm text-gray-400">Packet Loss</p>
-                            <p id="packetLoss" class="text-lg font-bold text-yellow-400">-</p>
+                            <p id="uptimeLabel" class="text-sm text-gray-400">Uptime (24h)</p>
+                            <p id="uptime24h" class="text-lg font-bold text-green-400">-</p>
                         </div>
-                        <i class="fas fa-exclamation-triangle text-2xl text-gray-500"></i>
+                        <i class="fas fa-clock text-2xl text-gray-500"></i>
                     </div>
                 </div>
                 
@@ -2161,6 +2161,13 @@
                                                 
                                                 // Update chart
                                                 targetChart.update('active');
+                                                
+                                                // Apply Y-axis optimization for ping chart after loading new data
+                                                if (chartId === 'pingChart' && typeof window.applyYAxisOptimization === 'function') {
+                                                    setTimeout(() => {
+                                                        window.applyYAxisOptimization(targetChart, 'ping');
+                                                    }, 100);
+                                                }
                                                 
                                                 addDebugLog(`✅ Úspešne aktualizovaný graf ${chartId} na ${nextRange} s ${newData.length} bodmi`);
                                                 
@@ -3825,6 +3832,10 @@
             const dropdown = document.getElementById('deviceSelectorDropdown');
             const textElement = document.getElementById('deviceSelectorText');
             
+            if (!container || !button || !dropdown || !textElement) {
+                return;
+            }
+            
             let selectedValue = '';
             
             // Toggle dropdown
@@ -3986,6 +3997,8 @@
                 },
                 updateDeviceStatus: function(deviceId, status, isPaused = null) {
                     const options = dropdown.querySelectorAll('.custom-select-option[data-value]');
+                    let deviceUpdated = false;
+                    
                     options.forEach(option => {
                         if (option.getAttribute('data-value') == deviceId) {
                             const deviceName = option.getAttribute('data-name');
@@ -4013,9 +4026,10 @@
                             option.textContent = `${statusIndicator} ${deviceName} (${deviceIp})`;
                             option.dataset.status = status;
                             option.dataset.paused = pausedStatus;
+                            deviceUpdated = true;
                             
-                            // Update button text if this is the selected device
-                            if (option.getAttribute('data-value') === selectedValue) {
+                            // OPRAVA: Vždy aktualizuj button text ak je toto zariadenie vybrané
+                            if (option.getAttribute('data-value') == selectedValue) {
                                 // Pre mobile verziu v button zobraz len názov, pre PC názov + IP
                                 const isMobile = window.innerWidth <= 768;
                                 const buttonText = isMobile ? 
@@ -4034,6 +4048,15 @@
             initializeCustomDropdown();
             applyMobileSelectStyling();
         });
+        
+        // Fallback: initialize immediately if DOM is already ready
+        if (document.readyState === 'loading') {
+            // DOM still loading, wait for DOMContentLoaded
+        } else {
+            // DOM already loaded
+            initializeCustomDropdown();
+            applyMobileSelectStyling();
+        }
 
         // Mobile time range scroller edge detection + auto-centering active
         document.addEventListener('DOMContentLoaded', () => {

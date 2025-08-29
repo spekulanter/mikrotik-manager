@@ -302,6 +302,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let socket = null;
     let isLoadingData = false; // Flag to prevent multiple simultaneous requests
     let lastTotalMemoryValue = null; // For real-time forward-fill
+    let lastPingHistory = []; // cache ping history for uptime výpočet
+    let pendingFullPingHistory = false; // či čakáme na plný dataset po rýchlom skrátenom načítaní
+    let lastPingHistoryTimestamp = 0; // timestamp poslednej aktualizácie histórie
     
     // Export charts to window for access from monitoring.html
     window.charts = charts;
@@ -321,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         domCache.deviceModel = document.getElementById('deviceModel');
         domCache.pingStatus = document.getElementById('pingStatus');
         domCache.avgLatency = document.getElementById('avgLatency');
-        domCache.packetLoss = document.getElementById('packetLoss');
+        domCache.uptime24h = document.getElementById('uptime24h');
         domCache.lastPing = document.getElementById('lastPing');
     };
     
@@ -483,6 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Always update device status in cache and selector (lightweight operation)
             const deviceId = parseInt(data.device_id);
             const status = data.status; // Use status directly from ping result
+            
             updateDeviceStatus(deviceId, status);
             
             // Only update charts if page is visible and this is the currently selected device
@@ -559,12 +563,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // Update ping status display - optimized version
+    // Update ping status display - optimized version with uptime
     const updatePingStatus = (pingData) => {
         // Use cached DOM elements for better performance
         const pingStatus = domCache.pingStatus || document.getElementById('pingStatus');
         const avgLatency = domCache.avgLatency || document.getElementById('avgLatency');
-        const packetLoss = domCache.packetLoss || document.getElementById('packetLoss');
+        const uptime24h = domCache.uptime24h || document.getElementById('uptime24h');
         const lastPing = domCache.lastPing || document.getElementById('lastPing');
         
         if (!pingStatus) return; // Guard clause
@@ -584,23 +588,130 @@ document.addEventListener('DOMContentLoaded', () => {
             if (avgLatency) {
                 avgLatency.textContent = pingData.avg_latency ? `${pingData.avg_latency.toFixed(1)} ms` : '-';
             }
-            if (packetLoss) {
-                packetLoss.textContent = `${pingData.packet_loss || 0}%`;
-                
-                // Update packet loss color
-                const lossPercent = pingData.packet_loss || 0;
-                if (lossPercent === 0) {
-                    packetLoss.className = 'text-lg font-bold text-green-400';
-                } else if (lossPercent < 10) {
-                    packetLoss.className = 'text-lg font-bold text-yellow-400';
-                } else {
-                    packetLoss.className = 'text-lg font-bold text-red-400';
-                }
+            
+            // Load uptime data when ping status updates
+            if (currentDeviceId && uptime24h) {
+                loadUptimeData(currentDeviceId);
             }
+            
             if (lastPing) {
                 lastPing.textContent = new Date(pingData.timestamp).toLocaleTimeString('sk-SK');
             }
         });
+    };
+    
+    // Load uptime data for current device
+    const loadUptimeData = async (deviceId) => {
+        try {
+            const response = await api.get(`monitoring/uptime/${deviceId}`);
+            if (response && response.uptime_periods) {
+                updateUptimeDisplay(response.uptime_periods);
+            }
+        } catch (error) {
+            debugLog('api', 'Error loading uptime data:', error);
+            // Set uptime to 0% on error
+            const uptime24h = document.getElementById('uptime24h');
+            if (uptime24h) {
+                uptime24h.textContent = '0.00%';
+                uptime24h.className = 'text-lg font-bold text-red-400';
+            }
+        }
+    };
+    
+    // Update uptime display with color coding like Uptime Kuma
+    const updateUptimeDisplay = (uptimePeriods) => {
+        const uptime24h = document.getElementById('uptime24h');
+        if (!uptime24h || !uptimePeriods['24h']) return;
+        
+        const uptime = uptimePeriods['24h'];
+        uptime24h.textContent = `${uptime.toFixed(2)}%`;
+        
+        // Color coding based on uptime percentage (Uptime Kuma style)
+        if (uptime >= 95) {
+            uptime24h.className = 'text-lg font-bold text-green-400';
+        } else if (uptime >= 80) {
+            uptime24h.className = 'text-lg font-bold text-yellow-400';
+        } else {
+            uptime24h.className = 'text-lg font-bold text-red-400';
+        }
+    };
+
+    // Nové: výpočet uptime percenta pre ľubovoľný rozsah podľa ping histórie
+    // Výpočet uptime na základe trvania (durations), nie len počtu záznamov
+    // Predpoklad: záznamy v lastPingHistory sú chronologicky (ak nie, zoradíme)
+    const computeUptimeForRange = (rangeKey) => {
+        if (!Array.isArray(lastPingHistory) || lastPingHistory.length === 0) return null;
+        const nowTs = Date.now();
+        const rangeMs = getTimeRangeMs(rangeKey === '30m' ? 'recent' : rangeKey);
+        const fromTs = nowTs - rangeMs;
+
+        // Zoberieme aj jeden záznam tesne pred fromTs kvôli kontinuite stavu
+        // (ak zariadenie bolo online tesne pred oknom a prvý bod vo vnútri je neskôr)
+        let history = lastPingHistory.filter(p => {
+            const t = new Date(p.timestamp).getTime();
+            return !isNaN(t) && (t >= fromTs - (5 * 60 * 1000)) && t <= nowTs; // malá tolerancia 5 min pred oknom
+        });
+        if (history.length === 0) return null;
+        // Usporiadať (pre istotu)
+        history.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp));
+
+        // Nájsť prvý referenčný záznam (ak prvý je ešte pred oknom, posunúť jeho timestamp na fromTs)
+        if (new Date(history[0].timestamp).getTime() < fromTs) {
+            // klon s posunutým timestampom
+            history[0] = { ...history[0], timestamp: new Date(fromTs).toISOString() };
+        } else if (new Date(history[0].timestamp).getTime() > fromTs) {
+            // Ak prvý bod je neskôr ako fromTs a nemáme žiadny predtým, vložíme syntetický bod s rovnakým stavom ako prvý (konzervatívne)
+            const first = history[0];
+            history.unshift({ timestamp: new Date(fromTs).toISOString(), status: first.status, avg_latency: first.avg_latency });
+        }
+
+        let onlineDuration = 0;
+        for (let i=0;i<history.length-1;i++) {
+            const cur = history[i];
+            const next = history[i+1];
+            const curTs = new Date(cur.timestamp).getTime();
+            const nextTs = new Date(next.timestamp).getTime();
+            if (isNaN(curTs) || isNaN(nextTs) || nextTs <= curTs) continue;
+            const segment = nextTs - curTs;
+            if (cur.status === 'online') onlineDuration += segment;
+        }
+        // Posledný segment až po nowTs
+        const last = history[history.length-1];
+        const lastTs = new Date(last.timestamp).getTime();
+        if (!isNaN(lastTs) && lastTs < nowTs) {
+            if (last.status === 'online') onlineDuration += (nowTs - lastTs);
+        }
+
+        const totalDuration = rangeMs;
+        if (totalDuration <= 0) return null;
+        const percent = (onlineDuration / totalDuration) * 100;
+        return Math.min(100, Math.max(0, percent));
+    };
+
+    const updateDynamicUptime = () => {
+        const uptimeEl = document.getElementById('uptime24h');
+        const labelEl = document.getElementById('uptimeLabel');
+        if (!uptimeEl || !labelEl) return;
+    // Ak čakáme na plný dataset po rýchlom (optimized) načítaní, nerefreshuj (zabránime blikaniu)
+    if (pendingFullPingHistory) return;
+        const range = currentTimeRange;
+        // Pre label
+        labelEl.textContent = `Uptime (${range})`;
+        const val = computeUptimeForRange(range);
+        if (val === null) {
+            uptimeEl.textContent = '-';
+            uptimeEl.className = 'text-lg font-bold text-gray-400';
+            return;
+        }
+        uptimeEl.textContent = `${val.toFixed(2)}%`;
+        // Farby podľa rovnakých prahov
+        if (val >= 95) {
+            uptimeEl.className = 'text-lg font-bold text-green-400';
+        } else if (val >= 80) {
+            uptimeEl.className = 'text-lg font-bold text-yellow-400';
+        } else {
+            uptimeEl.className = 'text-lg font-bold text-red-400';
+        }
     };
     
     // Get time format configuration based on time range
@@ -812,29 +923,32 @@ document.addEventListener('DOMContentLoaded', () => {
         // Ping latency optimization - focus on actual latency range
         const optimizePingYAxis = (min, max, range) => {
             if (range === 0) {
-                // Single value - create small range around it
-                const padding = Math.max(min * 0.1, 0.1); // 10% padding or at least 0.1ms
+                // Single value - create small range around it with minimal bottom padding
+                const topPadding = Math.max(min * 0.25, 0.3); // 25% padding or at least 0.3ms on top
+                const bottomPadding = Math.max(min * 0.02, 0.02); // 2% padding or at least 0.02ms on bottom
                 return {
-                    suggestedMin: Math.max(0, min - padding),
-                    suggestedMax: max + padding
+                    suggestedMin: Math.max(0, min - bottomPadding),
+                    suggestedMax: max + topPadding
                 };
             }
 
-            // For ping, we want to show the data centered with some breathing room
-            // but avoid showing too much empty space at bottom
-            let padding = range * 0.2; // 20% padding on each side
-            let suggestedMin = Math.max(0, min - padding);
-            let suggestedMax = max + padding;
+            // For ping, we want to push the data much lower in the chart
+            // Minimal padding on bottom, much more padding on top
+            let topPadding = range * 0.5; // 50% padding on top (increased from 35%)
+            let bottomPadding = range * 0.05; // 5% padding on bottom (decreased from 10%)
+            let suggestedMin = Math.max(0, min - bottomPadding);
+            let suggestedMax = max + topPadding;
 
             // Don't start too close to zero if all pings are much higher
             // This prevents the chart from being squashed at the top
             if (min > 1 && range > 0.5) {
                 // If lowest ping is above 1ms and there's reasonable variation
-                suggestedMin = Math.max(0, min - range * 0.4);
+                suggestedMin = Math.max(0, min - range * 0.08); // Even less bottom padding
+                suggestedMax = max + range * 0.6; // Even more top padding
             } else if (min > 0.5 && range < 0.3) {
-                // Stable but higher latency - center better
-                suggestedMin = Math.max(0, min - 0.3);
-                suggestedMax = max + 0.3;
+                // Stable but higher latency - push much lower with very asymmetric padding
+                suggestedMin = Math.max(0, min - 0.05); // Very minimal bottom padding
+                suggestedMax = max + 0.8; // Much more top padding
             }
 
             return {
@@ -1019,7 +1133,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const chartOptions = getChartOptions();
         
-        // Ping Chart
+        // Ping Chart - Uptime Kuma style with dynamic segments
         charts.ping = new Chart(document.getElementById('pingChart'), {
             type: 'line',
             data: {
@@ -1029,10 +1143,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     tension: 0.1,
-                    fill: true,
+                    fill: false,
                     pointRadius: 0,
-                    pointHoverRadius: 0,  // Completely disable hover points
-                    borderWidth: 2
+                    pointHoverRadius: 0,
+                    borderWidth: 2,
+                    spanGaps: false,
+                    order: 1
                 }]
             },
             options: {
@@ -1046,6 +1162,43 @@ document.addEventListener('DOMContentLoaded', () => {
                             display: true,
                             text: 'Latencia (ms)',
                             color: '#d1d5db'
+                        }
+                    }
+                },
+                plugins: {
+                    ...chartOptions.plugins,
+                    legend: {
+                        ...chartOptions.plugins?.legend,
+                        labels: {
+                            ...chartOptions.plugins?.legend?.labels,
+                            color: '#d1d5db', // Light gray text like other charts
+                            generateLabels: function(chart) {
+                                // Generate only two fixed legend items: Online and Offline
+                                return [
+                                    {
+                                        text: 'Online',
+                                        fillStyle: 'rgba(16, 185, 129, 0.1)', // Light transparent fill like other charts
+                                        strokeStyle: '#10b981',
+                                        lineWidth: 2,
+                                        hidden: false,
+                                        index: 0,
+                                        fontColor: '#d1d5db' // Light gray text
+                                    },
+                                    {
+                                        text: 'Offline',
+                                        fillStyle: 'rgba(239, 68, 68, 0.1)', // Light transparent fill like other charts
+                                        strokeStyle: 'rgba(239, 68, 68, 0.6)',
+                                        lineWidth: 2,
+                                        hidden: false,
+                                        index: 1,
+                                        fontColor: '#d1d5db' // Light gray text
+                                    }
+                                ];
+                            }
+                        },
+                        onClick: function(e, legendItem) {
+                            // Disable legend click functionality since we have dynamic datasets
+                            return;
                         }
                     }
                 }
@@ -1283,7 +1436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, { passive: true });
     };
     
-    // Update ping chart with new data
+    // Update ping chart with new data - Uptime Kuma style with separated status segments
     const updatePingChart = (pingData) => {
         if (typeof addDebugLog === 'function') {
             if (pingData.history && Array.isArray(pingData.history)) {
@@ -1296,66 +1449,356 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!charts.ping) return;
         
         const chart = charts.ping;
+    const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
         
         // Check if this is historical data (array) or real-time data (single point)
         if (pingData.history && Array.isArray(pingData.history)) {
+            // Cache full history for uptime výpočty
+            lastPingHistory = pingData.history.slice();
+            lastPingHistoryTimestamp = Date.now();
             
-            // Prepare data array for batch processing
-            const pingPoints = [];
+            // Create separate datasets for each continuous segment
+            const datasets = [];
+            let onlineSegments = [];
+            let offlineSegments = [];
             
-            // Single pass through data
-            pingData.history.forEach(point => {
-                if (point.avg_latency !== null && point.timestamp) {
-                    pingPoints.push({
-                        x: new Date(point.timestamp),
+            let currentOnlineSegment = [];
+            let currentOfflineSegment = [];
+            let lastStatus = null;
+            
+            // Process data to create separate continuous segments
+            pingData.history.forEach((point, index) => {
+                if (!point.timestamp) return;
+                
+                const timestamp = new Date(point.timestamp);
+                const isOnline = point.status === 'online' && point.avg_latency !== null;
+                
+                if (isOnline) {
+                    // If we were offline, finish the offline segment
+                    if (lastStatus === 'offline' && currentOfflineSegment.length > 0) {
+                        offlineSegments.push([...currentOfflineSegment]);
+                        currentOfflineSegment = [];
+                    }
+                    
+                    // Add to current online segment
+                    currentOnlineSegment.push({
+                        x: timestamp,
                         y: point.avg_latency
                     });
+                } else {
+                    // Device is offline
+                    // If we were online, finish the online segment
+                    if (lastStatus === 'online' && currentOnlineSegment.length > 0) {
+                        onlineSegments.push([...currentOnlineSegment]);
+                        currentOnlineSegment = [];
+                    }
+                    
+                    // Add to current offline segment (we'll calculate height later)
+                    currentOfflineSegment.push({
+                        x: timestamp,
+                        y: null  // Will be calculated based on online data
+                    });
                 }
+                
+                lastStatus = isOnline ? 'online' : 'offline';
             });
+            
+            // Add final segments
+            if (currentOnlineSegment.length > 0) {
+                onlineSegments.push(currentOnlineSegment);
+            }
+            if (currentOfflineSegment.length > 0) {
+                offlineSegments.push(currentOfflineSegment);
+            }
+            
+            // Calculate appropriate offline height range based on online data
+            let maxOnlineLatency = 0;
+            let minOnlineLatency = Infinity;
+            onlineSegments.forEach(segment => {
+                segment.forEach(point => {
+                    if (point.y > maxOnlineLatency) {
+                        maxOnlineLatency = point.y;
+                    }
+                    if (point.y < minOnlineLatency) {
+                        minOnlineLatency = point.y;
+                    }
+                });
+            });
+            
+            // If no online data, use reasonable defaults
+            if (maxOnlineLatency === 0) {
+                maxOnlineLatency = 50; // Default 50ms
+                minOnlineLatency = 1;  // Default 1ms
+            }
+            if (minOnlineLatency === Infinity) {
+                minOnlineLatency = Math.max(1, maxOnlineLatency * 0.1); // 10% of max or 1ms minimum
+            }
+            
+            // Update offline segments with calculated range (from min to max)
+            offlineSegments.forEach(segment => {
+                segment.forEach(point => {
+                    // Set Y value to create filled area between min and max
+                    point.y = maxOnlineLatency; // Top of the area
+                });
+            });
+            
+            // Create datasets for online segments
+            onlineSegments.forEach((segment, index) => {
+                datasets.push({
+                    label: index === 0 ? 'Ping Latencia (ms)' : '',
+                    data: segment,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.1,
+                    fill: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    borderWidth: 2,
+                    spanGaps: false,
+                    order: 1
+                });
+            });
+            
+            // Create datasets for offline segments
+            offlineSegments.forEach((segment, index) => {
+                // First create invisible bottom line at minOnlineLatency
+                datasets.push({
+                    label: '',
+                    data: segment.map(point => ({x: point.x, y: minOnlineLatency})),
+                    borderColor: 'transparent',
+                    backgroundColor: 'transparent',
+                    borderWidth: 0,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0,
+                    spanGaps: false,
+                    order: 3
+                });
+                
+                // Then create top line that fills to previous dataset (bottom line)
+                datasets.push({
+                    label: '',  // No label for offline segments
+                    data: segment,
+                    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+                    borderColor: 'rgba(239, 68, 68, 0.6)',
+                    borderWidth: 1,
+                    fill: '-1', // Fill to previous dataset (the invisible bottom line)
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    tension: 0,
+                    spanGaps: false,
+                    order: 2
+                });
+            });
+            
+            // If no data, create empty datasets
+            if (datasets.length === 0) {
+                datasets.push({
+                    label: 'Ping Latencia (ms)',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.1,
+                    fill: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    borderWidth: 2,
+                    spanGaps: false,
+                    order: 1
+                });
+            }
             
             // Batch update using requestAnimationFrame
             requestAnimationFrame(() => {
-                chart.data.datasets[0].data = pingPoints;
+                chart.data.datasets = datasets;
                 
                 // Apply Y-axis optimization for ping chart
                 applyYAxisOptimization(chart, 'ping');
+
+                // Pruning prebytočných bodov mimo aktuálneho krátkeho okna (stabilizácia min/max)
+                if (shortRangeActive) {
+                    const nowTs = Date.now();
+                    const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
+                    chart.data.datasets.forEach(ds => {
+                        ds.data = ds.data.filter(p => p.x && p.x.getTime() >= minAllowed);
+                    });
+                }
+                
+                // If no data (empty chart), apply default ping Y-axis range for better positioning
+                if (datasets.length === 0 || datasets.every(ds => ds.data.length === 0)) {
+                    chart.options.scales.y.suggestedMin = 0;
+                    chart.options.scales.y.suggestedMax = 200; // Even more asymmetric default range 0-200ms (pushes lines much lower)
+                }
                 
                 chart.update('none');
                 
-                // Apply full time range horizon after historical data update
-                if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
-                    // Use setTimeout to apply after chart update
-                    setTimeout(() => {
-                        if (typeof window.applyFullTimeRangeToChart === 'function') {
-                            window.applyFullTimeRangeToChart(chart);
-                        }
-                    }, 50);
+                // Potlač applyFullTimeRangeToAllCharts pre krátke intervaly (batched neskôr)
+                if (!shortRangeActive) {
+                    if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
+                        setTimeout(() => {
+                            if (typeof window.applyFullTimeRangeToChart === 'function') {
+                                window.applyFullTimeRangeToChart(chart);
+                            }
+                        }, 50);
+                    }
                 }
             });
             
         } else {
-            // Real-time single data point - lightweight update
+            // Real-time single data point - add to appropriate segment
             const now = new Date(pingData.timestamp);
+            const isOnline = pingData.status === 'online' && pingData.avg_latency !== null;
+            // Push do cache a orez na posledných ~2000 bodov kvôli pamäti
+            lastPingHistory.push({
+                timestamp: pingData.timestamp,
+                status: pingData.status,
+                avg_latency: pingData.avg_latency
+            });
+            if (lastPingHistory.length > 2000) lastPingHistory.shift();
             
             requestAnimationFrame(() => {
-                // Add new data point
-                if (pingData.avg_latency !== null) {
-                    chart.data.datasets[0].data.push({
+                let datasets = chart.data.datasets;
+                
+                if (datasets.length === 0) {
+                    // Initialize with first dataset
+                    datasets = [{
+                        label: 'Ping Latencia (ms)',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.1,
+                        fill: false,
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        borderWidth: 2,
+                        spanGaps: false,
+                        order: 1
+                    }];
+                }
+                
+                // Find the last dataset of the current type (online/offline)
+                let targetDataset = null;
+                let lastDataset = datasets[datasets.length - 1];
+                
+                if (isOnline) {
+                    // Look for the last online dataset or create new one
+                    if (lastDataset && lastDataset.borderColor === '#10b981') {
+                        targetDataset = lastDataset;
+                    } else {
+                        // Create new online dataset
+                        targetDataset = {
+                            label: '',
+                            data: [],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.1,
+                            fill: false,
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            borderWidth: 2,
+                            spanGaps: false,
+                            order: 1
+                        };
+                        datasets.push(targetDataset);
+                    }
+                    
+                    targetDataset.data.push({
                         x: now,
                         y: pingData.avg_latency
                     });
+                } else {
+                    // Calculate appropriate offline height range based on existing online data
+                    let maxOnlineLatency = 0;
+                    let minOnlineLatency = Infinity;
+                    datasets.forEach(dataset => {
+                        if (dataset.borderColor === '#10b981') {
+                            dataset.data.forEach(point => {
+                                if (point.y > maxOnlineLatency) {
+                                    maxOnlineLatency = point.y;
+                                }
+                                if (point.y < minOnlineLatency) {
+                                    minOnlineLatency = point.y;
+                                }
+                            });
+                        }
+                    });
+                    
+                    // If no online data, use reasonable defaults
+                    if (maxOnlineLatency === 0) {
+                        maxOnlineLatency = 50; // Default 50ms
+                        minOnlineLatency = 1;  // Default 1ms
+                    }
+                    if (minOnlineLatency === Infinity) {
+                        minOnlineLatency = Math.max(1, maxOnlineLatency * 0.1); // 10% of max or 1ms minimum
+                    }
+                    
+                    // Offline height should match the maximum ping value (peak) in current interval
+                    const offlineHeight = maxOnlineLatency;
+                    
+                    // Look for the last offline dataset or create new one
+                    if (lastDataset && lastDataset.backgroundColor === 'rgba(239, 68, 68, 0.3)') {
+                        targetDataset = lastDataset;
+                    } else {
+                        // Create new offline dataset - use origin fill and adjust chart min
+                        targetDataset = {
+                            label: '',
+                            data: [],
+                            backgroundColor: 'rgba(239, 68, 68, 0.3)',
+                            borderColor: 'rgba(239, 68, 68, 0.6)',
+                            borderWidth: 1,
+                            fill: 'origin', // Fill from origin, but we'll adjust chart min to minOnlineLatency
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            tension: 0,
+                            spanGaps: false,
+                            order: 2
+                        };
+                        datasets.push(targetDataset);
+                        
+                        // Adjust chart Y-axis minimum to minOnlineLatency for proper fill display
+                        chart.options.scales.y.suggestedMin = minOnlineLatency;
+                    }
+                    
+                    targetDataset.data.push({
+                        x: now,
+                        y: offlineHeight  // Height matches current ping peak
+                    });
                 }
                 
-                // Keep only reasonable amount of real-time data
-                if (chart.data.datasets[0].data.length > 1000) {
-                    chart.data.datasets[0].data.shift();
+                // Keep only reasonable amount of real-time data per dataset
+                datasets.forEach(dataset => {
+                    if (dataset.data.length > 500) {
+                        dataset.data.shift();
+                    }
+                });
+                
+                chart.data.datasets = datasets;
+                
+                // Apply Y-axis optimization for real-time data
+                applyYAxisOptimization(chart, 'ping');
+
+                if (shortRangeActive) {
+                    const nowTs = Date.now();
+                    const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
+                    chart.data.datasets.forEach(ds => {
+                        ds.data = ds.data.filter(p => p.x && p.x.getTime() >= minAllowed);
+                    });
+                }
+                
+                // If no data (empty chart), apply default ping Y-axis range for better positioning
+                if (datasets.length === 0 || datasets.every(ds => ds.data.length === 0)) {
+                    chart.options.scales.y.suggestedMin = 0;
+                    chart.options.scales.y.suggestedMax = 200; // Even more asymmetric default range 0-200ms (pushes lines much lower)
                 }
                 
                 chart.update('none');
             });
         }
+    // Po každej aktualizácii prepočítať uptime pre aktuálny rozsah (nie ak čakáme na full dataset)
+    updateDynamicUptime();
     };
-    
+
     // Dynamic point size adjustment based on data density and time range
     const adjustPointSizes = (chart, dataLength, timeRange = currentTimeRange) => {
         if (!chart || !chart.data || !chart.data.datasets) return;
@@ -1390,6 +1833,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 addDebugLog(`📊 updateSNMPCharts: real-time SNMP bod`);
             }
         }
+    const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
         
         // Check if this is historical data (array) or real-time data (single point)  
         if (snmpData.history && Array.isArray(snmpData.history)) {
@@ -1468,6 +1912,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update CPU chart
                 if (charts.cpu && cpuData.length > 0) {
                     charts.cpu.data.datasets[0].data = cpuData;
+                    if (shortRangeActive) {
+                        const nowTs = Date.now();
+                        const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
+                        charts.cpu.data.datasets[0].data = charts.cpu.data.datasets[0].data.filter(p => p.x && p.x.getTime() >= minAllowed);
+                    }
                     adjustPointSizes(charts.cpu, cpuData.length, currentTimeRange);
                     applyYAxisOptimization(charts.cpu, 'cpu');
                     charts.cpu.update('none');
@@ -1479,6 +1928,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update temperature chart
                 if (charts.temperature && tempData.length > 0) {
                     charts.temperature.data.datasets[0].data = tempData;
+                    if (shortRangeActive) {
+                        const nowTs = Date.now();
+                        const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
+                        charts.temperature.data.datasets[0].data = charts.temperature.data.datasets[0].data.filter(p => p.x && p.x.getTime() >= minAllowed);
+                    }
                     adjustPointSizes(charts.temperature, tempData.length, currentTimeRange);
                     applyYAxisOptimization(charts.temperature, 'temperature');
                     charts.temperature.update('none');
@@ -1491,6 +1945,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (charts.memory && (usedMemData.length > 0 || totalMemData.length > 0)) {
                     charts.memory.data.datasets[0].data = usedMemData;  // Used Memory (red line)
                     charts.memory.data.datasets[1].data = totalMemData;  // Total Memory (blue line)
+                    if (shortRangeActive) {
+                        const nowTs = Date.now();
+                        const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
+                        charts.memory.data.datasets.forEach(ds => {
+                            ds.data = ds.data.filter(p => p.x && p.x.getTime() >= minAllowed);
+                        });
+                    }
                     
                     // Update lastTotalMemoryValue for real-time forward-fill
                     if (totalMemData.length > 0) {
@@ -1506,12 +1967,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     charts.memory.update('none');
                 }
                 
-                // Apply full time range horizon after historical data update  
-                if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
-                    // Use setTimeout to apply after all charts update
-                    setTimeout(() => {
-                        window.applyFullTimeRangeToAllCharts();
-                    }, 50);
+                if (!shortRangeActive) {
+                    // Apply full time range horizon after historical data update  
+                    if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
+                        // Use setTimeout to apply after all charts update
+                        setTimeout(() => {
+                            window.applyFullTimeRangeToAllCharts();
+                        }, 50);
+                    }
                 }
             });
             
@@ -1667,6 +2130,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper function to get time range in milliseconds (used for animation direction)
     const getTimeRangeMs = (timeRange) => {
         switch (timeRange) {
+            case '30m': // alias k 'recent' pre konzistentnosť (30 minút)
+                return 30 * 60 * 1000;
             case 'recent': return 30 * 60 * 1000; // 30 minutes
             case '3h': return 3 * 60 * 60 * 1000;
             case '6h': return 6 * 60 * 60 * 1000;
@@ -1679,75 +2144,138 @@ document.addEventListener('DOMContentLoaded', () => {
             default: return 24 * 60 * 60 * 1000; // default 24h
         }
     };
+
+    // === Stabilizácia osi X pre krátke intervaly (30m,3h,6h,12h,24h) ===
+    // Problém: po kliknutí na "Obnoviť" občas zmiznú vertikálne mriežky a časové popisky
+    // alebo krátko preblikne staršie časové okno (napr. 17:49 namiesto 18:02) – dôvodom je viacnásobné
+    // rýchle prepisovanie min/max (applyFullTimeRangeToAllCharts, unifyTimeAxis, reset zoom, atď.)
+    // Riešenie: po dokončení načítania historických dát (a po refresh) urobíme jeden konsolidovaný
+    // krok, ktorý nastaví konzistentné min/max pre všetky grafy len raz a až potom vykoná update.
+    const SHORT_RANGES = new Set(['30m','recent','3h','6h','12h','24h']);
+    const stabilizeShortRangeTimeAxis = (range = currentTimeRange) => {
+        if (!SHORT_RANGES.has(range)) return; // iba pre krátke rozsahy
+        if (window._userZoomActive || window._singleChartZoomOut) return; // nerešpektuj pri aktívnom zoome
+        try {
+            const rangeMs = getTimeRangeMs(range);
+            const nowTs = Date.now();
+            const minTs = nowTs - rangeMs;
+            Object.values(charts).forEach(ch => {
+                if (!ch?.options?.scales?.x) return;
+                // Zachovaj typ 'time'
+                ch.options.scales.x.type = 'time';
+                ch.options.scales.x.min = minTs;
+                ch.options.scales.x.max = nowTs;
+                ch.options.scales.x.offset = false;
+                // Pre istotu znovu prirad formáty (môže zaniknúť pri konfliktných updateoch)
+                const tf = getTimeFormats(range);
+                if (ch.options.scales.x.time) {
+                    ch.options.scales.x.time.displayFormats = tf.displayFormats;
+                    ch.options.scales.x.time.tooltipFormat = tf.tooltipFormat;
+                    ch.options.scales.x.time.unit = tf.unit;
+                    ch.options.scales.x.time.stepSize = tf.stepSize;
+                }
+                if (ch.options.scales.x.ticks) {
+                    ch.options.scales.x.ticks.maxTicksLimit = getTimeFormats(range).maxTicksLimit || 8;
+                }
+            });
+            // Batch update v ďalšom frame aby sa aplikovalo len raz
+            requestAnimationFrame(() => {
+                Object.values(charts).forEach(ch => { try { ch.update('none'); } catch(_){} });
+            });
+            if (typeof addDebugLog === 'function') addDebugLog(`🧭 stabilizeShortRangeTimeAxis: konsolidované min/max pre ${range}`);
+        } catch (e) {
+            if (typeof addDebugLog === 'function') addDebugLog(`⚠️ stabilizeShortRangeTimeAxis chyba: ${e.message}`);
+        }
+    };
+
+    // =================== Vypnutie animácií pri zmene časového rozsahu ===================
+    // Prepínač – ak true, všetky vizuálne scale animácie (zoom in/out) pri prepínaní intervalov sa vypnú
+    let disableRangeAnimations = true;
+
+    // Pomocná funkcia – dočasne vypne Chart.js animácie pre ďalšie updaty (nastaví duration=0)
+    const disableChartAnimationsForRangeChange = () => {
+        Object.values(charts).forEach(ch => {
+            if (ch?.options) {
+                if (!ch.options.animation) ch.options.animation = {};
+                ch.options.animation.duration = 0;
+                ch.options.animation.easing = 'linear';
+            }
+        });
+    };
+
+    // Unifikácia časového okna osi X pre všetky grafy – aby mali rovnaké min/max ako ping graf
+    // Voláme iba keď NIE je aktívny užívateľský zoom (aby sme neprebili manuálne nastavenia)
+    const unifyTimeAxis = () => {
+        try {
+            // Pokus o zistenie, či je aktívny zoom – ak v globálnom scope existuje indikátor z monitoring.html
+            if (window._userZoomActive || window._singleChartZoomOut) return; // rešpektuj zoom režim
+            const rangeMs = getTimeRangeMs(currentTimeRange);
+            const now = Date.now();
+            const min = now - rangeMs;
+            Object.values(charts).forEach(ch => {
+                if (!ch || !ch.options || !ch.options.scales || !ch.options.scales.x) return;
+                // Nastav explicitné hranice – Chart.js tým pádom zarovná mriežku pre všetky grafy rovnako
+                ch.options.scales.x.min = min;
+                ch.options.scales.x.max = now;
+                // Pre istotu vypneme offset aby nezaoblil mimo rozsah
+                ch.options.scales.x.offset = false;
+            });
+            // Aktualizácie vykonáme v jednom ďalšom frame kvôli výkonu
+            requestAnimationFrame(() => {
+                Object.values(charts).forEach(ch => { try { ch.update('none'); } catch(_){} });
+            });
+        } catch (e) {
+            console.warn('unifyTimeAxis chyba:', e);
+        }
+    };
     
     // Animate zoom-in effect (shrinking time range)
     const animateZoomIn = (charts) => {
+        if (disableRangeAnimations) return; // no-op
         Object.values(charts).forEach(chart => {
-            if (chart && chart.canvas) {
-                // Add CSS animation class for zoom-in
-                chart.canvas.style.transform = 'scale(1.05)';
-                chart.canvas.style.transition = 'transform 0.3s ease-out';
-                
-                setTimeout(() => {
-                    chart.canvas.style.transform = 'scale(1)';
-                    setTimeout(() => {
-                        chart.canvas.style.transition = '';
-                    }, 300);
-                }, 50);
-            }
+            if (!chart?.canvas) return;
+            chart.canvas.style.transform = 'scale(1.02)';
+            chart.canvas.style.transition = 'transform 0.18s ease-out';
+            requestAnimationFrame(()=>{
+                chart.canvas.style.transform = 'scale(1)';
+                setTimeout(()=>{ chart.canvas.style.transition=''; },180);
+            });
         });
     };
     
     // Animate zoom-out effect (expanding time range)
     const animateZoomOut = (charts) => {
+        if (disableRangeAnimations) return; // no-op
         Object.values(charts).forEach(chart => {
-            if (chart && chart.canvas) {
-                // Add CSS animation class for zoom-out
-                chart.canvas.style.transform = 'scale(0.95)';
-                chart.canvas.style.transition = 'transform 0.3s ease-out';
-                
-                setTimeout(() => {
-                    chart.canvas.style.transform = 'scale(1)';
-                    setTimeout(() => {
-                        chart.canvas.style.transition = '';
-                    }, 300);
-                }, 50);
-            }
+            if (!chart?.canvas) return;
+            chart.canvas.style.transform = 'scale(0.98)';
+            chart.canvas.style.transition = 'transform 0.18s ease-out';
+            requestAnimationFrame(()=>{
+                chart.canvas.style.transform = 'scale(1)';
+                setTimeout(()=>{ chart.canvas.style.transition=''; },180);
+            });
         });
     };
     
     // Apply smooth transition animation based on time range direction
     const applyTimeRangeTransition = async (oldTimeRange, newTimeRange) => {
+        if (disableRangeAnimations) {
+            // Hard, immediate transition (no visual scale flicker)
+            if (typeof resetAllChartsZoom === 'function') resetAllChartsZoom();
+            if (typeof window.applyFullTimeRangeToAllCharts === 'function') window.applyFullTimeRangeToAllCharts();
+            disableChartAnimationsForRangeChange();
+            unifyTimeAxis();
+            stabilizeShortRangeTimeAxis(newTimeRange);
+            Object.values(charts).forEach(ch => { try { ch.update('none'); } catch(_){} });
+            return;
+        }
         const oldMs = getTimeRangeMs(oldTimeRange);
         const newMs = getTimeRangeMs(newTimeRange);
-        
-        
-        // Reset zoom on all charts first
-        if (typeof resetAllChartsZoom === 'function') {
-            resetAllChartsZoom();
-        }
-        
-        // Wait a moment for zoom reset to complete
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        // CRITICAL: Apply correct time formats for the new time range
-        // This ensures that time axes show proper labels for each interval
-        if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
-            window.applyFullTimeRangeToAllCharts();
-        }
-        
-        // Wait a moment for time format update to complete
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        if (newMs < oldMs) {
-            // Zooming in (shorter time range)
-            animateZoomIn(charts);
-        } else if (newMs > oldMs) {
-            // Zooming out (longer time range)
-            animateZoomOut(charts);
-        } else {
-            // Same range, no animation needed
-        }
+        if (typeof resetAllChartsZoom === 'function') resetAllChartsZoom();
+        await new Promise(r=>setTimeout(r,40));
+        if (typeof window.applyFullTimeRangeToAllCharts === 'function') window.applyFullTimeRangeToAllCharts();
+        await new Promise(r=>setTimeout(r,40));
+        if (newMs < oldMs) animateZoomIn(charts); else if (newMs > oldMs) animateZoomOut(charts);
     };
     
     // Get time range from buttons instead of selector
@@ -1802,7 +2330,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof addDebugLog === 'function') {
             addDebugLog(`⏰ setActiveTimeRange: Volám updateChartTimeFormats`);
         }
+
+        // PREVENTÍVNE: pred zmenou formátov skráť (alebo uvoľni) existujúce min/max osi X, aby Chart.js negeneroval tick overflow
+        try {
+            const rangeMs = getTimeRangeMs(timeRange);
+            const nowTs = Date.now();
+            Object.values(charts).forEach(ch => {
+                if (!ch || !ch.options || !ch.options.scales || !ch.options.scales.x) return;
+                // Ak predošlý rozsah bol výrazne väčší (napr. 1y) a teraz ideme na krátky interval (30m, 3h, 6h, 12h, 24h), nastav nové hranice
+                const shortRanges = ['30m','recent','3h','6h','12h','24h'];
+                if (shortRanges.includes(timeRange)) {
+                    ch.options.scales.x.min = nowTs - rangeMs;
+                    ch.options.scales.x.max = nowTs;
+                } else {
+                    // Pri dlhších intervaloch ponecháme unifyTimeAxis po načítaní dát
+                    delete ch.options.scales.x.min;
+                    delete ch.options.scales.x.max;
+                }
+            });
+        } catch(e) {
+            if (typeof addDebugLog === 'function') addDebugLog(`⚠️ Predbežný reset osi X zlyhal: ${e.message}`);
+        }
         updateChartTimeFormats(timeRange);
+    // Prepočet uptime pri zmene intervalu
+    updateDynamicUptime();
+        // Okamžité finálne zarovnanie pri vypnutých animáciách
+        if (disableRangeAnimations) {
+            disableChartAnimationsForRangeChange();
+            unifyTimeAxis();
+            stabilizeShortRangeTimeAxis(timeRange);
+        }
         
         if (typeof addDebugLog === 'function') {
             addDebugLog(`💾 setActiveTimeRange: Volám saveState`);
@@ -1830,25 +2387,42 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update all existing charts with new time formats and point sizes
             Object.values(charts).forEach(chart => {
                 if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
-                chart.options.scales.x.time.displayFormats = timeFormats.displayFormats;
-                chart.options.scales.x.time.tooltipFormat = timeFormats.tooltipFormat;
-                chart.options.scales.x.time.unit = timeFormats.unit;
-                chart.options.scales.x.time.stepSize = timeFormats.stepSize;
-                
-                // Update maxTicksLimit
-                if (chart.options.scales.x.ticks) {
-                    chart.options.scales.x.ticks.maxTicksLimit = timeFormats.maxTicksLimit || 8;
+                    // Ak existujú extrémne staré min/max (prechod z 1y na 30m), normalizuj ešte raz
+                    try {
+                        const expectedRangeMs = getTimeRangeMs(timeRange);
+                        const xScale = chart.options.scales.x;
+                        if (xScale.min !== undefined && xScale.max !== undefined) {
+                            const currentRange = xScale.max - xScale.min;
+                            if (currentRange > expectedRangeMs * 6 && expectedRangeMs < (7 * 24 * 3600 * 1000)) { // príliš široké oproti očakávaniu pre krátke intervaly
+                                const nowTs = Date.now();
+                                xScale.min = nowTs - expectedRangeMs;
+                                xScale.max = nowTs;
+                                if (typeof addDebugLog === 'function') addDebugLog(`🩹 Normalizovaná X os (príliš veľký rozsah → skrátené) pre chart id=${chart.id || 'n/a'}`);
+                            }
+                        }
+                    } catch (rngErr) {
+                        if (typeof addDebugLog === 'function') addDebugLog(`⚠️ Normalizačná kontrola X osi zlyhala: ${rngErr.message}`);
+                    }
+
+                    chart.options.scales.x.time.displayFormats = timeFormats.displayFormats;
+                    chart.options.scales.x.time.tooltipFormat = timeFormats.tooltipFormat;
+                    chart.options.scales.x.time.unit = timeFormats.unit;
+                    chart.options.scales.x.time.stepSize = timeFormats.stepSize;
+                    
+                    // Update maxTicksLimit
+                    if (chart.options.scales.x.ticks) {
+                        chart.options.scales.x.ticks.maxTicksLimit = timeFormats.maxTicksLimit || 8;
+                    }
+                    
+                    // Update point sizes based on new time range
+                    if (chart.data && chart.data.datasets && chart.data.datasets[0] && chart.data.datasets[0].data) {
+                        const dataLength = chart.data.datasets[0].data.length;
+                        adjustPointSizes(chart, dataLength, timeRange);
+                    }
+                    
+                    chart.update('none');
                 }
-                
-                // Update point sizes based on new time range
-                if (chart.data && chart.data.datasets && chart.data.datasets[0] && chart.data.datasets[0].data) {
-                    const dataLength = chart.data.datasets[0].data.length;
-                    adjustPointSizes(chart, dataLength, timeRange);
-                }
-                
-                chart.update('none');
-            }
-        });
+            });
         
         if (typeof addDebugLog === 'function') {
             addDebugLog(`✅ updateChartTimeFormats: Dokončené pre ${timeRange}`);
@@ -1860,6 +2434,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 addDebugLog(`❌ updateChartTimeFormats chyba: ${error.message}`);
             }
             console.error('Error in updateChartTimeFormats:', error);
+
+            // Fallback: ak problém s "too far apart" – odstráň min/max a skús ešte raz raz
+            if (/too far apart/i.test(error.message)) {
+                try {
+                    Object.values(charts).forEach(chart => {
+                        if (chart?.options?.scales?.x) {
+                            delete chart.options.scales.x.min;
+                            delete chart.options.scales.x.max;
+                        }
+                    });
+                    if (typeof addDebugLog === 'function') addDebugLog('🔁 Fallback: odstránené min/max, opätovný pokus o update formátov');
+                    // Zabrániť nekonečnej slučke – označíme príznakom
+                    if (!window._retryingTimeFormat) {
+                        window._retryingTimeFormat = true;
+                        updateChartTimeFormats(timeRange);
+                    } else {
+                        if (typeof addDebugLog === 'function') addDebugLog('⏹️ Fallback ukončený – druhý pokus neúspešný');
+                        window._retryingTimeFormat = false;
+                    }
+                } catch (fbErr) {
+                    if (typeof addDebugLog === 'function') addDebugLog(`💥 Fallback zlyhal: ${fbErr.message}`);
+                }
+            } else {
+                window._retryingTimeFormat = false; // reset zabezpečenia
+            }
         }
     };
     
@@ -1932,9 +2531,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // Load historical data with animation
-    const loadHistoricalData = async (deviceId, showLoadingAnimation = true) => {
+    const loadHistoricalData = async (deviceId, showLoadingAnimation = true, isRefreshOperation = false) => {
         if (typeof addDebugLog === 'function') {
-            addDebugLog(`🚀 loadHistoricalData zavolané pre device: ${deviceId}, showLoadingAnimation: ${showLoadingAnimation}`);
+            addDebugLog(`🚀 loadHistoricalData zavolané pre device: ${deviceId}, showLoadingAnimation: ${showLoadingAnimation}, isRefresh: ${isRefreshOperation}`);
         }
         
         if (isLoadingData) {
@@ -1953,12 +2552,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 addDebugLog(`📅 Aktuálny časový rozsah: ${timeRange}`);
             }
             
+            // Pre refresh operácie vždy použijeme plný rozsah - žiadna optimalizácia
             // Pre prvé načítanie použijeme kratší rozsah pre rýchlejšie načítanie
             // VÝNIMKA: ak je aktívny zoom-out alebo single chart expansion, načítaj všetky dáta
             let optimizedRange = timeRange;
             
             // Pre single chart zoom-out VŽDY použijeme plný rozsah - bez akejkoľvek optimalizácie
-            if (window._singleChartZoomOut || window._isZoomOutExpansion) {
+            if (window._singleChartZoomOut || window._isZoomOutExpansion || isRefreshOperation) {
                 optimizedRange = timeRange;
             } else if ((timeRange === '24h' || timeRange === '7d' || timeRange === '30d')) {
                 // Pri prvom načítaní použijeme Recent (1 hodina) pre rýchlejší start
@@ -2016,6 +2616,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         addDebugLog(`🏓 Spracovávam ping dáta: ${data.ping_data.length} bodov`);
                     }
                     updatePingChart({ device_id: deviceId, history: data.ping_data });
+                    // Ak sme načítali len optimized (skrátený) rozsah a ešte príde full background, označ ako pending
+                    pendingFullPingHistory = (optimizedRange !== timeRange);
                 } else {
                     if (typeof addDebugLog === 'function') {
                         addDebugLog(`❌ Žiadne ping dáta - čistím graf`);
@@ -2053,8 +2655,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // await updateAvailabilityChart(deviceId);
                 
                 // Ak sme používali optimized range, načítaj postupne plné dáta na pozadí
-                // VÝNIMKA: Nerobí background loading počas single chart zoom-out alebo zoom-out expansion
-                if (optimizedRange !== timeRange && !window._singleChartZoomOut && !window._isZoomOutExpansion) {
+                // VÝNIMKA: Nerobí background loading počas single chart zoom-out, zoom-out expansion alebo refresh operácií
+                if (optimizedRange !== timeRange && !window._singleChartZoomOut && !window._isZoomOutExpansion && !isRefreshOperation) {
                     setTimeout(async () => {
                         try {
                             // Map frontend range names to backend range names
@@ -2071,6 +2673,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                     if (fullData.snmp_data && fullData.snmp_data.length > 0) {
                                         updateSNMPCharts({ history: fullData.snmp_data });
                                     }
+                                    // Teraz už máme plný dataset
+                                    pendingFullPingHistory = false;
+                                    updateDynamicUptime();
                                     
                                     // Apply full time range horizon after background loading
                                     if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
@@ -2097,6 +2702,19 @@ document.addEventListener('DOMContentLoaded', () => {
             // Apply initial Y-axis optimization after all data is loaded
             setTimeout(() => {
                 optimizeAllChartsYAxes();
+                
+                // For refresh operations, use simplified approach like long intervals (7d+)
+                if (isRefreshOperation) {
+                    // Simple update for refresh - no complex stabilization
+                    updateDynamicUptime();
+                } else {
+                    // Po optimalizácii Y osí ešte zjednotíme časové okno – vyrieši rozdiely medzi SNMP a Ping
+                    unifyTimeAxis();
+                    // Dodatočná stabilizácia pre krátke rozsahy (rieši miznúce tick-y a skákanie)
+                    stabilizeShortRangeTimeAxis(timeRange);
+                    // Aktualizovať dynamický uptime po komplet načítaní
+                    updateDynamicUptime();
+                }
             }, 200);
             
             
@@ -2255,8 +2873,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 showDeviceInfo();
                 await Promise.all([
                     loadHistoricalData(currentDeviceId),
-                    getCurrentPingStatus(currentDeviceId)
+                    getCurrentPingStatus(currentDeviceId),
+                    loadUptimeData(currentDeviceId)  // Load uptime data
                 ]);
+                // Po prvom načítaní hneď stabilizuj ak je krátky interval
+                stabilizeShortRangeTimeAxis(currentTimeRange);
                 showCharts();
                 initializePingUpdates();
                 
@@ -2501,6 +3122,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (typeof addDebugLog === 'function') {
                             addDebugLog(`✅ Historické dáta úspešne načítané pre ${newTimeRange}`);
                         }
+                        // Stabilizácia po zmene časového rozsahu (najmä pri prechode z dlhého na krátky)
+                        stabilizeShortRangeTimeAxis(newTimeRange);
                     } catch (error) {
                         if (typeof addDebugLog === 'function') {
                             addDebugLog(`❌ Chyba pri načítaní historických dát: ${error.message}`);
@@ -2526,25 +3149,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 cleanupAllSelections();
             }
             
-            // Reset zoom on all charts before refresh (same as time range buttons)
-            if (typeof resetAllChartsZoom === 'function') {
-                resetAllChartsZoom();
-                
-                // Wait longer for zoom reset to complete and charts to update
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+            // Simplified refresh approach - use same logic as long intervals (7d+)
+            // No complex zoom reset or stabilization for short ranges
             
-            // Tichá aktualizácia dát na pozadí - tlačidlo zostane normálne
+            // Simple data reload without zoom manipulation
             await Promise.all([
-                loadHistoricalData(currentDeviceId),
+                loadHistoricalData(currentDeviceId, true, true), // isRefreshOperation = true
                 getCurrentPingStatus(currentDeviceId)  // Len číta stav z databázy, nespúšťa nový ping
             ]);
             
-            // Force final chart update after data load
+            // Simple chart update without additional stabilization
             setTimeout(() => {
                 Object.values(charts).forEach(chart => {
                     if (chart) {
-                        chart.update();
+                        chart.update('none'); // Use 'none' to prevent animation conflicts
                     }
                 });
             }, 50);
@@ -2590,10 +3208,35 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSettingsModal.addEventListener('click', closeModal);
     cancelSettings.addEventListener('click', closeModal);
     
-    deviceSettingsModal.addEventListener('click', (e) => {
-        if (e.target === deviceSettingsModal) {
-            closeModal();
+    // Track mouse events to distinguish between clicks and text selection
+    let isTextSelection = false;
+    let mouseDownTarget = null;
+    
+    deviceSettingsModal.addEventListener('mousedown', (e) => {
+        mouseDownTarget = e.target;
+        isTextSelection = false;
+    });
+    
+    deviceSettingsModal.addEventListener('mousemove', (e) => {
+        // If mouse moves during mousedown, it's likely text selection
+        if (mouseDownTarget && (e.buttons === 1)) {
+            isTextSelection = true;
         }
+    });
+    
+    deviceSettingsModal.addEventListener('mouseup', (e) => {
+        // Reset tracking variables
+        mouseDownTarget = null;
+        // Don't reset isTextSelection immediately, wait for potential click event
+    });
+    
+    // Removed automatic modal closing on backdrop click
+    // Modal can only be closed using X button or Cancel button
+    deviceSettingsModal.addEventListener('click', (e) => {
+        // Reset text selection flag after any click
+        setTimeout(() => {
+            isTextSelection = false;
+        }, 10);
     });
     
     deviceSettingsForm.addEventListener('submit', async (e) => {

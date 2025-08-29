@@ -3072,9 +3072,6 @@ function debugLog(debugType, message, ...args) {
         return;
     }
     
-    // Only log to console if explicitly enabled (no automatic console logging)
-    // console.log(`[${debugType.toUpperCase()}]`, message, ...args);
-    
     // If debug panel is enabled, log to panel
     if (debugSettings.debug_chart_frontend_panel === 'true' || debugSettings.debug_master_switch === 'true') {
         addLogToPanel(debugType, message, args);

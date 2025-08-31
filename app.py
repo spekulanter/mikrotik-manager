@@ -3100,28 +3100,90 @@ def get_monitoring_history(device_id):
             # Ping dáta s optimalizáciou pre veľké datasety
             cursor = conn.cursor()
             
-            # Pre dlhé časové rozsahy použijeme rowid sampling pre lepšiu výkonnosť
+            # Pokročilý sampling pre extrémne veľké datasety (až 365 dní s 1s intervalmi)
+            # PROBLÉM: rowid % sampling je neefektívny pre milióny záznamov
+            # RIEŠENIE: časovo-based sampling + inteligentná hustota pre rôzne časti rozsahu
+            
+            # Najprv zistíme celkový počet záznamov v rozsahu
+            cursor.execute('''
+                SELECT COUNT(*) FROM ping_history 
+                WHERE device_id = ? AND timestamp >= ?
+            ''', (device_id, start_time.isoformat()))
+            total_count = cursor.fetchone()[0] or 0
+            
             if time_range in ['30d', '90d', '1y']:
-                # Pre dlhé obdobia - zoberieme vzorky pre zníženie objemu dát
-                sample_interval_mapping = {'30d': 10, '90d': 50, '1y': 100}
-                sample_interval = sample_interval_mapping[time_range]
+                # Pre najdlhšie rozsahy: časovo-based sampling pre masívne datasety
+                target_points = {'30d': 6000, '90d': 8000, '1y': 12000}[time_range]
                 
-                cursor.execute('''
-                    SELECT timestamp, avg_latency, packet_loss, status
-                    FROM ping_history 
-                    WHERE device_id = ? AND timestamp >= ? 
-                    AND (rowid % ? = 0 OR timestamp >= datetime('now', '-24 hours'))
-                    ORDER BY timestamp ASC
-                    LIMIT 3000
-                ''', (device_id, start_time.isoformat(), sample_interval))
+                if total_count <= target_points:
+                    # Ak je málo dát, zoberie všetko
+                    cursor.execute('''
+                        SELECT timestamp, avg_latency, packet_loss, status
+                        FROM ping_history
+                        WHERE device_id = ? AND timestamp >= ?
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat()))
+                elif total_count > 100000:  # Pre masívne datasety (>100k záznamov)
+                    # Časovo-based sampling: rozdel rozsah na segmenty a zoberie vzorky z každého
+                    days_in_range = {'30d': 30, '90d': 90, '1y': 365}[time_range]
+                    samples_per_day = target_points // days_in_range
+                    
+                    # Stratifikovaný sampling - vzorky z každého dňa
+                    cursor.execute('''
+                        WITH daily_samples AS (
+                            SELECT timestamp, avg_latency, packet_loss, status,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY DATE(timestamp) 
+                                       ORDER BY timestamp
+                                   ) as rn,
+                                   COUNT(*) OVER (PARTITION BY DATE(timestamp)) as daily_count
+                            FROM ping_history
+                            WHERE device_id = ? AND timestamp >= ?
+                        )
+                        SELECT timestamp, avg_latency, packet_loss, status
+                        FROM daily_samples
+                        WHERE rn % MAX(1, daily_count / ?) = 0
+                           OR timestamp >= datetime('now', '-24 hours')
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat(), samples_per_day))
+                else:
+                    # Stredne veľké datasety: adaptívny rowid sampling
+                    dynamic_interval = max(1, total_count // target_points)
+                    cursor.execute('''
+                        SELECT timestamp, avg_latency, packet_loss, status
+                        FROM ping_history
+                        WHERE device_id = ? AND timestamp >= ? 
+                          AND (rowid % ? = 0 OR timestamp >= datetime('now', '-24 hours'))
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat(), dynamic_interval))
+            elif time_range in ['24h', '7d']:
+                # Pre stredné rozsahy: optimalizované limity
+                target_points = {'24h': 4000, '7d': 6000}[time_range]
+                
+                if total_count <= target_points:
+                    cursor.execute('''
+                        SELECT timestamp, avg_latency, packet_loss, status
+                        FROM ping_history
+                        WHERE device_id = ? AND timestamp >= ?
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat()))
+                else:
+                    dynamic_interval = max(1, total_count // target_points)
+                    cursor.execute('''
+                        SELECT timestamp, avg_latency, packet_loss, status
+                        FROM ping_history
+                        WHERE device_id = ? AND timestamp >= ? 
+                          AND (rowid % ? = 0 OR timestamp >= datetime('now', '-2 hours'))
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat(), dynamic_interval))
             else:
-                # Pre kratšie obdobia - všetky dáta
+                # Pre kratšie rozsahy: všetky dáta (ale s limitom pre bezpečnosť)
                 cursor.execute('''
                     SELECT timestamp, avg_latency, packet_loss, status
-                    FROM ping_history 
+                    FROM ping_history
                     WHERE device_id = ? AND timestamp >= ?
                     ORDER BY timestamp ASC
-                    LIMIT 2000
+                    LIMIT 50000
                 ''', (device_id, start_time.isoformat()))
             
             ping_rows = cursor.fetchall()
@@ -3134,28 +3196,79 @@ def get_monitoring_history(device_id):
                     'status': row[3]
                 })
             
-            # SNMP dáta s rovnakou optimalizáciou ako ping dáta
+            # SNMP dáta s rovnakou pokročilou logikou
+            cursor.execute('''
+                SELECT COUNT(*) FROM snmp_history 
+                WHERE device_id = ? AND timestamp >= ?
+            ''', (device_id, start_time.isoformat()))
+            total_snmp_count = cursor.fetchone()[0] or 0
+            
             if time_range in ['30d', '90d', '1y']:
-                # Pre dlhé obdobia - zoberieme vzorky pre zníženie objemu dát
-                sample_interval_mapping = {'30d': 10, '90d': 50, '1y': 100}
-                sample_interval = sample_interval_mapping[time_range]
+                target_points = {'30d': 6000, '90d': 8000, '1y': 12000}[time_range]
                 
-                cursor.execute('''
-                    SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory
-                    FROM snmp_history 
-                    WHERE device_id = ? AND timestamp >= ? 
-                    AND (rowid % ? = 0 OR timestamp >= datetime('now', '-24 hours'))
-                    ORDER BY timestamp ASC
-                    LIMIT 3000
-                ''', (device_id, start_time.isoformat(), sample_interval))
+                if total_snmp_count <= target_points:
+                    cursor.execute('''
+                        SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory
+                        FROM snmp_history
+                        WHERE device_id = ? AND timestamp >= ?
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat()))
+                elif total_snmp_count > 100000:  # Masívne SNMP datasety
+                    days_in_range = {'30d': 30, '90d': 90, '1y': 365}[time_range]
+                    samples_per_day = target_points // days_in_range
+                    
+                    cursor.execute('''
+                        WITH daily_samples AS (
+                            SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY DATE(timestamp) 
+                                       ORDER BY timestamp
+                                   ) as rn,
+                                   COUNT(*) OVER (PARTITION BY DATE(timestamp)) as daily_count
+                            FROM snmp_history
+                            WHERE device_id = ? AND timestamp >= ?
+                        )
+                        SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory
+                        FROM daily_samples
+                        WHERE rn % MAX(1, daily_count / ?) = 0
+                           OR timestamp >= datetime('now', '-24 hours')
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat(), samples_per_day))
+                else:
+                    dynamic_interval = max(1, total_snmp_count // target_points)
+                    cursor.execute('''
+                        SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory
+                        FROM snmp_history
+                        WHERE device_id = ? AND timestamp >= ? 
+                          AND (rowid % ? = 0 OR timestamp >= datetime('now', '-24 hours'))
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat(), dynamic_interval))
+            elif time_range in ['24h', '7d']:
+                target_points = {'24h': 4000, '7d': 6000}[time_range]
+                
+                if total_snmp_count <= target_points:
+                    cursor.execute('''
+                        SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory
+                        FROM snmp_history
+                        WHERE device_id = ? AND timestamp >= ?
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat()))
+                else:
+                    dynamic_interval = max(1, total_snmp_count // target_points)
+                    cursor.execute('''
+                        SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory
+                        FROM snmp_history
+                        WHERE device_id = ? AND timestamp >= ? 
+                          AND (rowid % ? = 0 OR timestamp >= datetime('now', '-2 hours'))
+                        ORDER BY timestamp ASC
+                    ''', (device_id, start_time.isoformat(), dynamic_interval))
             else:
-                # Pre kratšie obdobia - všetky dáta
                 cursor.execute('''
                     SELECT timestamp, cpu_load, temperature, memory_usage, uptime, total_memory, free_memory
-                    FROM snmp_history 
+                    FROM snmp_history
                     WHERE device_id = ? AND timestamp >= ?
                     ORDER BY timestamp ASC
-                    LIMIT 2000
+                    LIMIT 50000
                 ''', (device_id, start_time.isoformat()))
             
             snmp_rows = cursor.fetchall()
@@ -3205,7 +3318,7 @@ def get_monitoring_history(device_id):
             'end_time': now.isoformat(),
             'ping_records': len(ping_data),
             'snmp_records': len(snmp_data),
-            'optimized': time_range in ['30d', '90d', '1y']  # označuje či sa používa časový sampling
+            'optimized': time_range in ['24h', '7d', '30d', '90d', '1y']  # označuje či sa používa časový sampling
         })
             
     except sqlite3.Error as e:

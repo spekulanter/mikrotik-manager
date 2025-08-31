@@ -1638,6 +1638,23 @@
             }
         });
 
+        // Funkcia na konverziu časového rozsahu na lokalizovaný label
+        function getTimeRangeLabel(timeRange) {
+            const timeRangeLabels = {
+                'recent': 'Posledná hodina',
+                '30m': 'Posledných 30 minút',
+                '3h': 'Posledné 3 hodiny',
+                '6h': 'Posledných 6 hodín',
+                '12h': 'Posledných 12 hodín', 
+                '24h': 'Posledných 24 hodín',
+                '7d': 'Posledných 7 dní',
+                '30d': 'Posledných 30 dní',
+                '90d': 'Posledných 90 dní',
+                '1y': 'Posledný rok'
+            };
+            return timeRangeLabels[timeRange] || 'Posledných 24 hodín';
+        }
+
         // Custom zoom functionality without plugin
         let currentChart = null;
 
@@ -2303,10 +2320,10 @@
                     subtitle.color = '#10b981'; // Green color for optimized view
                 } else if (!isShortRange && dataDays < requestedDays) {
                     // For long ranges, show horizon message
-                    subtitle.text = `Zobrazený ${currentTimeRange} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
+                    subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
                     subtitle.color = '#fbbf24';
                 } else {
-                    subtitle.text = `Zobrazené všetky dostupné dáta za ${currentTimeRange}`;
+                    subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
                     subtitle.color = '#9ca3af';
                 }
             }
@@ -2460,10 +2477,10 @@
                             subtitle.color = '#10b981'; // Green color for optimized view
                         } else if (!isShortRange && dataDays < requestedDays) {
                             // For long ranges, show horizon message
-                            subtitle.text = `Zobrazený ${currentTimeRange} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
+                            subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
                             subtitle.color = '#fbbf24';
                         } else {
-                            subtitle.text = `Zobrazené všetky dostupné dáta za ${currentTimeRange}`;
+                            subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
                             subtitle.color = '#9ca3af';
                         }
                     } else if (subtitle) {
@@ -2503,13 +2520,23 @@
         function applyFullTimeRangeToChart(chart) {
             if (!chart) return;
             
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`🔧 applyFullTimeRangeToChart: začiatok pre chart ${chart.canvas?.id || 'unknown'}`);
+            }
+            
             // Skip if this chart is currently in single zoom-out mode
             if (window._singleChartZoomOut && chart.canvas && chart.canvas.id === window._singleChartZoomOut) {
+                if (typeof addDebugLog === 'function') {
+                    addDebugLog(`🔧 applyFullTimeRangeToChart: preskakujem - single zoom-out mode`);
+                }
                 return;
             }
             
             // Skip if this chart is permanently expanded
             if (window._expandedCharts && chart.canvas && window._expandedCharts.has(chart.canvas.id)) {
+                if (typeof addDebugLog === 'function') {
+                    addDebugLog(`🔧 applyFullTimeRangeToChart: preskakujem - permanently expanded`);
+                }
                 return;
             }
             
@@ -2532,6 +2559,10 @@
                         });
                     }
                 });
+            }
+            
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`🔧 applyFullTimeRangeToChart: currentTimeRange=${currentTimeRange}, dataMin=${dataMin}, dataMax=${dataMax}, datasets=${chart.data?.datasets?.length || 0}`);
             }
             
             // For shorter time ranges, optimize the display to reduce left-side gaps
@@ -2570,11 +2601,22 @@
             // Update subtitle to show data coverage within the displayed range
             const subtitle = chart.options.plugins.subtitle;
             if (subtitle && dataMin !== null && dataMax !== null) {
-                const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
+                const dataDuration = dataMax - dataMin;
+                const dataDays = Math.ceil(dataDuration / (1000 * 60 * 60 * 24));
                 const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
                 const actualRangeDays = Math.ceil((requestedMax - requestedMin) / (1000 * 60 * 60 * 24));
                 
-                if (isShortRange && dataDays < requestedDays) {
+                // Ak máme veľmi málo dát (menej ako 5 minút), považujme to za "žiadne užitočné dáta"
+                const minUsefulDuration = 5 * 60 * 1000; // 5 minút
+                
+                if (dataDuration < minUsefulDuration) {
+                    // Veľmi málo dát - použijeme štandardnú správu
+                    subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
+                    subtitle.color = '#9ca3af';
+                    if (typeof addDebugLog === 'function') {
+                        addDebugLog(`🔧 applyFullTimeRangeToChart: nastavujem ŠTANDARDNÚ SPRÁVU (minimálne dáta: ${Math.ceil(dataDuration / 60000)}min)`);
+                    }
+                } else if (isShortRange && dataDays < requestedDays) {
                     // For short ranges with limited data, show optimized view message
                     if (dataDays < 1) {
                         const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
@@ -2583,17 +2625,30 @@
                         subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
                     }
                     subtitle.color = '#10b981'; // Green color for optimized view
+                    if (typeof addDebugLog === 'function') {
+                        addDebugLog(`🔧 applyFullTimeRangeToChart: nastavujem OPTIMALIZOVANÉ zobrazenie`);
+                    }
                 } else if (!isShortRange && dataDays < requestedDays) {
                     // For long ranges, show horizon message
-                    subtitle.text = `Zobrazený ${currentTimeRange} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
+                    subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
                     subtitle.color = '#fbbf24';
+                    if (typeof addDebugLog === 'function') {
+                        addDebugLog(`🔧 applyFullTimeRangeToChart: nastavujem HORIZONT s limitovanými dátami`);
+                    }
                 } else {
-                    subtitle.text = `Zobrazené všetky dostupné dáta za ${currentTimeRange}`;
+                    subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
                     subtitle.color = '#9ca3af';
+                    if (typeof addDebugLog === 'function') {
+                        addDebugLog(`🔧 applyFullTimeRangeToChart: nastavujem VŠETKY DOSTUPNÉ DÁTA`);
+                    }
                 }
             } else if (subtitle) {
-                subtitle.text = `Zobrazený ${currentTimeRange} horizont - označte oblasť pre zoom`;
+                // Ak nemáme dáta, použijeme štandardnú správu namiesto "označte oblasť pre zoom"
+                subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
                 subtitle.color = '#9ca3af';
+                if (typeof addDebugLog === 'function') {
+                    addDebugLog(`🔧 applyFullTimeRangeToChart: nastavujem ŠTANDARDNÚ SPRÁVU (žiadne dáta)`);
+                }
             }
             
             // Update chart (use 'none' to avoid animation during data loading)

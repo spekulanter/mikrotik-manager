@@ -920,35 +920,35 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // Ping latency optimization - focus on actual latency range
+        // Ping latency optimization - position data higher in the chart for better visibility
         const optimizePingYAxis = (min, max, range) => {
             if (range === 0) {
-                // Single value - create small range around it with minimal bottom padding
-                const topPadding = Math.max(min * 0.25, 0.3); // 25% padding or at least 0.3ms on top
-                const bottomPadding = Math.max(min * 0.02, 0.02); // 2% padding or at least 0.02ms on bottom
+                // Single value - create balanced range around it
+                const topPadding = Math.max(min * 0.4, 0.5); // 40% padding or at least 0.5ms on top
+                const bottomPadding = Math.max(min * 0.15, 0.1); // 15% padding or at least 0.1ms on bottom
                 return {
                     suggestedMin: Math.max(0, min - bottomPadding),
                     suggestedMax: max + topPadding
                 };
             }
 
-            // For ping, we want to push the data much lower in the chart
-            // Minimal padding on bottom, much more padding on top
-            let topPadding = range * 0.5; // 50% padding on top (increased from 35%)
-            let bottomPadding = range * 0.05; // 5% padding on bottom (decreased from 10%)
+            // For ping, we want to position the data higher in the chart for better visibility
+            // More padding on bottom, less padding on top
+            let topPadding = range * 0.2; // 20% padding on top (reduced from 50%)
+            let bottomPadding = range * 0.3; // 30% padding on bottom (increased from 5%)
             let suggestedMin = Math.max(0, min - bottomPadding);
             let suggestedMax = max + topPadding;
 
             // Don't start too close to zero if all pings are much higher
-            // This prevents the chart from being squashed at the top
+            // This prevents the chart from being squashed at the bottom
             if (min > 1 && range > 0.5) {
                 // If lowest ping is above 1ms and there's reasonable variation
-                suggestedMin = Math.max(0, min - range * 0.08); // Even less bottom padding
-                suggestedMax = max + range * 0.6; // Even more top padding
+                suggestedMin = Math.max(0, min - range * 0.25); // More bottom padding
+                suggestedMax = max + range * 0.15; // Less top padding
             } else if (min > 0.5 && range < 0.3) {
-                // Stable but higher latency - push much lower with very asymmetric padding
-                suggestedMin = Math.max(0, min - 0.05); // Very minimal bottom padding
-                suggestedMax = max + 0.8; // Much more top padding
+                // Stable but higher latency - center better with more balanced padding
+                suggestedMin = Math.max(0, min - 0.2); // More bottom padding
+                suggestedMax = max + 0.3; // Less top padding
             }
 
             return {
@@ -1143,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     tension: 0.1,
-                    fill: false,
+                    fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,
                     borderWidth: 2,
@@ -1550,7 +1550,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     tension: 0.1,
-                    fill: false,
+                    fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,
                     borderWidth: 2,
@@ -1600,7 +1600,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.1)',
                     tension: 0.1,
-                    fill: false,
+                    fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,
                     borderWidth: 2,
@@ -1668,7 +1668,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         borderColor: '#10b981',
                         backgroundColor: 'rgba(16, 185, 129, 0.1)',
                         tension: 0.1,
-                        fill: false,
+                        fill: true,
                         pointRadius: 0,
                         pointHoverRadius: 0,
                         borderWidth: 2,
@@ -1693,7 +1693,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             borderColor: '#10b981',
                             backgroundColor: 'rgba(16, 185, 129, 0.1)',
                             tension: 0.1,
-                            fill: false,
+                            fill: true,
                             pointRadius: 0,
                             pointHoverRadius: 0,
                             borderWidth: 2,
@@ -2464,6 +2464,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Update chart titles with current time range
     const updateChartTitles = (timeRange) => {
+        if (typeof addDebugLog === 'function') {
+            addDebugLog(`🏷️ updateChartTitles volaná s rozsahom: ${timeRange}`);
+        }
+        
         const timeRangeLabels = {
             'recent': 'Posledná hodina',
             '30m': 'Posledných 30 minút',
@@ -2479,6 +2483,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const label = timeRangeLabels[timeRange] || 'Posledných 24 hodín';
         
+        if (typeof addDebugLog === 'function') {
+            addDebugLog(`🏷️ updateChartTitles: rozsah=${timeRange}, label="${label}"`);
+        }
+        
         // Update chart subtitles - find them by their position in the card
         const chartCards = document.querySelectorAll('.card');
         chartCards.forEach(card => {
@@ -2491,11 +2499,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Don't update availability chart (it always shows "Posledných 7 dní")
                     const isAvailabilityChart = card.textContent.includes('Availability');
                     if (!isAvailabilityChart) {
+                        if (typeof addDebugLog === 'function') {
+                            addDebugLog(`🏷️ updateChartTitles: aktualizujem subtitle na "${label}"`);
+                        }
                         subtitle.textContent = label;
+                    } else {
+                        if (typeof addDebugLog === 'function') {
+                            addDebugLog(`🏷️ updateChartTitles: preskakujem Availability chart`);
+                        }
                     }
+                } else {
+                    if (typeof addDebugLog === 'function') {
+                        addDebugLog(`🏷️ updateChartTitles: subtitle nenájdený v karte`);
+                    }
+                }
+            } else {
+                if (typeof addDebugLog === 'function') {
+                    addDebugLog(`🏷️ updateChartTitles: chart container nenájdený v karte`);
                 }
             }
         });
+        
+        if (typeof addDebugLog === 'function') {
+            addDebugLog(`🏷️ updateChartTitles: dokončené`);
+        }
     };
     
     // Add chart loading animation - optimized version
@@ -2573,8 +2600,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 addChartLoadingAnimation();
             }
             
-            // Update chart titles (ale zobrazíme správny label pre pôvodný range)
-            updateChartTitles(timeRange);
+            // Update chart titles (používame window.currentTimeRange pre správny label)
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`🏷️ Volám updateChartTitles s window.currentTimeRange: ${window.currentTimeRange}`);
+            }
+            updateChartTitles(window.currentTimeRange);
             // Map frontend range names to backend range names
             const apiRange = optimizedRange === '30m' ? 'recent' : optimizedRange;
             
@@ -3081,9 +3111,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     cleanupAllSelections();
                 }
                 
+                // Set active time range PRED animáciou aby applyFullTimeRangeToAllCharts používal správny window.currentTimeRange
+                if (typeof addDebugLog === 'function') {
+                    addDebugLog(`✅ Nastavujem aktívny časový rozsah: ${newTimeRange}`);
+                    addDebugLog(`🔍 Pre-setActiveTimeRange: _blockGlobalTimeRangeChanges = ${window._blockGlobalTimeRangeChanges || false}`);
+                }
+                setActiveTimeRange(newTimeRange);
+                
                 // Determine animation direction and apply smooth transition
                 if (typeof addDebugLog === 'function') {
-                    addDebugLog(`🎬 Spúšťam animáciu prechodu času: ${currentTimeRange} → ${newTimeRange}`);
+                    addDebugLog(`� Spúšťam animáciu prechodu času: ${currentTimeRange} → ${newTimeRange}`);
                 }
                 
                 try {
@@ -3096,13 +3133,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         addDebugLog(`❌ Chyba pri animácii prechodu: ${error.message}`);
                     }
                 }
-                
-                // Set active time range
-                if (typeof addDebugLog === 'function') {
-                    addDebugLog(`✅ Nastavujem aktívny časový rozsah: ${newTimeRange}`);
-                    addDebugLog(`🔍 Pre-setActiveTimeRange: _blockGlobalTimeRangeChanges = ${window._blockGlobalTimeRangeChanges || false}`);
-                }
-                setActiveTimeRange(newTimeRange);
                 
                 // (Odstránené loading spinner na tlačidle – vizuálne rušivé)
                 if (typeof addDebugLog === 'function') {

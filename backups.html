@@ -911,9 +911,6 @@
                 return matchesSearch && matchesType;
             });
             
-            // Aktualizuj počítadlá
-            document.getElementById('visibleFiles').textContent = filteredRows.length;
-            
             // Stránkovanie
             const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
             const startIndex = (currentPage - 1) * itemsPerPage;
@@ -928,6 +925,8 @@
             });
             
             updatePagination(totalPages);
+            // Aktualizuj počítadlá (max 50 na stránku)
+            updateFileCounts();
         }
         
         function updatePagination(totalPages) {
@@ -1276,10 +1275,11 @@
         // Funkcia pre aktualizáciu počítadiel súborov
         function updateFileCounts() {
             const totalFiles = allRows.length;
-            const visibleFiles = filteredRows.length;
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const visibleOnPage = Math.max(0, Math.min(filteredRows.length - startIndex, itemsPerPage));
             
             document.getElementById('totalFiles').textContent = totalFiles;
-            document.getElementById('visibleFiles').textContent = Math.min(visibleFiles, itemsPerPage);
+            document.getElementById('visibleFiles').textContent = visibleOnPage;
         }
         
         // Funkcia pre spracovanie sťahovania v Android aplikácii

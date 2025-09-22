@@ -497,10 +497,10 @@
         
         /* Mobilné prispôsobenie headeru */
         @media (max-width: 768px) {
-            /* Menší hlavný container */
+            /* Menší hlavný container - využije viac priestoru obrazovky */
             .main-container {
-                margin: 10px;
-                padding: 15px;
+                margin: 5px; /* menšie okraje pre širšiu tabuľku */
+                padding: 12px; /* menší vnútorný padding */
                 display: flex;
                 flex-direction: column;
             }
@@ -655,9 +655,9 @@
             .table tbody td:first-child {
                 display: grid;
                 grid-template-columns: auto 1fr; /* 1: ikonka, 2: text */
-                align-items: start;
-                gap: 6px; /* menšia medzera */
-                padding-bottom: 0;
+                align-items: center; /* vertikálne centrovanie v mobile - text nebude na spodku/vrchu */
+                gap: 8px; /* trochu väčšia medzera medzi ikonkou a textom */
+                padding: 8px 0 8px 12px; /* pridané ľavé padding pre odsadenie ikonky od okraja */
                 grid-column: 1; /* prvý stĺpec gridu riadku */
             }
             .table tbody td:first-child .file-icon {

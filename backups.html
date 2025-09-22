@@ -409,6 +409,24 @@
             opacity: 1;
         }
 
+        /* Mobilné zoradenie podľa dátumu v prvom stĺpci */
+        .mobile-date-sort {
+            display: none;
+        }
+        
+        .mobile-date-text {
+            font-size: 12px;
+            color: var(--accent-color);
+            font-weight: 500;
+        }
+        
+        .sort-icon-mobile {
+            margin-left: 4px;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+            font-size: 12px;
+        }
+
         /* Svetlá téma */
         body.light-theme {
             --main-bg: #f1f5f9;
@@ -544,6 +562,51 @@
             .table tbody td:nth-child(3) {
                 display: none;
             }
+            
+            /* V mobilnej verzii zobraz mobilné zoradenie dátumu */
+            .mobile-date-sort {
+                display: flex !important;
+                align-items: center;
+                justify-content: flex-end;
+                cursor: pointer;
+                padding: 6px 8px;
+                border-radius: 4px;
+                transition: all 0.3s ease;
+                margin-left: 8px;
+                min-width: fit-content;
+                flex-shrink: 0;
+            }
+            
+            .mobile-date-sort:hover {
+                background-color: rgba(56, 189, 248, 0.1);
+            }
+            
+            /* Prvý stĺpec má flexbox layout pre názov a dátum zoradenie */
+            .table thead th:first-child {
+                display: flex !important;
+                align-items: center;
+                justify-content: space-between;
+                padding: 8px 10px !important;
+                gap: 8px;
+                cursor: default !important; /* Zruš klikateľnosť hlavného prvku */
+            }
+            
+            /* Názov súboru časť v hlavičke */
+            .filename-sort-section {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-grow: 1;
+                cursor: pointer;
+                padding: 6px 8px;
+                border-radius: 4px;
+                transition: all 0.3s ease;
+            }
+            
+            .filename-sort-section:hover {
+                background-color: rgba(56, 189, 248, 0.1);
+            }
+            
             /* Riadok v mobile: 2 stĺpce (1: názov, 2: akcie) */
             .table tbody tr {
                 display: grid;
@@ -557,28 +620,31 @@
                 grid-column: 2;
                 justify-content: flex-end;
                 align-items: center;
-                padding: 0; /* bez extra odsadenia, sme v tom istom riadku */
+                padding: 0 8px 0 0; /* padding vpravo pre odsadenie od okraja */
                 border: 0;
             }
             .table tbody td:nth-child(4) .action-buttons {
                 display: flex;
-                gap: 10px;
+                gap: 6px; /* menšia medzera medzi tlačidlami */
                 flex-wrap: nowrap;
                 align-items: center;
                 justify-content: flex-end;
             }
             .table tbody td:nth-child(4) .btn-download {
-                padding: 0; /* ikonové tlačidlo na mobile */
-                width: 36px;
-                height: 36px;
+                padding: 0;
+                width: 32px; /* menšie tlačidlo */
+                height: 32px; /* rovnaká výška ako kôš */
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 16px;
+                font-size: 14px; /* menšia ikonka */
+                border-radius: 6px; /* menší border-radius */
             }
             .table tbody td:nth-child(4) .btn-delete-compact {
-                width: 32px;
+                width: 32px; /* rovnaká veľkosť ako download */
                 height: 32px;
+                font-size: 14px; /* menšia ikonka */
+                border-radius: 6px; /* menší border-radius */
             }
             /* Skryť text v tlačidle Stiahnuť na mobile – ikonový režim */
             .table tbody td:nth-child(4) .btn-download .btn-text {
@@ -590,13 +656,13 @@
                 display: grid;
                 grid-template-columns: auto 1fr; /* 1: ikonka, 2: text */
                 align-items: start;
-                gap: 8px;
+                gap: 6px; /* menšia medzera */
                 padding-bottom: 0;
                 grid-column: 1; /* prvý stĺpec gridu riadku */
             }
             .table tbody td:first-child .file-icon {
                 margin: 0; /* riadi sa gridom */
-                font-size: 1rem; /* trošku menšia ikonka na mobile */
+                font-size: 0.9rem; /* menšia ikonka na mobile */
             }
             .table tbody td:first-child .filename {
                 min-width: 0; /* umožní skutočné skracovanie v grid kontejnery */
@@ -609,7 +675,8 @@
                 white-space: normal;
                 word-break: break-word;
                 overflow-wrap: anywhere;
-                line-height: 1.25;
+                line-height: 1.2; /* menší riadkovací rozostup */
+                font-size: 0.85rem; /* menší text pre lepšie zmestenie */
             }
         }
         
@@ -699,8 +766,15 @@
                 <thead>
                     <tr>
                         <th class="sortable" onclick="sortTable('name')" id="sort-name">
-                            <i class="fas fa-file"></i> Názov súboru
-                            <i class="fas fa-sort sort-icon"></i>
+                            <div class="filename-sort-section">
+                                <i class="fas fa-file"></i>
+                                <span>Názov súboru</span>
+                                <i class="fas fa-sort sort-icon"></i>
+                            </div>
+                            <div class="mobile-date-sort" onclick="event.stopPropagation(); sortTable('date');" id="sort-date-mobile">
+                                <span class="mobile-date-text">Dátum</span>
+                                <i class="fas fa-sort sort-icon-mobile"></i>
+                            </div>
                         </th>
                         <th class="sortable" onclick="sortTable('size')" id="sort-size">
                             <i class="fas fa-hdd"></i> Veľkosť
@@ -986,8 +1060,25 @@
             document.querySelectorAll('.sortable').forEach(th => {
                 th.classList.remove('active');
                 const icon = th.querySelector('.sort-icon');
-                icon.className = 'fas fa-sort sort-icon';
+                if (icon) icon.className = 'fas fa-sort sort-icon';
             });
+            
+            // Resetuj mobilnú ikonu dátumu
+            const mobileIcon = document.querySelector('.sort-icon-mobile');
+            if (mobileIcon) {
+                mobileIcon.className = 'fas fa-sort sort-icon-mobile';
+                mobileIcon.style.opacity = '0.5';
+            }
+            
+            // Resetuj všetky mobilné kontajnery
+            const filenameSection = document.querySelector('.filename-sort-section');
+            const mobileDateSort = document.querySelector('.mobile-date-sort');
+            if (filenameSection) {
+                filenameSection.style.backgroundColor = '';
+            }
+            if (mobileDateSort) {
+                mobileDateSort.style.backgroundColor = '';
+            }
             
             // Pridaj aktívny stav k aktuálnej hlavičke
             const activeHeader = document.getElementById(`sort-${currentSort}`);
@@ -996,18 +1087,28 @@
                 
                 // Aktualizuj ikonu podľa smeru zoradenia
                 const icon = activeHeader.querySelector('.sort-icon');
+                let iconClass = '';
                 
                 switch (currentSort) {
                     case 'name':
-                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-alpha-down' : 'fa-sort-alpha-up'} sort-icon`;
+                        iconClass = `fas ${sortDirection === 'asc' ? 'fa-sort-alpha-down' : 'fa-sort-alpha-up'} sort-icon`;
+                        // Názov je aktívny - žiaden vizuálny efekt
                         break;
                     case 'size':
-                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-amount-down' : 'fa-sort-amount-up'} sort-icon`;
+                        iconClass = `fas ${sortDirection === 'asc' ? 'fa-sort-amount-down' : 'fa-sort-amount-up'} sort-icon`;
                         break;
                     case 'date':
-                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-numeric-down' : 'fa-sort-numeric-up'} sort-icon`;
+                        iconClass = `fas ${sortDirection === 'asc' ? 'fa-sort-numeric-down' : 'fa-sort-numeric-up'} sort-icon`;
+                        // Aktualizuj aj mobilnú ikonu pre dátum
+                        if (mobileIcon) {
+                            mobileIcon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-numeric-down' : 'fa-sort-numeric-up'} sort-icon-mobile`;
+                            mobileIcon.style.opacity = '1';
+                        }
+                        // Dátum je aktívny - žiaden vizuálny efekt
                         break;
                 }
+                
+                if (icon) icon.className = iconClass;
             }
         }
         
@@ -1016,6 +1117,15 @@
             initTheme();
             const tbody = document.getElementById('filesTableBody');
             if (!tbody) return;
+            
+            // Pridaj event listener pre mobilné zoradenie podľa názvu
+            const filenameSection = document.querySelector('.filename-sort-section');
+            if (filenameSection) {
+                filenameSection.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    sortTable('name');
+                });
+            }
             
             allRows = Array.from(tbody.getElementsByTagName('tr'));
             // Zoradenie je už urobené server-side (mtime desc), klient tu už iba pripraví animáciu

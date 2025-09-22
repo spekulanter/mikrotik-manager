@@ -102,6 +102,68 @@
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        
+        /* Mobilné prispôsobenie headeru */
+        @media (max-width: 768px) {
+            /* Menší header */
+            header .flex {
+                height: 3.5rem; /* h-14 namiesto h-16 */
+            }
+            
+            /* Menší text a ikony */
+            header a {
+                font-size: 1rem !important; /* text-base namiesto text-xl */
+            }
+            
+            header h1 {
+                font-size: 0.875rem !important; /* text-sm namiesto text-lg */
+                font-weight: 500 !important;
+            }
+            
+            /* Menšie medzery */
+            header .gap-4 {
+                gap: 0.5rem !important; /* gap-2 namiesto gap-4 */
+            }
+            
+            /* Menšie tlačidlá */
+            header button {
+                padding: 0.375rem !important; /* p-1.5 namiesto p-2 */
+                font-size: 0.875rem !important;
+            }
+            
+            header button:last-child {
+                padding: 0.375rem 0.75rem !important; /* px-3 py-1.5 namiesto px-4 py-2 */
+            }
+            
+            /* Skryť oddeľovač na malých obrazovkách */
+            header .text-gray-400 {
+                display: none;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            /* Pre veľmi malé obrazovky ešte viac kompaktné */
+            header .flex {
+                height: 3rem; /* h-12 */
+            }
+            
+            header a {
+                font-size: 0.875rem !important; /* text-sm */
+            }
+            
+            header h1 {
+                font-size: 0.75rem !important; /* text-xs */
+            }
+            
+            /* Ešte menšie tlačidlá */
+            header button {
+                padding: 0.25rem !important; /* p-1 */
+            }
+            
+            header button:last-child {
+                padding: 0.25rem 0.5rem !important; /* px-2 py-1 */
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen">
@@ -304,10 +366,10 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label for="ping_heartbeat_interval" class="block mb-2 font-medium">Globálny ping interval (sekundy)</label>
-                                <input type="number" id="ping_heartbeat_interval" name="ping_heartbeat_interval" 
-                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
-                                       value="300" min="30" max="3600">
-                                <small class="text-gray-400 block mt-1">Bežný interval ping testov. Odporúčané: 300-600s (5-10 min)</small>
+                    <input type="number" id="ping_heartbeat_interval" name="ping_heartbeat_interval" 
+                        class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                        value="300" min="20" max="86400">
+                    <small class="text-gray-400 block mt-1">Bežný interval ping testov. Minimálne 20s, odporúčané: 300-600s (5-10 min), maximálne 86400s (24 hodín).</small>
                             </div>
                             
                             <div>

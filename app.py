@@ -515,14 +515,8 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
         with open(latest_backup_path, 'r', encoding='utf-8', errors='ignore') as f:
             local_content = f.read()
         
-        # Rozšírené ignore pravidlá ako v pôvodnom scripte
-        ignore_keywords = [
-            'list=blacklist', 
-            'comment=spamhaus,dshield,bruteforce',
-            'comment=spamhaus',
-            'comment=dshield', 
-            'comment=bruteforce'
-        ]
+        # Ignore pravidlá presne ako v legacy scripte (mikrotik_backup_compare_export_first.py)
+        ignore_keywords = ['list=blacklist', 'comment=spamhaus,dshield,bruteforce']
         
         def should_include(line):
             return all(keyword not in line for keyword in ignore_keywords)
@@ -1719,6 +1713,16 @@ def handle_settings():
     with get_db_connection() as conn:
         if request.method == 'GET': return jsonify({row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()})
         if request.method == 'POST':
+            # Validácia ping_check_interval_seconds
+            ping_interval = request.json.get('ping_check_interval_seconds')
+            if ping_interval is not None:
+                try:
+                    ping_interval_int = int(ping_interval)
+                    if ping_interval_int < 20 or ping_interval_int > 86400:
+                        return jsonify({'status': 'error', 'message': 'Globálny ping interval musí byť 20-86400 sekúnd'}), 400
+                except (ValueError, TypeError):
+                    return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre ping interval'}), 400
+            
             # Kontrola pre zmenu ping monitoring nastavení
             old_settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key IN (?, ?)', 
                                                                            ('ping_check_interval_seconds', 'ping_monitor_enabled')).fetchall()}
@@ -2712,6 +2716,8 @@ def monitoring_device_settings(device_id):
             # Validácia
             if ping_interval < 0 or ping_interval > 86400:  # 0-24 hodín
                 return jsonify({'status': 'error', 'message': 'Ping interval musí byť 0-86400 sekúnd'}), 400
+            if ping_interval > 0 and ping_interval < 20:
+                return jsonify({'status': 'error', 'message': 'Ping interval musí byť 0 (globálne) alebo minimálne 20 sekúnd'}), 400
             if snmp_interval < 0 or snmp_interval > 1440:  # 0-24 hodín
                 return jsonify({'status': 'error', 'message': 'SNMP interval musí byť 0-1440 minút'}), 400
             

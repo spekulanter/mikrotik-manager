@@ -476,6 +476,92 @@
                 justify-content: center;
             }
         }
+        
+        /* Mobilné prispôsobenie headeru */
+        @media (max-width: 768px) {
+            /* Menší hlavný container */
+            .main-container {
+                margin: 10px;
+                padding: 15px;
+            }
+            
+            /* Menší header s tlačidlami */
+            .main-container > div:first-child {
+                gap: 8px !important;
+                margin-bottom: 15px !important;
+                flex-wrap: wrap;
+                justify-content: center !important;
+            }
+            
+            /* Menšie tlačidlá */
+            .btn-back {
+                padding: 6px 12px !important;
+                font-size: 12px !important;
+                gap: 4px !important;
+                margin-bottom: 0 !important;
+            }
+            
+            .theme-toggle {
+                width: 32px !important;
+                height: 32px !important;
+                padding: 6px !important;
+                font-size: 12px !important;
+            }
+            
+            /* Menší page header */
+            .page-header {
+                margin-bottom: 20px;
+            }
+            
+            .page-header h1 {
+                font-size: 1.75rem !important; /* Menší z 2.5rem */
+                margin-bottom: 8px !important;
+            }
+            
+            .page-header p {
+                font-size: 0.95rem !important; /* Menší z 1.1rem */
+            }
+            
+            /* Menšia path-info */
+            .path-info {
+                font-size: 0.85rem !important;
+                padding: 8px 12px !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            /* Pre veľmi malé obrazovky */
+            .main-container {
+                margin: 5px;
+                padding: 12px;
+            }
+            
+            .page-header h1 {
+                font-size: 1.5rem !important;
+            }
+            
+            .page-header p {
+                font-size: 0.875rem !important;
+            }
+            
+            /* Ešte menšie tlačidlá */
+            .btn-back {
+                padding: 4px 8px !important;
+                font-size: 11px !important;
+            }
+            
+            .theme-toggle {
+                width: 28px !important;
+                height: 28px !important;
+                padding: 4px !important;
+                font-size: 11px !important;
+            }
+            
+            /* Skrýť text v tlačidlách na veľmi malých obrazovkách, nechať len ikony */
+            .btn-back span:not(.fas) {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -483,14 +569,14 @@
         <!-- Header s tlačidlami -->
         <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 20px;">
             <button onclick="window.location.href='/settings.html'" class="btn-back" style="float: none; margin-bottom: 0;" title="Nastavenia">
-                <i class="fas fa-cog"></i> Nastavenia
+                <i class="fas fa-cog"></i> <span>Nastavenia</span>
             </button>
             <button class="theme-toggle" onclick="toggleTheme()" title="Prepnúť tému">
                 <i class="fas fa-sun" id="theme-icon"></i>
             </button>
             <a href="/" class="btn-back" style="float: none; margin-bottom: 0;">
                 <i class="fas fa-arrow-left"></i>
-                Späť
+                <span>Späť</span>
             </a>
         </div>
         

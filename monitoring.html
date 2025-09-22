@@ -1523,12 +1523,13 @@
                     </label>
                     <input type="number" id="pingInterval" name="ping_interval_seconds" 
                            min="0" max="86400" 
-                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                           oninput="validatePingInterval(this)">
                     <div class="text-xs text-gray-400 mt-1 italic">
                         Ovplyvňuje graf: Ping Latencia
                     </div>
                     <div class="text-xs text-gray-400 mt-1">
-                        0 = použiť globálne nastavenie, 1-86400 sekúnd (max 24 hodín)
+                        0 = použiť globálne nastavenie, 20-86400 sekúnd (minimálne 20s, max 24 hodín).
                     </div>
                 </div>
                 
@@ -4133,6 +4134,28 @@
             }
             setTimeout(updateEdges, 40);
         });
+
+        // Validácia ping intervalu
+        function validatePingInterval(input) {
+            const value = parseInt(input.value);
+            const errorElement = input.parentElement.querySelector('.ping-interval-error');
+            
+            // Odstráň existujúcu chybovú správu
+            if (errorElement) {
+                errorElement.remove();
+            }
+            
+            // Skontroluj validáciu
+            if (input.value !== '' && value > 0 && value < 20) {
+                const error = document.createElement('div');
+                error.className = 'ping-interval-error text-xs text-red-400 mt-1';
+                error.textContent = 'Ping interval musí byť 0 (globálne) alebo minimálne 20 sekúnd';
+                input.parentElement.appendChild(error);
+                input.style.borderColor = '#f87171';
+            } else {
+                input.style.borderColor = '#6b7280';
+            }
+        }
     </script>
 </body>
 </html>

@@ -1,16 +1,23 @@
 package com.mikrotik.manager
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.CookieManager
+import android.webkit.DownloadListener
+import android.webkit.URLUtil
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
@@ -115,7 +122,10 @@ class MainActivity : AppCompatActivity() {
             }
             webView.overScrollMode = View.OVER_SCROLL_NEVER
 
-            // Add JavaScript interface for theme-based status bar colors
+            // Setup download handling for file downloads
+            setupDownloadHandling()
+
+            // Add JavaScript interface for theme-based status bar colors and downloads
             webView.addJavascriptInterface(object {
                 @android.webkit.JavascriptInterface
                 fun setStatusBarColor(color: String) {
@@ -167,6 +177,19 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                
+                @android.webkit.JavascriptInterface
+                fun downloadUrl(url: String) {
+                    runOnUiThread {
+                        try {
+                            Log.d("MainActivity", "Download requested: $url")
+                            startDownload(url)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error starting download: $url", e)
+                            Toast.makeText(this@MainActivity, "Chyba pri sťahovaní súboru", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
             }, "Android")
 
             // Enable cookies with persistence
@@ -179,8 +202,28 @@ class MainActivity : AppCompatActivity() {
                 cookieManager.flush()
             }
 
-            // Custom WebViewClient for theme-based status bar
+            // Custom WebViewClient for theme-based status bar and download handling
             webView.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val url = request?.url?.toString()
+                    if (url != null && isDownloadUrl(url)) {
+                        Log.d("MainActivity", "Intercepting download URL: $url")
+                        startDownload(url)
+                        return true
+                    }
+                    return super.shouldOverrideUrlLoading(view, request)
+                }
+                
+                @Suppress("DEPRECATION")
+                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                    if (url != null && isDownloadUrl(url)) {
+                        Log.d("MainActivity", "Intercepting download URL (deprecated): $url")
+                        startDownload(url)
+                        return true
+                    }
+                    return super.shouldOverrideUrlLoading(view, url)
+                }
+                
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     
@@ -389,6 +432,65 @@ class MainActivity : AppCompatActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             enableFullscreen()
+        }
+    }
+
+    // Download handling methods
+    private fun setupDownloadHandling() {
+        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+            Log.d("MainActivity", "Download listener triggered: $url")
+            startDownload(url)
+        })
+    }
+    
+    private fun isDownloadUrl(url: String): Boolean {
+        return url.contains("/download_backup/") || url.endsWith(".backup") || url.endsWith(".rsc")
+    }
+    
+    private fun startDownload(url: String) {
+        try {
+            val request = DownloadManager.Request(Uri.parse(url))
+            
+            // Set cookies from WebView
+            val cookies = CookieManager.getInstance().getCookie(url)
+            if (!cookies.isNullOrEmpty()) {
+                request.addRequestHeader("Cookie", cookies)
+            }
+            
+            // Set User-Agent from WebView
+            val userAgent = webView.settings.userAgentString
+            if (!userAgent.isNullOrEmpty()) {
+                request.addRequestHeader("User-Agent", userAgent)
+            }
+            
+            // Extract filename from URL
+            val filename = URLUtil.guessFileName(url, null, null)
+            request.setTitle("Sťahovanie $filename")
+            request.setDescription("MikroTik Manager - Sťahovanie zálohy")
+            
+            // Set destination
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ - use scoped storage
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+            } else {
+                // Android 9 and below - use legacy external storage
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename)
+            }
+            
+            // Show download in notification
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            request.setVisibleInDownloadsUi(true)
+            
+            // Start download
+            val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val downloadId = downloadManager.enqueue(request)
+            
+            Log.d("MainActivity", "Download started: ID=$downloadId, URL=$url")
+            Toast.makeText(this, "Sťahovanie začalo: $filename", Toast.LENGTH_SHORT).show()
+            
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error starting download", e)
+            Toast.makeText(this, "Chyba pri sťahovaní súboru", Toast.LENGTH_LONG).show()
         }
     }
 

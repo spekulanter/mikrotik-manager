@@ -483,39 +483,47 @@
             .main-container {
                 margin: 10px;
                 padding: 15px;
+                display: flex;
+                flex-direction: column;
             }
+            /* Predvolený poriadok pre všetky sekcie – tieto tri nastavíme vyššie, ostatné pôjdu nižšie */
+            .main-container > * { order: 4; }
             
-            /* Menší header s tlačidlami */
-            .main-container > div:first-child {
+            /* Header s tlačidlami – mobil: centrovať a umiestniť pod titulok */
+            .header-actions {
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
                 gap: 8px !important;
                 margin-bottom: 15px !important;
                 flex-wrap: wrap;
-                justify-content: center !important;
+                order: 2 !important;
             }
             
-            /* Menšie tlačidlá */
+            /* Usporiadanie: 1. titulok, 2. tlačidlá, 3. umiestnenie záloh */
+            .page-header { order: 1 !important; margin-bottom: 12px; }
+            .path-info { order: 3 !important; }
+            
+            /* Menšie tlačidlá – stále pohodlné na dotyk */
             .btn-back {
-                padding: 6px 12px !important;
-                font-size: 12px !important;
-                gap: 4px !important;
+                padding: 8px 12px !important;
+                font-size: 13px !important;
+                gap: 6px !important;
                 margin-bottom: 0 !important;
+                min-height: 40px;
             }
             
             .theme-toggle {
-                width: 32px !important;
-                height: 32px !important;
+                width: 40px !important;
+                height: 40px !important;
                 padding: 6px !important;
-                font-size: 12px !important;
+                font-size: 14px !important;
             }
             
             /* Menší page header */
-            .page-header {
-                margin-bottom: 20px;
-            }
-            
             .page-header h1 {
                 font-size: 1.75rem !important; /* Menší z 2.5rem */
-                margin-bottom: 8px !important;
+                margin-bottom: 6px !important;
             }
             
             .page-header p {
@@ -524,8 +532,84 @@
             
             /* Menšia path-info */
             .path-info {
-                font-size: 0.85rem !important;
+                font-size: 0.9rem !important;
                 padding: 8px 12px !important;
+            }
+
+            /* Mobil: zobraz len názov súboru + akcie; skry stĺpce 2 (Veľkosť) a 3 (Dátum) */
+            .table thead th:nth-child(2),
+            .table thead th:nth-child(3),
+            .table thead th:nth-child(4),
+            .table tbody td:nth-child(2),
+            .table tbody td:nth-child(3) {
+                display: none;
+            }
+            /* Riadok v mobile: 2 stĺpce (1: názov, 2: akcie) */
+            .table tbody tr {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                align-items: center; /* akcie na stred výšky názvu (aj keď je na 2 riadky) */
+                column-gap: 8px;
+            }
+            /* Akcie v rovnakom riadku vpravo */
+            .table tbody td:nth-child(4) {
+                display: flex;
+                grid-column: 2;
+                justify-content: flex-end;
+                align-items: center;
+                padding: 0; /* bez extra odsadenia, sme v tom istom riadku */
+                border: 0;
+            }
+            .table tbody td:nth-child(4) .action-buttons {
+                display: flex;
+                gap: 10px;
+                flex-wrap: nowrap;
+                align-items: center;
+                justify-content: flex-end;
+            }
+            .table tbody td:nth-child(4) .btn-download {
+                padding: 0; /* ikonové tlačidlo na mobile */
+                width: 36px;
+                height: 36px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 16px;
+            }
+            .table tbody td:nth-child(4) .btn-delete-compact {
+                width: 32px;
+                height: 32px;
+            }
+            /* Skryť text v tlačidle Stiahnuť na mobile – ikonový režim */
+            .table tbody td:nth-child(4) .btn-download .btn-text {
+                display: none;
+            }
+
+            /* Lepšia čitateľnosť dlhých názvov súborov (ikonka + text) v prvom stĺpci */
+            .table tbody td:first-child {
+                display: grid;
+                grid-template-columns: auto 1fr; /* 1: ikonka, 2: text */
+                align-items: start;
+                gap: 8px;
+                padding-bottom: 0;
+                grid-column: 1; /* prvý stĺpec gridu riadku */
+            }
+            .table tbody td:first-child .file-icon {
+                margin: 0; /* riadi sa gridom */
+                font-size: 1rem; /* trošku menšia ikonka na mobile */
+            }
+            .table tbody td:first-child .filename {
+                min-width: 0; /* umožní skutočné skracovanie v grid kontejnery */
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 3; /* max 3 riadky na mobile */
+                line-clamp: 3; /* štandardná vlastnosť pre budúcu kompatibilitu */
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: normal;
+                word-break: break-word;
+                overflow-wrap: anywhere;
+                line-height: 1.25;
             }
         }
         
@@ -544,22 +628,18 @@
                 font-size: 0.875rem !important;
             }
             
-            /* Ešte menšie tlačidlá */
+            /* Udrž optimálnu veľkosť aj na veľmi malých obrazovkách */
             .btn-back {
-                padding: 4px 8px !important;
-                font-size: 11px !important;
+                padding: 6px 12px !important;
+                font-size: 12px !important;
+                min-height: 40px;
             }
             
             .theme-toggle {
-                width: 28px !important;
-                height: 28px !important;
-                padding: 4px !important;
-                font-size: 11px !important;
-            }
-            
-            /* Skrýť text v tlačidlách na veľmi malých obrazovkách, nechať len ikony */
-            .btn-back span:not(.fas) {
-                display: none;
+                width: 40px !important;
+                height: 40px !important;
+                padding: 6px !important;
+                font-size: 14px !important;
             }
         }
     </style>
@@ -567,7 +647,7 @@
 <body>
     <div class="main-container">
         <!-- Header s tlačidlami -->
-        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 20px;">
+        <div class="header-actions" style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 20px;">
             <button onclick="window.location.href='/settings.html'" class="btn-back" style="float: none; margin-bottom: 0;" title="Nastavenia">
                 <i class="fas fa-cog"></i> <span>Nastavenia</span>
             </button>
@@ -650,9 +730,9 @@
                         <td>{{ file.modified.strftime('%d.%m.%Y %H:%M') }}</td>
                         <td>
                             <div class="action-buttons">
-                                <a href="/download_backup/{{ file.name }}" class="btn-download">
+                                <a href="/download_backup/{{ file.name }}" class="btn-download" onclick="triggerNativeDownload(event, '/download_backup/{{ file.name }}')">
                                     <i class="fas fa-download"></i>
-                                    Stiahnuť
+                                    <span class="btn-text">Stiahnuť</span>
                                 </a>
                                 <button onclick="confirmDeleteBackup('{{ file.name }}')" class="btn-delete btn-delete-compact" title="Vymazať zálohu">
                                     <i class="fas fa-trash"></i>
@@ -1090,6 +1170,24 @@
             
             document.getElementById('totalFiles').textContent = totalFiles;
             document.getElementById('visibleFiles').textContent = Math.min(visibleFiles, itemsPerPage);
+        }
+        
+        // Funkcia pre spracovanie sťahovania v Android aplikácii
+        function triggerNativeDownload(event, url) {
+            try {
+                // Detekuj či je to Android WebView aplikácia
+                if (typeof Android !== 'undefined' && Android.downloadUrl) {
+                    event.preventDefault(); // Zabráň štandardnému sťahovaniu
+                    const fullUrl = window.location.origin + url;
+                    Android.downloadUrl(fullUrl);
+                    return false;
+                }
+                // Ak nie je Android interface dostupný, pokračuj s normálnym sťahovaním
+                return true;
+            } catch (e) {
+                console.log('Android download not available, using default download');
+                return true;
+            }
         }
     </script>
 </body>

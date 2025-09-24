@@ -190,6 +190,26 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                
+                @android.webkit.JavascriptInterface
+                fun confirmDeleteBackup(filename: String) {
+                    runOnUiThread {
+                        try {
+                            Log.d("MainActivity", "Delete confirmation requested: $filename")
+                            val builder = android.app.AlertDialog.Builder(this@MainActivity)
+                            builder.setTitle("Vymazať zálohu")
+                            builder.setMessage("Naozaj chcete vymazať záložný súbor \"$filename\"?\n\nTento súbor bude vymazaný lokálne aj z FTP servera (ak je nakonfigurovaný).")
+                            builder.setPositiveButton("Vymazať") { _, _ ->
+                                webView.evaluateJavascript("deleteBackupConfirmed('$filename')", null)
+                            }
+                            builder.setNegativeButton("Zrušiť", null)
+                            builder.show()
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Error showing delete confirmation: $filename", e)
+                            Toast.makeText(this@MainActivity, "Chyba pri potvrdení vymazania", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
             }, "Android")
 
             // Enable cookies with persistence

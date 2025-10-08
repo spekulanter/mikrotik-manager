@@ -157,6 +157,49 @@
             padding: 18px 15px;
             text-align: left;
             font-size: 13px;
+            position: relative;
+        }
+
+        .header-label-main {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mobile-date-toggle {
+            display: none;
+            margin-top: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: var(--text-color);
+            background: rgba(17, 24, 39, 0.6);
+            backdrop-filter: blur(6px);
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: none;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .mobile-date-toggle:hover,
+        .mobile-date-toggle:focus {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            outline: none;
+        }
+
+        .mobile-date-toggle.active {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .mobile-date-toggle .mobile-sort-icon {
+            margin-left: auto;
         }
         
         .table tbody tr {
@@ -544,6 +587,12 @@
             .table tbody td:nth-child(3) {
                 display: none;
             }
+            .table thead th#sort-name {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
             /* Riadok v mobile: 2 stĺpce (1: názov, 2: akcie) */
             .table tbody tr {
                 display: grid;
@@ -551,13 +600,16 @@
                 align-items: center; /* akcie na stred výšky názvu (aj keď je na 2 riadky) */
                 column-gap: 8px;
             }
+            .mobile-date-toggle {
+                display: inline-flex;
+            }
             /* Akcie v rovnakom riadku vpravo */
             .table tbody td:nth-child(4) {
                 display: flex;
                 grid-column: 2;
                 justify-content: flex-end;
                 align-items: center;
-                padding: 0; /* bez extra odsadenia, sme v tom istom riadku */
+                padding: 0 10px 0 0; /* pridaj miesto pre ikony od okraja */
                 border: 0;
             }
             .table tbody td:nth-child(4) .action-buttons {
@@ -569,16 +621,18 @@
             }
             .table tbody td:nth-child(4) .btn-download {
                 padding: 0; /* ikonové tlačidlo na mobile */
-                width: 36px;
-                height: 36px;
+                width: 32px;
+                height: 32px;
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 16px;
+                font-size: 14px;
+                border-radius: 10px;
             }
             .table tbody td:nth-child(4) .btn-delete-compact {
                 width: 32px;
                 height: 32px;
+                border-radius: 10px;
             }
             /* Skryť text v tlačidle Stiahnuť na mobile – ikonový režim */
             .table tbody td:nth-child(4) .btn-download .btn-text {
@@ -589,7 +643,7 @@
             .table tbody td:first-child {
                 display: grid;
                 grid-template-columns: auto 1fr; /* 1: ikonka, 2: text */
-                align-items: start;
+                align-items: center;
                 gap: 8px;
                 padding-bottom: 0;
                 grid-column: 1; /* prvý stĺpec gridu riadku */
@@ -597,6 +651,7 @@
             .table tbody td:first-child .file-icon {
                 margin: 0; /* riadi sa gridom */
                 font-size: 1rem; /* trošku menšia ikonka na mobile */
+                align-self: center;
             }
             .table tbody td:first-child .filename {
                 min-width: 0; /* umožní skutočné skracovanie v grid kontejnery */
@@ -609,7 +664,8 @@
                 white-space: normal;
                 word-break: break-word;
                 overflow-wrap: anywhere;
-                line-height: 1.25;
+                font-size: 0.9rem;
+                line-height: 1.3;
             }
         }
         
@@ -699,8 +755,15 @@
                 <thead>
                     <tr>
                         <th class="sortable" onclick="sortTable('name')" id="sort-name">
-                            <i class="fas fa-file"></i> Názov súboru
-                            <i class="fas fa-sort sort-icon"></i>
+                            <div class="header-label-main">
+                                <i class="fas fa-file"></i> Názov súboru
+                                <i class="fas fa-sort sort-icon"></i>
+                            </div>
+                            <button type="button" class="mobile-date-toggle" id="mobile-sort-date" onclick="handleMobileDateHeader(event)" aria-label="Zoradiť podľa dátumu vytvorenia" aria-pressed="false">
+                                <i class="fas fa-calendar"></i>
+                                <span>Dátum vytvorenia</span>
+                                <i class="fas fa-sort mobile-sort-icon"></i>
+                            </button>
                         </th>
                         <th class="sortable" onclick="sortTable('size')" id="sort-size">
                             <i class="fas fa-hdd"></i> Veľkosť
@@ -979,6 +1042,7 @@
             allRows.forEach(row => tbody.appendChild(row));
             
             filterAndPaginate();
+            updateMobileDateToggle();
         }
         
         function updateSortHeaders() {
@@ -1010,6 +1074,37 @@
                 }
             }
         }
+
+        function handleMobileDateHeader(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            sortTable('date');
+        }
+
+        function updateMobileDateToggle() {
+            const button = document.getElementById('mobile-sort-date');
+            if (!button) return;
+
+            const sortIcon = button.querySelector('.mobile-sort-icon');
+
+            if (currentSort === 'date') {
+                button.classList.add('active');
+                button.setAttribute('aria-pressed', 'true');
+                button.title = sortDirection === 'asc'
+                    ? 'Zoradené podľa dátumu (najstaršie hore). Kliknutím zmeníš poradie.'
+                    : 'Zoradené podľa dátumu (najnovšie hore). Kliknutím zmeníš poradie.';
+                if (sortIcon) {
+                    sortIcon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down'} mobile-sort-icon`;
+                }
+            } else {
+                button.classList.remove('active');
+                button.setAttribute('aria-pressed', 'false');
+                button.title = 'Zoradiť podľa dátumu vytvorenia';
+                if (sortIcon) {
+                    sortIcon.className = 'fas fa-sort mobile-sort-icon';
+                }
+            }
+        }
         
         // Inicializácia pri načítaní stránky
         document.addEventListener('DOMContentLoaded', function() {
@@ -1034,6 +1129,7 @@
             updateSortHeaders();
             filterAndPaginate();
             updateFileCounts();
+            updateMobileDateToggle();
         });
         
         // Funkcia pre potvrdenie vymazania zálohy

@@ -164,42 +164,60 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 4px 6px;
+            border-radius: 4px;
+        }
+
+        .header-label-main:hover {
+            background-color: rgba(56, 189, 248, 0.1);
         }
 
         .mobile-date-toggle {
             display: none;
-            margin-top: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 6px;
-            padding: 6px 10px;
-            color: var(--text-color);
-            background: rgba(17, 24, 39, 0.6);
-            backdrop-filter: blur(6px);
-            font-size: 0.85rem;
-            font-weight: 500;
-            text-transform: none;
-            width: 100%;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
+            border: none;
+            background: none;
+            padding: 4px 6px;
+            margin: 0;
+            color: var(--accent-color);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+            border-radius: 4px;
         }
 
         .mobile-date-toggle:hover,
         .mobile-date-toggle:focus {
-            border-color: var(--accent-color);
-            color: var(--accent-color);
+            color: var(--accent-color-hover);
+            background-color: rgba(56, 189, 248, 0.1);
             outline: none;
         }
 
         .mobile-date-toggle.active {
-            border-color: var(--accent-color);
             color: var(--accent-color);
+            background-color: rgba(56, 189, 248, 0.15);
         }
 
         .mobile-date-toggle .mobile-sort-icon {
-            margin-left: auto;
+            margin-left: 6px;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
+        .mobile-date-toggle:hover .mobile-sort-icon,
+        .mobile-date-toggle.active .mobile-sort-icon {
+            opacity: 1;
         }
         
         .table tbody tr {
@@ -216,9 +234,10 @@
         }
         
         .table tbody td {
-            padding: 15px;
+            padding: 10px 15px;
             vertical-align: middle;
             color: var(--text-color);
+            line-height: 1.4;
         }
         
         .btn-download {
@@ -309,6 +328,10 @@
         .file-icon {
             font-size: 1.2rem;
             margin-right: 10px;
+            width: 24px;
+            display: inline-block;
+            text-align: center;
+            flex-shrink: 0;
         }
         
         .file-backup {
@@ -445,6 +468,10 @@
             margin-left: 8px;
             opacity: 0.5;
             transition: opacity 0.3s ease;
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            flex-shrink: 0;
         }
         
         .table thead th.sortable:hover .sort-icon,
@@ -589,9 +616,45 @@
             }
             .table thead th#sort-name {
                 display: flex;
-                flex-direction: column;
-                align-items: flex-start;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 10px 12px;
+                font-size: 11px;
+                background-color: rgba(56, 189, 248, 0.08);
+            }
+            
+            /* Zruš hover/active zmenu pozadia - nech je stále rovnaké */
+            .table thead th#sort-name:hover,
+            .table thead th#sort-name.active {
+                background-color: rgba(56, 189, 248, 0.08) !important;
+            }
+            
+            .table thead th#sort-name .header-label-main {
+                font-size: 11px;
                 gap: 6px;
+                flex: 1;
+                min-width: 0;
+                justify-content: center;
+                text-align: center;
+            }
+            
+            .table thead th#sort-name .mobile-date-toggle {
+                flex: 1;
+                min-width: 0;
+                justify-content: center;
+                text-align: center;
+            }
+            
+            /* Šípky v neaktívnom stave majú menšiu opacity */
+            .table thead th#sort-name .header-label-main .sort-icon {
+                opacity: 0.5;
+            }
+            
+            /* Len aktívne tlačidlo "NÁZOV SÚBORU" má plnú opacity pre šípky */
+            .table thead th#sort-name .header-label-main.active .sort-icon {
+                opacity: 1;
             }
             /* Riadok v mobile: 2 stĺpce (1: názov, 2: akcie) */
             .table tbody tr {
@@ -645,13 +708,16 @@
                 grid-template-columns: auto 1fr; /* 1: ikonka, 2: text */
                 align-items: center;
                 gap: 8px;
-                padding-bottom: 0;
+                padding: 15px; /* Zjednotený padding pre lepšie vertikálne centrovanie */
                 grid-column: 1; /* prvý stĺpec gridu riadku */
             }
             .table tbody td:first-child .file-icon {
                 margin: 0; /* riadi sa gridom */
                 font-size: 1rem; /* trošku menšia ikonka na mobile */
                 align-self: center;
+                width: 20px; /* Fixná šírka pre ikonu */
+                text-align: center; /* Centrovanie ikony v jej priestore */
+                flex-shrink: 0;
             }
             .table tbody td:first-child .filename {
                 min-width: 0; /* umožní skutočné skracovanie v grid kontejnery */
@@ -666,6 +732,7 @@
                 overflow-wrap: anywhere;
                 font-size: 0.9rem;
                 line-height: 1.3;
+                align-self: center; /* Vycentruj text vertikálne */
             }
         }
         
@@ -883,7 +950,6 @@
         
         function filterAndPaginate() {
             const searchValue = document.getElementById('searchInput').value.toLowerCase();
-            const tbody = document.getElementById('filesTableBody');
             
             // Filtruj riadky podľa typu a vyhľadávania
             filteredRows = allRows.filter(row => {
@@ -900,22 +966,29 @@
                 return matchesSearch && matchesType;
             });
             
-            // Aktualizuj počítadlá
-            document.getElementById('visibleFiles').textContent = filteredRows.length;
-            
             // Stránkovanie
-            const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
+            const totalFiltered = filteredRows.length;
+            const totalPages = Math.ceil(totalFiltered / itemsPerPage);
+
+            if (totalPages > 0 && currentPage > totalPages) {
+                currentPage = totalPages;
+            } else if (totalPages === 0) {
+                currentPage = 1;
+            }
+
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = startIndex + itemsPerPage;
+            const rowsToDisplay = filteredRows.slice(startIndex, endIndex);
             
             // Skry všetky riadky
             allRows.forEach(row => row.style.display = 'none');
             
             // Zobraz len aktuálnu stránku
-            filteredRows.slice(startIndex, endIndex).forEach(row => {
+            rowsToDisplay.forEach(row => {
                 row.style.display = '';
             });
-            
+
+            updateFileCounts(rowsToDisplay.length);
             updatePagination(totalPages);
         }
         
@@ -1053,10 +1126,23 @@
                 icon.className = 'fas fa-sort sort-icon';
             });
             
+            // Odstráň active zo všetkých mobilných tlačidiel
+            document.querySelectorAll('.header-label-main').forEach(label => {
+                label.classList.remove('active');
+            });
+            
             // Pridaj aktívny stav k aktuálnej hlavičke
             const activeHeader = document.getElementById(`sort-${currentSort}`);
             if (activeHeader) {
                 activeHeader.classList.add('active');
+                
+                // Pridaj active aj na mobilné tlačidlo názvu ak je aktívne
+                if (currentSort === 'name') {
+                    const mobileNameLabel = activeHeader.querySelector('.header-label-main');
+                    if (mobileNameLabel) {
+                        mobileNameLabel.classList.add('active');
+                    }
+                }
                 
                 // Aktualizuj ikonu podľa smeru zoradenia
                 const icon = activeHeader.querySelector('.sort-icon');
@@ -1094,7 +1180,7 @@
                     ? 'Zoradené podľa dátumu (najstaršie hore). Kliknutím zmeníš poradie.'
                     : 'Zoradené podľa dátumu (najnovšie hore). Kliknutím zmeníš poradie.';
                 if (sortIcon) {
-                    sortIcon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down'} mobile-sort-icon`;
+                    sortIcon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-numeric-down' : 'fa-sort-numeric-up'} mobile-sort-icon`;
                 }
             } else {
                 button.classList.remove('active');
@@ -1321,12 +1407,15 @@
         }
         
         // Funkcia pre aktualizáciu počítadiel súborov
-        function updateFileCounts() {
+        function updateFileCounts(displayedCount = null) {
             const totalFiles = allRows.length;
-            const visibleFiles = filteredRows.length;
-            
+            const totalFiltered = filteredRows.length;
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const remaining = Math.max(totalFiltered - startIndex, 0);
+            const visible = displayedCount !== null ? displayedCount : Math.min(itemsPerPage, remaining);
+
             document.getElementById('totalFiles').textContent = totalFiles;
-            document.getElementById('visibleFiles').textContent = Math.min(visibleFiles, itemsPerPage);
+            document.getElementById('visibleFiles').textContent = visible;
         }
         
         // Funkcia pre spracovanie sťahovania v Android aplikácii

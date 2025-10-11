@@ -234,7 +234,7 @@
         }
         
         .table tbody td {
-            padding: 10px 15px;
+            padding: 8px 14px;
             vertical-align: middle;
             color: var(--text-color);
             line-height: 1.4;
@@ -244,15 +244,15 @@
             background: linear-gradient(135deg, var(--success-color), #22c55e);
             border: none;
             border-radius: 6px;
-            padding: 8px 16px;
+            padding: 7px 14px;
             color: #000;
             text-decoration: none;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             font-weight: 500;
-            font-size: 14px;
+            font-size: 13px;
         }
         
         .btn-download:hover {
@@ -266,15 +266,15 @@
             background: linear-gradient(135deg, #ef4444, #dc2626);
             border: none;
             border-radius: 6px;
-            padding: 8px 16px;
+            padding: 7px 14px;
             color: white;
             text-decoration: none;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             font-weight: 500;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
         }
         
@@ -287,8 +287,8 @@
         .btn-delete-compact {
             padding: 8px;
             min-width: auto;
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             border-radius: 8px;
             display: inline-flex;
             align-items: center;
@@ -662,6 +662,9 @@
                 grid-template-columns: 1fr auto;
                 align-items: center; /* akcie na stred výšky názvu (aj keď je na 2 riadky) */
                 column-gap: 8px;
+            }
+            .table tbody td {
+                padding: 10px 12px;
             }
             .mobile-date-toggle {
                 display: inline-flex;

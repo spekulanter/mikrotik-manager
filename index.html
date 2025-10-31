@@ -1175,6 +1175,7 @@
                                 <option value="backup">Zálohovanie</option>
                                 <option value="notification">Notifikácie</option>
                                 <option value="status">Online/Offline</option>
+                                <option value="device">Zariadenie</option>
                                 <option value="system">Systém</option>
                             </select>
                         </div>
@@ -1220,6 +1221,7 @@
                             <option value="backup">Zálohovanie</option>
                             <option value="notification">Notifikácie</option>
                             <option value="status">Online/Offline</option>
+                            <option value="device">Zariadenie</option>
                             <option value="system">Systém</option>
                         </select>
                     </div>
@@ -1863,6 +1865,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Všetky zálohovacie správy vrátane "spúšťam pokročilú zálohu" (okrem Pushover)
         if (msgLower.includes('záloha') || msgLower.includes('backup') || 
             msgLower.includes('spúšťam pokročilú zálohu') || msgLower.includes('spúšťam zálohu')) return 'backup';
+        // Udalosti týkajúce sa zariadenia (reštart, kritické hodnoty, verzia)
+        const deviceKeywords = ['reštartovan', 'reštart', 'kritick', 'verziu', 'uptime', 'routeros', 'cpu', 'pamät', 'pamäte', 'teplot'];
+        const isDeviceEvent = msgLower.includes('mikrotik') &&
+            deviceKeywords.some(keyword => msgLower.includes(keyword)) &&
+            !msgLower.includes('online') &&
+            !msgLower.includes('offline');
+        if (isDeviceEvent) return 'device';
         // Online/Offline správy (okrem Pushover notifikácií)
         if (msgLower.includes('online') || msgLower.includes('offline') || msgLower.includes('pripojené') || msgLower.includes('nedostupné')) return 'status';
         return 'system';
@@ -2161,7 +2170,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const typeFilter = entry.getAttribute('data-type');
             const levelFilter = entry.getAttribute('data-level');
             const messageText = entry.textContent || '';
-            
+
             let visible = true;
             
             // Filter by device - hľadáme IP aj v data-device aj v texte správy
@@ -2175,16 +2184,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Filter by type
             if (currentFilters.type && typeFilter !== currentFilters.type) {
-                const msgLower = messageText.toLowerCase();
-                
-                // Špeciálne pravidlo: Pushover správy o online/offline stave sú viditeľné aj v "status" filtri
-                if (currentFilters.type === 'status' && typeFilter === 'notification') {
-                    if (!(msgLower.includes('pushover') && (msgLower.includes('online') || msgLower.includes('offline')))) {
-                        visible = false;
-                    }
-                } else {
-                    visible = false;
-                }
+                visible = false;
             }
             
             // Filter by level

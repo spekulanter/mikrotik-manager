@@ -1915,7 +1915,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const addLog = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
         // Úplne ignorujeme startup správy
-        if (message.includes('MikroTik Backup Manager') && message.includes('úspešne načítaný!')) {
+        if (message.includes('MikroTik Manager') && message.includes('úspešne načítaný!')) {
             return; // Túto správu už nezobrazujeme vôbec
         }
         
@@ -2072,7 +2072,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             reversedLogs.forEach(log => {
                 // Ignorujeme len startup správy
-                if (!(log.message.includes('MikroTik Backup Manager') && log.message.includes('úspešne načítaný!'))) {
+                if (!(log.message.includes('MikroTik Manager') && log.message.includes('úspešne načítaný!'))) {
                     addLogToContainer(log.level, log.message, log.device_ip, log.timestamp);
                 }
             });

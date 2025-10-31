@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MikroTik Backup Web Backend v2.8 - Secured
+MikroTik Manager - Secured
 Pridaná webová registrácia, zobrazenie stavu prihlásenia a možnosť zmeny hesla.
 """
 
@@ -424,14 +424,31 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retention_days', '30'))  # Pridané: uchovávanie ping dát
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_retention_days', '30'))  # Pridané: uchovávanie SNMP dát
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('log_max_entries', '2000'))  # Pridané: limit zobrazených logov
-        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('notify_backup_success', 'false'))  # Notifikácie úspešných záloh
-        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('notify_backup_failure', 'false'))  # Notifikácie neúspešných záloh
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('notify_backup_success', 'true'))  # Notifikácie úspešných záloh
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('notify_backup_failure', 'true'))  # Notifikácie neúspešných záloh
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_check_interval_seconds', '120'))  # Ping monitoring interval v sekundách
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_monitor_enabled', 'true'))  # Povoliť/zakázať ping monitoring
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('debug_terminal', 'false'))  # Pridané: debug terminál v monitoringu
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retry_interval', '20'))  # Retry interval pri výpadku v sekundách
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retries', '3'))  # Počet neúspešných pokusov pred označením offline
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_timeout', '5'))  # Timeout pre jeden ping
+        additional_defaults = {
+            'notify_device_offline': 'true',
+            'notify_device_online': 'true',
+            'notify_temp_critical': 'true',
+            'notify_cpu_critical': 'true',
+            'notify_memory_critical': 'true',
+            'notify_reboot_detected': 'true',
+            'notify_version_change': 'true',
+            'temp_critical_threshold': '75',
+            'cpu_critical_threshold': '85',
+            'memory_critical_threshold': '90',
+            'quiet_hours_enabled': 'false',
+            'quiet_hours_start': '',
+            'quiet_hours_end': ''
+        }
+        for key, value in additional_defaults.items():
+            cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
         conn.commit()
         logger.info("Databáza úspešne inicializovaná.")
 
@@ -517,13 +534,33 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
         
         # Ignore pravidlá presne ako v legacy scripte (mikrotik_backup_compare_export_first.py)
         ignore_keywords = ['list=blacklist', 'comment=spamhaus,dshield,bruteforce']
-        
-        def should_include(line):
-            return all(keyword not in line for keyword in ignore_keywords)
-        
-        # Odstránime prvý riadok a filtrujeme podľa ignore pravidiel
-        local_lines = [line for line in local_content.splitlines()[1:] if should_include(line)]
-        remote_lines = [line for line in remote_content.splitlines()[1:] if should_include(line)]
+
+        def normalized_lines(content):
+            """Vráti riadky bez šumových blacklist aktualizácií."""
+            lines = content.splitlines()
+            filtered = []
+            skip_indented = False
+
+            for raw_line in lines[1:]:  # preskočíme časovú hlavičku
+                stripped = raw_line.strip()
+
+                if skip_indented:
+                    if not stripped or raw_line[:1].isspace():
+                        if not raw_line.rstrip().endswith('\\'):
+                            skip_indented = False
+                        continue
+                    skip_indented = False
+
+                if any(keyword in raw_line for keyword in ignore_keywords):
+                    skip_indented = raw_line.rstrip().endswith('\\')
+                    continue
+
+                filtered.append(raw_line)
+
+            return filtered
+
+        local_lines = normalized_lines(local_content)
+        remote_lines = normalized_lines(remote_content)
         
         # Používame rovnakú diff logiku ako pôvodný script
         d = difflib.Differ()
@@ -643,7 +680,11 @@ def run_backup_logic(device, is_sequential=False):
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
         if settings.get('notify_backup_success', 'false').lower() == 'true':
             device_name = device.get('name', ip)
-            send_pushover_notification(f"Záloha MikroTik {ip} ({device_name}) bola úspešne dokončená.", title="Úspešná záloha")
+            send_pushover_notification(
+                f"💾 Záloha MikroTik {ip} ({device_name}) bola úspešne dokončená.",
+                title="Úspešná záloha",
+                notification_key='notify_backup_success'
+            )
 
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now().isoformat()})
         upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.backup"), detailed_logging)
@@ -662,7 +703,11 @@ def run_backup_logic(device, is_sequential=False):
                 settings_fail = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             if settings_fail.get('notify_backup_failure', 'false').lower() == 'true':
                 device_name = device.get('name', ip)
-                send_pushover_notification(f"Záloha MikroTik {ip} ({device_name}) zlyhala: {e}", title="Zlyhaná záloha")
+                send_pushover_notification(
+                    f"❌ Záloha MikroTik {ip} ({device_name}) zlyhala: {e}",
+                    title="Zlyhaná záloha",
+                    notification_key='notify_backup_failure'
+                )
         except Exception as notif_e:
             add_log('error', f"Notifikácia o zlyhaní zálohy sa nepodarila: {notif_e}", ip)
     finally:
@@ -753,8 +798,10 @@ def get_snmp_data(ip, community='public'):
             else:
                 val = varBinds[0][1]
                 if name == 'uptime':
-                    td = timedelta(seconds=float(val)/100.0)
+                    seconds = int(float(val) / 100.0)
+                    td = timedelta(seconds=seconds)
                     results[name] = f"{td.days}d {td.seconds//3600}h {(td.seconds//60)%60}m"
+                    results['uptime_seconds'] = str(seconds)
                 elif name == 'temperature': 
                     results[name] = str(int(int(val)/10.0))
                 elif name in ['used_memory', 'total_memory']:
@@ -827,10 +874,14 @@ def get_snmp_data(ip, community='public'):
         for key in ['architecture']:
             if key in results: 
                 del results[key]
+        if 'uptime_seconds' not in results:
+            results['uptime_seconds'] = '0'
         return results
     except Exception as e:
         add_log('error', f"SNMP query for IP {ip} failed: {e}", device_ip=ip)
-        return {k: 'N/A' for k in ['identity','uptime','version','board_name','cpu_load','temperature','cpu_count','memory_usage','used_memory','total_memory','free_memory']}
+        fallback = {k: 'N/A' for k in ['identity','uptime','version','board_name','cpu_load','temperature','cpu_count','memory_usage','used_memory','total_memory','free_memory']}
+        fallback['uptime_seconds'] = '0'
+        return fallback
 
 def upload_to_ftp(local_path, detailed_logging=True):
     try:
@@ -846,25 +897,76 @@ def upload_to_ftp(local_path, detailed_logging=True):
                     add_log('info', f"Súbor {os.path.basename(local_path)} nahraný na FTP.")
     except Exception as e: add_log('error', f"FTP upload zlyhal: {e}")
 
-def send_pushover_notification(message, title="MikroTik Manager"):
+def send_pushover_notification(message, title="MikroTik Manager", notification_key=None, default_enabled=True):
     try:
+        queried_keys = ['pushover_app_key', 'pushover_user_key', 'quiet_hours_enabled', 'quiet_hours_start', 'quiet_hours_end']
+        if notification_key:
+            queried_keys.append(notification_key)
         with get_db_connection() as conn:
-            settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE "pushover_%"')}
-        if not all(k in settings and settings[k] for k in ['pushover_app_key', 'pushover_user_key']): return
+            cursor = conn.cursor()
+            placeholders = ','.join('?' for _ in queried_keys)
+            settings_rows = cursor.execute(f'SELECT key, value FROM settings WHERE key IN ({placeholders})', queried_keys).fetchall()
+            settings = {row['key']: row['value'] for row in settings_rows}
+            
+            enabled = True
+            if notification_key:
+                raw_value = settings.get(notification_key)
+                if raw_value is None:
+                    cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (notification_key, 'true' if default_enabled else 'false'))
+                    conn.commit()
+                    enabled = default_enabled
+                else:
+                    enabled = raw_value.lower() == 'true'
+                if not enabled:
+                    debug_log('debug_notifications', f"Notification '{notification_key}' potlačená - vypnutá v nastaveniach.")
+                    return False
+            
+            # Quiet hours support
+            quiet_enabled = settings.get('quiet_hours_enabled', 'false').lower() == 'true'
+            if quiet_enabled:
+                start = settings.get('quiet_hours_start')
+                end = settings.get('quiet_hours_end')
+                if start and end:
+                    try:
+                        start_time = datetime.strptime(start, "%H:%M").time()
+                        end_time = datetime.strptime(end, "%H:%M").time()
+                        now_time = datetime.now().time()
+                        in_quiet_hours = False
+                        if start_time <= end_time:
+                            in_quiet_hours = start_time <= now_time < end_time
+                        else:
+                            in_quiet_hours = now_time >= start_time or now_time < end_time
+                        if in_quiet_hours:
+                            debug_log('debug_notifications', f"Notification '{notification_key}' potlačená - quiet hours.")
+                            return False
+                    except Exception as time_e:
+                        debug_log('debug_notifications', f"Quiet hours parsing error: {time_e}")
+            
+            app_key = settings.get('pushover_app_key')
+            user_key = settings.get('pushover_user_key')
+            if not app_key or not user_key:
+                debug_log('debug_notifications', "Pushover notifikácia neodoslaná - chýba app key alebo user key.")
+                return False
+        
         conn_pushover = http.client.HTTPSConnection("api.pushover.net:443")
-        conn_pushover.request("POST", "/1/messages.json", urllib.parse.urlencode({"token": settings['pushover_app_key'], "user": settings['pushover_user_key'], "title": title, "message": message}), {"Content-type": "application/x-www-form-urlencoded"})
+        conn_pushover.request(
+            "POST",
+            "/1/messages.json",
+            urllib.parse.urlencode({"token": app_key, "user": user_key, "title": title, "message": message}),
+            {"Content-type": "application/x-www-form-urlencoded"}
+        )
         conn_pushover.getresponse()
         
-        # Určíme level podľa obsahu správy
-        if "OFFLINE" in message:
-            log_level = 'warning'
-        elif "ONLINE" in message:
-            log_level = 'info'
-        else:
-            log_level = 'info'
-            
+        level_map = {
+            'notify_device_offline': 'warning',
+            'notify_backup_failure': 'error'
+        }
+        log_level = level_map.get(notification_key, 'info')
         add_log(log_level, f"Pushover notifikácia odoslaná: {message}")
-    except Exception as e: add_log('error', f"Odoslanie Pushover notifikácie zlyhalo: {e}")
+        return True
+    except Exception as e:
+        add_log('error', f"Odoslanie Pushover notifikácie zlyhalo: {e}")
+        return False
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1123,14 +1225,22 @@ def delete_backup(filename):
                 device_ip = ip_match.group(1)
                 
                 # Kontrola, či ešte existujú nejaké zálohy pre toto zariadenie
-                existing_backups = [f for f in os.listdir(BACKUP_DIR) 
-                                  if f.endswith('.backup') and device_ip in f and os.path.isfile(os.path.join(BACKUP_DIR, f))]
-                
-                if not existing_backups:
-                    # Žiadne zálohy už neexistujú, vynuluj last_backup v databáze
-                    with get_db_connection() as conn:
+                candidate_files = []
+                for f in os.listdir(BACKUP_DIR):
+                    if not f.endswith('.backup') or device_ip not in f:
+                        continue
+                    full_path = os.path.join(BACKUP_DIR, f)
+                    if os.path.isfile(full_path):
+                        candidate_files.append((f, full_path, os.path.getmtime(full_path)))
+
+                with get_db_connection() as conn:
+                    if not candidate_files:
                         conn.execute('UPDATE devices SET last_backup = NULL WHERE ip = ?', (device_ip,))
-                        conn.commit()
+                    else:
+                        latest_name, latest_path, latest_mtime = max(candidate_files, key=lambda item: item[2])
+                        latest_mtime = datetime.fromtimestamp(latest_mtime)
+                        conn.execute('UPDATE devices SET last_backup = ? WHERE ip = ?', (latest_mtime, device_ip,))
+                    conn.commit()
         except Exception as db_e:
             add_log('warning', f"Nepodarilo sa aktualizovať databázu po vymazaní zálohy: {db_e}")
         
@@ -1770,7 +1880,7 @@ def handle_settings():
 @app.route('/api/notifications/test', methods=['POST'])
 @login_required
 def test_notification():
-    send_pushover_notification("Toto je testovacia správa z MikroTik Backup Manager.")
+    send_pushover_notification("🔔 Toto je testovacia správa z MikroTik Manager.")
     return jsonify({'status': 'success'})
 
 @app.route('/api/snmp/timers/status', methods=['GET'])
@@ -2100,7 +2210,11 @@ def start_snmp_timer_for_device(device_id, interval_minutes, immediate=False):
         try:
             with app.app_context():
                 with get_db_connection() as conn:
-                    device = conn.execute('SELECT id, ip, name, snmp_community, monitoring_paused FROM devices WHERE id = ?', (device_id,)).fetchone()
+                    device = conn.execute(
+                        'SELECT id, ip, name, snmp_community, monitoring_paused, last_snmp_data '
+                        'FROM devices WHERE id = ?',
+                        (device_id,)
+                    ).fetchone()
                     
                     if not device:
                         logger.warning(f"Device {device_id} not found, stopping SNMP timer")
@@ -2113,33 +2227,54 @@ def start_snmp_timer_for_device(device_id, interval_minutes, immediate=False):
                         schedule_next_check()
                         return
                     
+                    # Načítaj posledné SNMP dáta pre porovnanie
+                    previous_data = {}
+                    if device['last_snmp_data']:
+                        try:
+                            previous_data = json.loads(device['last_snmp_data'])
+                        except Exception as decode_error:
+                            debug_log('debug_snmp_data', f"Nepodarilo sa dekódovať predchádzajúce SNMP dáta: {decode_error}")
+                            previous_data = {}
+
                     # Perform the actual SNMP check
                     debug_log('debug_snmp_timers', f"Performing SNMP check for device {device['name']} (interval: {interval_minutes}min)")
                     
                     # Get SNMP data
                     snmp_data = get_snmp_data(device['ip'], device['snmp_community'])
                     status = 'online' if snmp_data.get('uptime') != 'N/A' else 'offline'
-                    
-                    if snmp_data:
-                        # Save to database - update same fields as manual check
-                        timestamp = datetime.now()
-                        conn.execute("UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ?", 
-                                   (json.dumps(snmp_data), status, timestamp.isoformat(), device_id))
-                        conn.commit()
-                        
-                        # Save to SNMP history
-                        save_snmp_history(device_id, snmp_data)
-                        
-                        # Emit to WebSocket
-                        debug_emit('snmp_update', {
-                            'id': device_id,
-                            'data': snmp_data,
-                            'status': status
-                        })
-                        
+                    has_valid_metrics = snmp_data and snmp_data.get('uptime') != 'N/A'
+
+                    if has_valid_metrics:
+                        evaluate_snmp_notifications(device, snmp_data, previous_data if previous_data.get('uptime') != 'N/A' else {})
+
+                    # Save to database
+                    timestamp = datetime.now()
+                    if has_valid_metrics:
+                        conn.execute(
+                            "UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ?",
+                            (json.dumps(snmp_data), status, timestamp.isoformat(), device_id)
+                        )
+                    else:
+                        conn.execute(
+                            "UPDATE devices SET status = ?, last_snmp_check = ? WHERE id = ?",
+                            (status, timestamp.isoformat(), device_id)
+                        )
+                    conn.commit()
+
+                    # Save to SNMP history (uchovávame aj neplatné dáta kvôli diagnostike)
+                    save_snmp_history(device_id, snmp_data)
+
+                    # Emit to WebSocket
+                    debug_emit('snmp_update', {
+                        'id': device_id,
+                        'data': snmp_data,
+                        'status': status
+                    })
+
+                    if has_valid_metrics:
                         debug_log('debug_snmp_data', f"SNMP data saved and emitted for device {device['name']}")
                     else:
-                        logger.warning(f"Failed to get SNMP data for device {device['name']}")
+                        logger.warning(f"SNMP dáta pre {device['name']} neobsahovali platný uptime (zariadenie je pravdepodobne offline).")
                     
                     # Schedule next check
                     schedule_next_check()
@@ -2452,6 +2587,148 @@ def save_snmp_history(device_id, snmp_data):
     except Exception as e:
         logger.error(f"Chyba pri ukladaní SNMP history: {e}")
 
+def _safe_int(value):
+    try:
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return int(float(value))
+        text = str(value).strip()
+        if not text or text.upper() == 'N/A':
+            return None
+        text = text.replace('%', '').replace(',', '.')
+        return int(float(text))
+    except (ValueError, TypeError):
+        return None
+
+def _format_duration_from_seconds(seconds):
+    try:
+        total_seconds = int(seconds)
+    except (TypeError, ValueError):
+        return "0m"
+    minutes, _ = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours or days:
+        parts.append(f"{hours}h")
+    parts.append(f"{minutes}m")
+    return ' '.join(parts)
+
+def evaluate_snmp_notifications(device, snmp_data, previous_data):
+    """Vyhodnotí SNMP notifikácie podľa kritických limitov a zmien."""
+    try:
+        with get_db_connection() as conn:
+            keys = ['temp_critical_threshold', 'cpu_critical_threshold', 'memory_critical_threshold']
+            placeholders = ','.join('?' for _ in keys)
+            rows = conn.execute(f'SELECT key, value FROM settings WHERE key IN ({placeholders})', keys).fetchall()
+            settings = {row['key']: row['value'] for row in rows}
+    except Exception as e:
+        add_log('warning', f"Nepodarilo sa načítať nastavenia SNMP notifikácií: {e}", device['ip'])
+        return
+
+    temperature_threshold = _safe_int(settings.get('temp_critical_threshold'))
+    cpu_threshold = _safe_int(settings.get('cpu_critical_threshold'))
+    memory_threshold = _safe_int(settings.get('memory_critical_threshold'))
+
+    current_temperature = _safe_int(snmp_data.get('temperature'))
+    previous_temperature = _safe_int((previous_data or {}).get('temperature'))
+    if (
+        temperature_threshold is not None
+        and current_temperature is not None
+        and current_temperature >= temperature_threshold
+        and (previous_temperature is None or previous_temperature < temperature_threshold)
+    ):
+        message = (
+            f"🌡️ MikroTik {device['name']} ({device['ip']}) prekročil kritickú teplotu: "
+            f"{current_temperature}°C (limit {temperature_threshold}°C)"
+        )
+        add_log('warning', message, device['ip'])
+        send_pushover_notification(
+            message,
+            title="SNMP Monitoring - Teplota",
+            notification_key='notify_temp_critical'
+        )
+
+    current_cpu = _safe_int(snmp_data.get('cpu_load'))
+    previous_cpu = _safe_int((previous_data or {}).get('cpu_load'))
+    if (
+        cpu_threshold is not None
+        and current_cpu is not None
+        and current_cpu >= cpu_threshold
+        and (previous_cpu is None or previous_cpu < cpu_threshold)
+    ):
+        message = (
+            f"🖥️ MikroTik {device['name']} ({device['ip']}) prekročil kritické vyťaženie CPU: "
+            f"{current_cpu}% (limit {cpu_threshold}%)"
+        )
+        add_log('warning', message, device['ip'])
+        send_pushover_notification(
+            message,
+            title="SNMP Monitoring - CPU",
+            notification_key='notify_cpu_critical'
+        )
+
+    current_memory = _safe_int(snmp_data.get('memory_usage'))
+    previous_memory = _safe_int((previous_data or {}).get('memory_usage'))
+    if (
+        memory_threshold is not None
+        and current_memory is not None
+        and current_memory >= memory_threshold
+        and (previous_memory is None or previous_memory < memory_threshold)
+    ):
+        message = (
+            f"💾 MikroTik {device['name']} ({device['ip']}) prekročil kritické využitie pamäte: "
+            f"{current_memory}% (limit {memory_threshold}%)"
+        )
+        add_log('warning', message, device['ip'])
+        send_pushover_notification(
+            message,
+            title="SNMP Monitoring - Pamäť",
+            notification_key='notify_memory_critical'
+        )
+
+    current_uptime = _safe_int(snmp_data.get('uptime_seconds')) if snmp_data.get('uptime') != 'N/A' else None
+    previous_uptime = _safe_int((previous_data or {}).get('uptime_seconds'))
+    if (
+        previous_uptime is not None
+        and current_uptime is not None
+        and previous_uptime > current_uptime + 300
+        and previous_uptime > 600
+    ):
+        uptime_human = _format_duration_from_seconds(current_uptime)
+        message = (
+            f"🔄 MikroTik {device['name']} ({device['ip']}) bol reštartovaný "
+            f"(aktuálny uptime {uptime_human})"
+        )
+        add_log('info', message, device['ip'])
+        send_pushover_notification(
+            message,
+            title="SNMP Monitoring - Reboot",
+            notification_key='notify_reboot_detected'
+        )
+
+    current_version = snmp_data.get('version')
+    previous_version = (previous_data or {}).get('version')
+    if (
+        previous_version
+        and current_version
+        and previous_version != 'N/A'
+        and current_version != 'N/A'
+        and previous_version != current_version
+    ):
+        message = (
+            f"🆕 MikroTik {device['name']} ({device['ip']}) má novú verziu RouterOS: "
+            f"{previous_version} ➜ {current_version}"
+        )
+        add_log('info', message, device['ip'])
+        send_pushover_notification(
+            message,
+            title="SNMP Monitoring - Verzia OS",
+            notification_key='notify_version_change'
+        )
 def ping_monitoring_loop():
     """Nekonečná slučka pre ping monitoring s presným dodržaním intervalov pre každé zariadenie"""
     global ping_thread_stop_flag
@@ -2490,7 +2767,7 @@ def ping_monitoring_loop():
                 
                 # Získaj zariadenia s ich ping interval nastaveniami (okrem paused zariadení)
                 cursor.execute('''
-                    SELECT id, ip, ping_interval_seconds, status
+                    SELECT id, name, ip, ping_interval_seconds, status
                     FROM devices
                     WHERE monitoring_paused = 0 OR monitoring_paused IS NULL
                 ''')
@@ -2503,16 +2780,19 @@ def ping_monitoring_loop():
                 shortest_interval = global_ping_interval
                 
                 for device in devices:
-                    device_id, ip, device_ping_interval, db_status = device
+                    device_id, device_name, ip, device_ping_interval, db_status = device
                     
                     # Iniciálne nastavenie tracker-a pre zariadenie ak neexistuje
                     if device_id not in device_status_tracker:
                         device_status_tracker[device_id] = {
+                            'name': device_name,
                             'status': db_status or 'unknown',
                             'failed_count': 0,
                             'last_status_change': current_time,
                             'in_retry_mode': False
                         }
+                    else:
+                        device_status_tracker[device_id]['name'] = device_name
                     
                     # Použij device-specific interval, ak je nastavený, inak global
                     effective_interval = device_ping_interval if device_ping_interval and device_ping_interval > 0 else global_ping_interval
@@ -2531,7 +2811,7 @@ def ping_monitoring_loop():
                     if device_id not in device_last_ping:
                         # Prvý ping - pinguj okamžite
                         should_ping = True
-                        debug_log('debug_ping_monitoring', f"Device {ip} (ID: {device_id}): prvý ping, interval: {effective_interval}s")
+                        debug_log('debug_ping_monitoring', f"Device {ip} ({device_name}) (ID: {device_id}): prvý ping, interval: {effective_interval}s")
                     else:
                         # Kontrola času od posledného pingu pre toto zariadenie
                         seconds_since_ping = (current_time - device_last_ping[device_id]).total_seconds()
@@ -2540,17 +2820,17 @@ def ping_monitoring_loop():
                             should_ping = True
                             if device_status_tracker[device_id]['in_retry_mode']:
                                 debug_log('debug_ping_monitoring', 
-                                          f"Device {ip} (ID: {device_id}): retry ping, failed count: {device_status_tracker[device_id]['failed_count']}")
+                                          f"Device {ip} ({device_name}) (ID: {device_id}): retry ping, failed count: {device_status_tracker[device_id]['failed_count']}")
                             else:
                                 debug_log('debug_ping_monitoring', 
-                                          f"Device {ip} (ID: {device_id}): {seconds_since_ping:.2f}s od posledného pingu (interval: {effective_interval}s)")
+                                          f"Device {ip} ({device_name}) (ID: {device_id}): {seconds_since_ping:.2f}s od posledného pingu (interval: {effective_interval}s)")
                         else:
                             remaining = effective_interval - seconds_since_ping
                             debug_log('debug_ping_monitoring', 
-                                      f"Device {ip} (ID: {device_id}): zostáva {remaining:.2f}s do ďalšieho pingu")
+                                      f"Device {ip} ({device_name}) (ID: {device_id}): zostáva {remaining:.2f}s do ďalšieho pingu")
                     
                     if should_ping:
-                        devices_to_ping.append((device_id, ip, effective_interval, retry_interval, max_retries, ping_timeout))
+                        devices_to_ping.append((device_id, device_name, ip, effective_interval, retry_interval, max_retries, ping_timeout))
                 
                 # Ping všetky zariadenia, ktoré potrebujú ping - spustíme ich paralelne pre presnosť
                 if devices_to_ping:
@@ -2558,7 +2838,7 @@ def ping_monitoring_loop():
                     import threading
                     
                     def ping_single_device(device_info):
-                        device_id, ip, interval, retry_interval, max_retries, ping_timeout = device_info
+                        device_id, device_name, ip, interval, retry_interval, max_retries, ping_timeout = device_info
                         try:
                             # Zaznačíme čas PRED pingom pre presnosť
                             ping_time = datetime.now()
@@ -2576,11 +2856,16 @@ def ping_monitoring_loop():
                                 # Úspešný ping - zariadenie je online
                                 if current_status == 'offline':
                                     # Zariadenie bolo offline a teraz je online - zmena stavu
-                                    add_log('info', f"Zariadenie {ip} je opäť online")
-                                    send_pushover_notification(f"Zariadenie {ip} je opäť online", title="MikroTik Monitor - Zariadenie Online")
+                                    add_log('info', f"MikroTik {device_name} ({ip}) je opäť online")
+                                    send_pushover_notification(
+                                        f"🟢 MikroTik {device_name} ({ip}) je opäť online",
+                                        title="MikroTik Monitor - Zariadenie Online",
+                                        notification_key='notify_device_online'
+                                    )
                                 
                                 # Reset retry counter and mode
                                 device_status_tracker[device_id] = {
+                                    'name': device_name,
                                     'status': 'online',
                                     'failed_count': 0,
                                     'last_status_change': datetime.now(),
@@ -2606,8 +2891,12 @@ def ping_monitoring_loop():
                                         # Zmena stavu na offline
                                         device_status_tracker[device_id]['status'] = 'offline'
                                         device_status_tracker[device_id]['last_status_change'] = datetime.now()
-                                        add_log('error', f"Zariadenie {ip} je offline (po {max_retries} neúspešných pokusoch)")
-                                        send_pushover_notification(f"Zariadenie {ip} je offline", title="MikroTik Monitor - Zariadenie Offline")
+                                        add_log('error', f"MikroTik {device_name} ({ip}) je offline (po {max_retries} neúspešných pokusoch)")
+                                        send_pushover_notification(
+                                            f"🔴 MikroTik {device_name} ({ip}) je offline",
+                                            title="MikroTik Monitor - Zariadenie Offline",
+                                            notification_key='notify_device_offline'
+                                        )
                                         # Naďalej zostávame v retry mode pre monitoring
                             
                             # Uložíme výsledok a aktuálny status

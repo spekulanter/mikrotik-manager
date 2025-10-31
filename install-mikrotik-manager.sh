@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# MikroTik Backup Manager - Smart Installer/Updater v2.0
+# MikroTik Manager - Smart Installer/Updater v2.0
 # Deteguje existujúcu inštaláciu a spustí buď inštaláciu alebo update
 #
 set -e
@@ -21,7 +21,7 @@ if [ -d "${APP_DIR}/.git" ]; then
     echo "🔄 Detegovaná existujúca inštalácia - spúšťam aktualizáciu..."
     
     # UPDATE PROCES
-    msg_info "Zastavujem službu MikroTik Backup Manager..."
+    msg_info "Zastavujem službu MikroTik Manager..."
     systemctl stop mikrotik-manager.service 2>/dev/null || true
     systemctl kill mikrotik-manager.service 2>/dev/null || true
     sleep 1
@@ -141,7 +141,7 @@ PROFEOF
     msg_info "Kontrolujem systemd službu..."
     cat << EOF > ${SERVICE_FILE}
 [Unit]
-Description=MikroTik Backup Manager
+Description=MikroTik Manager
 After=network.target
 
 [Service]
@@ -347,7 +347,7 @@ PROFEOF
     msg_info "Vytváram systemd službu pre automatické spúšťanie..."
     cat << EOF > ${SERVICE_FILE}
 [Unit]
-Description=MikroTik Backup Manager
+Description=MikroTik Manager
 After=network.target
 
 [Service]
@@ -366,7 +366,7 @@ EOF
     msg_ok "Súbor pre službu vytvorený."
     
     # Povolenie a spustenie služby
-    msg_info "Povoľujem a spúšťam službu MikroTik Backup Manager..."
+    msg_info "Povoľujem a spúšťam službu MikroTik Manager..."
     systemctl daemon-reload
     systemctl enable --now mikrotik-manager.service >/dev/null 2>&1
     msg_ok "Služba mikrotik-manager.service je aktívna a beží."

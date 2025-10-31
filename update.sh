@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-echo "🔄 Aktualizujem MikroTik Backup Manager..."
+echo "🔄 Aktualizujem MikroTik Manager..."
 
 # Load Android development environment
 if [ -f /etc/profile.d/android-dev.sh ]; then

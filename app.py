@@ -31,6 +31,9 @@ import urllib.parse
 from contextlib import contextmanager
 import logging
 import schedule
+import heapq
+import itertools
+from concurrent.futures import ThreadPoolExecutor
 
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -591,17 +594,29 @@ def run_backup_logic(device, is_sequential=False):
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     
     detailed_logging = settings.get('backup_detailed_logging', 'false').lower() == 'true'
+
+    # Zistíme názov zariadenia (pre logy + notifikácie)
+    device_name = device.get('name')
+    if not device_name:
+        try:
+            with get_db_connection() as conn:
+                row = conn.execute('SELECT name FROM devices WHERE ip = ?', (ip,)).fetchone()
+                if row:
+                    device_name = row['name']
+        except Exception:
+            device_name = None
+    name_suffix = f" ({device_name})" if device_name else ""
     
     # Základná správa o spustení zálohy (zjednotená pre konzistentnosť)
     # Vždy komunikujeme, že ide o pokročilú zálohu; pri sekvenčnej doplníme info a pri low-memory režime upozorníme na dlhšie časy
     # Neuvádzame IP priamo v texte (frontend ju má už v hlavičke logu)
     prefix = "Záloha - " if is_sequential else ""
     if low_memory:
-        add_log('info', f"{prefix}Spúšťam zálohu pre 16MB zariadenie (predĺžené časy)", ip)
+        add_log('info', f"{prefix}Spúšťam zálohu{name_suffix} pre 16MB zariadenie (predĺžené časy)", ip)
         if detailed_logging:
             add_log('info', "Režim 16MB: predĺžené čakacie intervaly (backup ~30s, export ~180s).", ip)
     else:
-        add_log('info', f"{prefix}Spúšťam zálohu", ip)
+        add_log('info', f"{prefix}Spúšťam zálohu{name_suffix}", ip)
     
     socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'starting'})
     client = None
@@ -619,9 +634,9 @@ def run_backup_logic(device, is_sequential=False):
         if not compare_with_local_backup(ip, remote_config, detailed_logging):
             # Záverečná správa o preskočení zálohy
             if is_sequential:
-                add_log('info', f"Záloha - preskočená (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
+                add_log('info', f"Záloha - preskočená{name_suffix} (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
             else:
-                add_log('info', f"Záloha preskočená (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
+                add_log('info', f"Záloha preskočená{name_suffix} (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
             socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'skipped'})
             return
         _, stdout, _ = client.exec_command('/system identity print')
@@ -671,9 +686,9 @@ def run_backup_logic(device, is_sequential=False):
         
         # Záverečná správa o dokončení zálohy
         if is_sequential:
-            add_log('info', f"Záloha - dokončená úspešne{' (16MB)' if low_memory else ''}", ip)
+            add_log('info', f"Záloha - dokončená{name_suffix} úspešne{' (16MB)' if low_memory else ''}", ip)
         else:
-            add_log('info', f"Záloha dokončená{' (16MB)' if low_memory else ''}.", ip)
+            add_log('info', f"Záloha dokončená{name_suffix}{' (16MB)' if low_memory else ''}.", ip)
         
         # Odoslanie notifikácie o úspešnej zálohe
         with get_db_connection() as conn:
@@ -1635,33 +1650,42 @@ def run_sequential_backup(devices, delay_seconds):
 @app.route('/api/snmp/<int:device_id>', methods=['GET'])
 @login_required
 def check_snmp(device_id):
-    with get_db_connection() as conn:
-        device = conn.execute('SELECT ip, snmp_community, snmp_interval_minutes FROM devices WHERE id = ?', (device_id,)).fetchone()
-    if not device: return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+    result = perform_snmp_poll(device_id, reason="manual")
+
+    # Zvládnutie stavov podľa výsledku
+    if result.get('status') == 'missing':
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+    if result.get('error'):
+        return jsonify({'status': 'error', 'message': result['error']}), 500
+
+    device = result.get('device')
+    if not device:
+        with get_db_connection() as conn:
+            device = conn.execute(
+                'SELECT id, snmp_interval_minutes FROM devices WHERE id = ?',
+                (device_id,)
+            ).fetchone()
+            if not device:
+                return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
     
-    snmp_data = get_snmp_data(device['ip'], device['snmp_community'])
-    status = 'online' if snmp_data.get('uptime') != 'N/A' else 'offline'
-    current_time = datetime.now()
-    with get_db_connection() as conn:
-        conn.execute("UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ?", (json.dumps(snmp_data), status, current_time.isoformat(), device_id))
-        conn.commit()
-    
-    # Uloženie do SNMP histórie
-    save_snmp_history(device_id, snmp_data)
-    
-    # NOVÉ: Reštartuj timer pri manuálnom checku
     with get_db_connection() as conn:
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
         global_interval = int(settings.get('snmp_check_interval_minutes', 10))
     
     # Určí interval pre toto zariadenie
-    device_interval = device['snmp_interval_minutes'] if device['snmp_interval_minutes'] and device['snmp_interval_minutes'] > 0 else global_interval
+    try:
+        snmp_interval_value = device['snmp_interval_minutes']
+    except (KeyError, TypeError):
+        if isinstance(device, (tuple, list)) and len(device) > 1:
+            snmp_interval_value = device[1]
+        else:
+            snmp_interval_value = 0
+    device_interval = snmp_interval_value if snmp_interval_value and snmp_interval_value > 0 else global_interval
     
     # Reštartuj timer s immediate=True pre okamžité nastavenie ďalšieho checku
     restart_snmp_timer_for_device(device_id, device_interval)
-    # Log odstránený - zbytočne zahltáva systém
     
-    socketio.emit('snmp_update', {'id': device_id, 'data': snmp_data, 'status': status})
+    snmp_data = result.get('snmp_data') or {}
     return jsonify(snmp_data)
 
 @app.route('/api/snmp/refresh-all', methods=['POST'])
@@ -1888,57 +1912,72 @@ def test_notification():
 def get_snmp_timers_status():
     """Diagnostika stavu SNMP timerov"""
     try:
-        timer_status = []
-        current_time = datetime.now()
-        
         with get_db_connection() as conn:
             devices = conn.execute('SELECT id, name, ip, snmp_interval_minutes, last_snmp_check, monitoring_paused FROM devices').fetchall()
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             global_interval = int(settings.get('snmp_check_interval_minutes', 10))
-            
-            for device in devices:
-                device_id = device['id']
-                device_interval = device['snmp_interval_minutes'] if device['snmp_interval_minutes'] and device['snmp_interval_minutes'] > 0 else global_interval
-                
-                # Stav timeru
-                timer_exists = device_id in device_snmp_timers
-                timer_active = timer_exists and device_snmp_timers[device_id].is_alive() if timer_exists else False
-                
-                # Čas od posledného checku
-                time_since_check = None
-                if device['last_snmp_check']:
-                    try:
-                        last_check = datetime.fromisoformat(device['last_snmp_check'])
-                        time_since_check = (current_time - last_check).total_seconds() / 60
-                    except:
-                        pass
-                
-                # Určenie stavu
-                if device['monitoring_paused']:
-                    status = 'paused'
-                elif not timer_exists:
-                    status = 'missing'
-                elif not timer_active:
-                    status = 'dead'
-                elif time_since_check and time_since_check > device_interval * 2:
-                    status = 'stuck'
-                else:
-                    status = 'healthy'
-                
-                timer_status.append({
-                    'device_id': device_id,
-                    'device_name': device['name'],
-                    'device_ip': device['ip'],
-                    'interval_minutes': device_interval,
-                    'timer_exists': timer_exists,
-                    'timer_active': timer_active,
-                    'last_check_minutes_ago': round(time_since_check, 1) if time_since_check else None,
-                    'status': status,
-                    'monitoring_paused': bool(device['monitoring_paused'])
-                })
-        
+
+        current_time = datetime.now()
+        now_ts = time.time()
+
+        with snmp_task_lock:
+            queue_length = len(snmp_task_queue)
+            state_snapshot = {device_id: dict(state) for device_id, state in snmp_task_state.items()}
+
+        timer_status = []
+        for device in devices:
+            device_id = device['id']
+            effective_interval = device['snmp_interval_minutes'] if device['snmp_interval_minutes'] and device['snmp_interval_minutes'] > 0 else global_interval
+            effective_interval = max(effective_interval, 1)
+
+            state = state_snapshot.get(device_id)
+            next_run_minutes = None
+            running = False
+            paused_state = False
+
+            if state:
+                paused_state = state.get('paused', False)
+                running = state.get('running', False)
+                next_run = state.get('next_run')
+                if next_run:
+                    next_run_minutes = round(max(0.0, (next_run - now_ts) / 60), 2)
+
+            last_check_minutes = None
+            if device['last_snmp_check']:
+                try:
+                    last_check = datetime.fromisoformat(device['last_snmp_check'])
+                    last_check_minutes = (current_time - last_check).total_seconds() / 60
+                except Exception as e:
+                    logger.error(f"Error parsing last_snmp_check for device {device_id}: {e}")
+
+            if device['monitoring_paused']:
+                status = 'paused'
+            elif not state:
+                status = 'missing'
+            elif paused_state:
+                status = 'paused'
+            elif running:
+                status = 'running'
+            elif last_check_minutes and last_check_minutes > effective_interval * 2:
+                status = 'overdue'
+            else:
+                status = 'scheduled'
+
+            timer_status.append({
+                'device_id': device_id,
+                'device_name': device['name'],
+                'device_ip': device['ip'],
+                'interval_minutes': effective_interval,
+                'status': status,
+                'monitoring_paused': bool(device['monitoring_paused']),
+                'next_run_minutes': next_run_minutes,
+                'last_check_minutes_ago': round(last_check_minutes, 1) if last_check_minutes is not None else None,
+                'running': running
+            })
+
         return jsonify({
-            'total_timers': len(device_snmp_timers),
+            'queue_length': queue_length,
+            'tracked_devices': len(state_snapshot),
             'devices': timer_status
         })
     except Exception as e:
@@ -2107,8 +2146,16 @@ def scheduled_backup_job():
         else:
             add_log('warning', "Plánované zálohovanie: Žiadne dostupné zariadenia na zálohovanie.")
 
-# SNMP Timer Management - Individual timers for each device
-device_snmp_timers = {}  # Store timer references for each device
+# SNMP Scheduler - centralized management of SNMP polling
+SNMP_MAX_WORKERS = int(os.environ.get('SNMP_MAX_WORKERS', '3'))
+snmp_executor = ThreadPoolExecutor(max_workers=SNMP_MAX_WORKERS)
+snmp_scheduler_thread = None
+snmp_scheduler_stop = threading.Event()
+snmp_scheduler_wakeup = threading.Event()
+snmp_task_queue = []
+snmp_task_state = {}
+snmp_task_lock = threading.Lock()
+snmp_task_counter = itertools.count()
 
 def trigger_immediate_health_check(reason="manuálne spustenie"):
     """Spustí okamžitý health check s inteligentným throttling pre zabránenie nadmerného používania"""
@@ -2117,9 +2164,9 @@ def trigger_immediate_health_check(reason="manuálne spustenie"):
         current_time = time.time()
         if not hasattr(trigger_immediate_health_check, 'last_run'):
             trigger_immediate_health_check.last_run = 0
-        
+
         time_since_last = current_time - trigger_immediate_health_check.last_run
-        
+
         # Inteligentné throttling podľa dôvodu
         if "snmp" in reason.lower() or "interval" in reason.lower():
             # Pre SNMP zmeny: len 5 sekúnd throttling (užívateľ môže rýchlo meniť nastavenia)
@@ -2127,68 +2174,295 @@ def trigger_immediate_health_check(reason="manuálne spustenie"):
         else:
             # Pre manuálne volania: 30 sekúnd throttling (prevencia spam)
             throttle_time = 30
-        
+
         if time_since_last < throttle_time:
             logger.info(f"Health check throttled - posledný spustený pred {time_since_last:.1f}s, potrebných {throttle_time}s (dôvod: {reason})")
             return False
-        
-        # Spustíme health check v separate threade aby neblokoval hlavné vlákno
+
         def run_health_check():
             try:
                 with app.app_context():
                     logger.info(f"Spúšťam okamžitý SNMP health check - dôvod: {reason}")
                     check_snmp_timers_health()
-                    logger.info(f"Okamžitý SNMP health check dokončený")
+                    logger.info("Okamžitý SNMP health check dokončený")
             except Exception as e:
                 logger.error(f"Chyba v okamžitom health check: {e}")
-        
-        # Spustíme v separate threade
-        import threading
+
         health_check_thread = threading.Thread(target=run_health_check, daemon=True)
         health_check_thread.start()
-        
+
         trigger_immediate_health_check.last_run = current_time
         return True
-        
+
     except Exception as e:
         logger.error(f"Chyba pri spúšťaní okamžitého health check: {e}")
         return False
 
-def check_snmp_timers_health():
-    """Kontroluje zdravie SNMP timerov a reštartuje mŕtve timery"""
+def ensure_snmp_scheduler_running():
+    """Spustí scheduler thread ak ešte nebeží."""
+    global snmp_scheduler_thread
+    if snmp_scheduler_thread and snmp_scheduler_thread.is_alive():
+        return
+    snmp_scheduler_stop.clear()
+    snmp_scheduler_wakeup.clear()
+    snmp_scheduler_thread = threading.Thread(target=snmp_scheduler_loop, daemon=True, name="snmp_scheduler")
+    snmp_scheduler_thread.start()
+    debug_log('debug_snmp_timers', "SNMP scheduler thread started")
+
+def schedule_snmp_task(device_id, interval_minutes, delay_seconds=0, reason="manual_schedule"):
+    """Pridá alebo aktualizuje SNMP úlohu pre zariadenie."""
+    ensure_snmp_scheduler_running()
+    interval = max(int(interval_minutes), 1)
+    delay = max(float(delay_seconds), 0.0)
+    next_run = time.time() + delay
+    with snmp_task_lock:
+        current = snmp_task_state.get(device_id, {})
+        version = current.get('version', 0) + 1
+        running = current.get('running', False)
+        snmp_task_state[device_id] = {
+            'interval': interval,
+            'paused': False,
+            'next_run': next_run,
+            'version': version,
+            'running': running
+        }
+        heapq.heappush(snmp_task_queue, (next_run, next(snmp_task_counter), device_id, version))
+    snmp_scheduler_wakeup.set()
+    debug_log('debug_snmp_timers', f"Scheduled SNMP task for device {device_id} in {delay:.1f}s (interval {interval}min, reason: {reason})")
+
+def pause_snmp_task(device_id, reason="pause"):
+    """Pozastaví SNMP úlohu pre zariadenie."""
+    with snmp_task_lock:
+        current = snmp_task_state.get(device_id, {})
+        version = current.get('version', 0) + 1
+        interval = current.get('interval', 1)
+        snmp_task_state[device_id] = {
+            'interval': interval,
+            'paused': True,
+            'next_run': None,
+            'version': version,
+            'running': False
+        }
+    snmp_scheduler_wakeup.set()
+    debug_log('debug_snmp_timers', f"Paused SNMP task for device {device_id} (reason: {reason})")
+
+def snmp_scheduler_loop():
+    """Hlavný loop scheduleru využívajúci priority queue."""
+    logger.info("SNMP scheduler loop started")
+    while not snmp_scheduler_stop.is_set():
+        with snmp_task_lock:
+            if snmp_task_queue:
+                next_run, counter, device_id, version = snmp_task_queue[0]
+            else:
+                next_run = None
+
+        if next_run is None:
+            snmp_scheduler_wakeup.wait(timeout=1.0)
+            snmp_scheduler_wakeup.clear()
+            continue
+
+        now = time.time()
+        wait_time = max(0.0, next_run - now)
+        if snmp_scheduler_wakeup.wait(timeout=wait_time):
+            snmp_scheduler_wakeup.clear()
+            continue
+
+        if snmp_scheduler_stop.is_set():
+            break
+
+        with snmp_task_lock:
+            if not snmp_task_queue:
+                continue
+            due_time, counter, device_id, version = heapq.heappop(snmp_task_queue)
+            state = snmp_task_state.get(device_id)
+            if not state:
+                continue
+            if state.get('version') != version or state.get('paused'):
+                state['running'] = False
+                continue
+            now = time.time()
+            if due_time > now:
+                heapq.heappush(snmp_task_queue, (due_time, counter, device_id, version))
+                continue
+            if state.get('running'):
+                reschedule_time = now + 1.0
+                state['next_run'] = reschedule_time
+                heapq.heappush(snmp_task_queue, (reschedule_time, next(snmp_task_counter), device_id, version))
+                continue
+            state['running'] = True
+            state['next_run'] = now
+
+        snmp_executor.submit(run_snmp_job, device_id, version)
+
+    logger.info("SNMP scheduler loop stopped")
+
+def mark_snmp_task_complete(device_id, version):
+    """Označí úlohu ako dokončenú a naplánuje ďalší interval."""
+    with snmp_task_lock:
+        state = snmp_task_state.get(device_id)
+        if not state:
+            return
+        state['running'] = False
+        if state.get('version') != version or state.get('paused'):
+            return
+        interval = max(state.get('interval', 1), 1)
+        next_run = time.time() + interval * 60
+        state['next_run'] = next_run
+        heapq.heappush(snmp_task_queue, (next_run, next(snmp_task_counter), device_id, version))
+    snmp_scheduler_wakeup.set()
+
+def perform_snmp_poll(device_id, reason="scheduler"):
+    """Vykoná SNMP dotaz pre zariadenie vrátane uloženia dát a notifikácií."""
     try:
         with get_db_connection() as conn:
-            devices = conn.execute('SELECT id, name, ip, snmp_interval_minutes, last_snmp_check FROM devices WHERE monitoring_paused = 0 OR monitoring_paused IS NULL').fetchall()
+            device = conn.execute(
+                'SELECT id, name, ip, snmp_community, monitoring_paused, last_snmp_data, snmp_interval_minutes FROM devices WHERE id = ?',
+                (device_id,)
+            ).fetchone()
+
+        if not device:
+            logger.warning(f"SNMP poll skipped - device {device_id} not found (reason: {reason})")
+            with snmp_task_lock:
+                snmp_task_state.pop(device_id, None)
+            return {'status': 'missing', 'snmp_data': None, 'device': None}
+
+        if device['monitoring_paused'] and reason != "manual":
+            debug_log('debug_snmp_timers', f"SNMP poll skipped - device {device['name']} monitoring paused (reason: {reason})")
+            return {'status': 'paused', 'snmp_data': None, 'device': device}
+
+        previous_data = {}
+        if device['last_snmp_data']:
+            try:
+                previous_data = json.loads(device['last_snmp_data'])
+            except Exception as decode_error:
+                debug_log('debug_snmp_data', f"Nepodarilo sa dekódovať predchádzajúce SNMP dáta ({device['name']}): {decode_error}")
+                previous_data = {}
+
+        snmp_data = get_snmp_data(device['ip'], device['snmp_community'])
+        has_valid_metrics = snmp_data.get('uptime') != 'N/A'
+        status = 'online' if has_valid_metrics else 'offline'
+        timestamp = datetime.now()
+
+        with get_db_connection() as conn:
+            if has_valid_metrics:
+                conn.execute(
+                    "UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ?",
+                    (json.dumps(snmp_data), status, timestamp.isoformat(), device_id)
+                )
+            else:
+                conn.execute(
+                    "UPDATE devices SET status = ?, last_snmp_check = ? WHERE id = ?",
+                    (status, timestamp.isoformat(), device_id)
+                )
+            conn.commit()
+
+        save_snmp_history(device_id, snmp_data)
+        debug_emit('snmp_update', {'id': device_id, 'data': snmp_data, 'status': status})
+
+        if has_valid_metrics:
+            evaluate_snmp_notifications(
+                device,
+                snmp_data,
+                previous_data if previous_data.get('uptime') != 'N/A' else {}
+            )
+            debug_log('debug_snmp_data', f"SNMP data saved for {device['name']} (reason: {reason})")
+        else:
+            logger.warning(f"SNMP dáta pre {device['name']} neobsahovali platný uptime (reason: {reason})")
+
+        return {
+            'status': status,
+            'snmp_data': snmp_data,
+            'device': device,
+            'has_valid': has_valid_metrics,
+            'previous_data': previous_data
+        }
+    except Exception as e:
+        logger.error(f"Error during SNMP poll for device {device_id}: {e}")
+        device_ip = None
+        try:
+            device_ip = device['ip']  # type: ignore[name-defined]
+        except Exception:
+            device_ip = None
+        add_log('error', f"SNMP query for device {device_id} failed: {e}", device_ip=device_ip)
+        return {'status': 'error', 'error': str(e), 'snmp_data': None, 'device': None}
+
+def run_snmp_job(device_id, version):
+    """Worker funkcia vykonaná vo thread poole."""
+    try:
+        with app.app_context():
+            perform_snmp_poll(device_id, reason="scheduler")
+    finally:
+        mark_snmp_task_complete(device_id, version)
+
+def trigger_immediate_snmp_check_for_device(device_id, reason="ping_observed_online"):
+    """Spustí okamžitý SNMP check pre jedno zariadenie a reštartuje jeho timer."""
+    try:
+        with get_db_connection() as conn:
+            device = conn.execute(
+                'SELECT name, ip, snmp_interval_minutes, monitoring_paused FROM devices WHERE id = ?',
+                (device_id,)
+            ).fetchone()
+            if not device:
+                logger.warning(f"Immediate SNMP trigger skipped - device {device_id} not found (reason: {reason})")
+                return False
+            settings = {
+                row['key']: row['value']
+                for row in conn.execute(
+                    'SELECT key, value FROM settings WHERE key = ?',
+                    ('snmp_check_interval_minutes',)
+                ).fetchall()
+            }
+        if device['monitoring_paused']:
+            debug_log('debug_snmp_timers', f"Immediate SNMP trigger skipped - device {device['name']} is paused")
+            return False
+        global_interval = int(settings.get('snmp_check_interval_minutes', 10))
+        interval_minutes = device['snmp_interval_minutes'] if device['snmp_interval_minutes'] and device['snmp_interval_minutes'] > 0 else global_interval
+        schedule_snmp_task(device_id, interval_minutes, delay_seconds=0, reason=reason)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to trigger immediate SNMP check for device {device_id} ({reason}): {e}")
+        return False
+
+def check_snmp_timers_health():
+    """Kontroluje zdravie SNMP úloh a reštartuje chýbajúce alebo zaseknuté."""
+    try:
+        with get_db_connection() as conn:
+            devices = conn.execute('SELECT id, name, ip, snmp_interval_minutes, last_snmp_check, monitoring_paused FROM devices').fetchall()
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             global_interval = int(settings.get('snmp_check_interval_minutes', 10))
-            
-            current_time = datetime.now()
-            
-            for device in devices:
-                device_id = device['id']
-                device_interval = device['snmp_interval_minutes'] if device['snmp_interval_minutes'] and device['snmp_interval_minutes'] > 0 else global_interval
-                
-                # Kontrola či timer existuje
-                if device_id not in device_snmp_timers:
-                    logger.warning(f"Missing SNMP timer for device {device['name']} (ID: {device_id}), restarting...")
-                    start_snmp_timer_for_device(device_id, device_interval, immediate=False)
-                    add_log('warning', f"SNMP timer neexistoval, reštartovaný (interval: {device_interval}min)", device['ip'])
-                    continue
-                
-                # Kontrola posledného SNMP checku
-                if device['last_snmp_check']:
-                    try:
-                        last_check = datetime.fromisoformat(device['last_snmp_check'])
-                        time_since_check = (current_time - last_check).total_seconds() / 60  # v minútach
-                        
-                        # Ak je čas od posledného checku viac ako 2x interval, timer sa zasekol
-                        if time_since_check > device_interval * 2:
-                            logger.warning(f"SNMP timer stuck for device {device['name']} (ID: {device_id}), last check {time_since_check:.1f}min ago, restarting...")
-                            restart_snmp_timer_for_device(device_id, device_interval)
-                            add_log('warning', f"SNMP timer sa zasekol ({time_since_check:.1f}min bez checku), reštartovaný", device['ip'])
-                    except Exception as e:
-                        logger.error(f"Error parsing last_snmp_check for device {device_id}: {e}")
-                        
+        ensure_snmp_scheduler_running()
+        recovered = 0
+        current_time = datetime.now()
+        for device in devices:
+            device_id = device['id']
+            paused_db = bool(device['monitoring_paused'])
+            effective_interval = device['snmp_interval_minutes'] if device['snmp_interval_minutes'] and device['snmp_interval_minutes'] > 0 else global_interval
+            effective_interval = max(effective_interval, 1)
+            with snmp_task_lock:
+                state = snmp_task_state.get(device_id)
+            if paused_db:
+                pause_snmp_task(device_id, reason="health_check_pause_sync")
+                continue
+            if not state or state.get('paused'):
+                schedule_snmp_task(device_id, effective_interval, delay_seconds=0, reason="health_check_missing")
+                add_log('warning', f"SNMP plán obnovený - chýbal aktívny záznam (interval {effective_interval}min)", device['ip'])
+                recovered += 1
+                continue
+            last_check_minutes = None
+            if device['last_snmp_check']:
+                try:
+                    last_check = datetime.fromisoformat(device['last_snmp_check'])
+                    last_check_minutes = (current_time - last_check).total_seconds() / 60
+                except Exception as e:
+                    logger.error(f"Error parsing last_snmp_check for device {device_id}: {e}")
+            if last_check_minutes is None or last_check_minutes > effective_interval * 2:
+                schedule_snmp_task(device_id, effective_interval, delay_seconds=0, reason="health_check_overdue")
+                if last_check_minutes is None:
+                    add_log('warning', "SNMP plán obnovený - neznámy čas posledného checku", device['ip'])
+                else:
+                    add_log('warning', f"SNMP plán obnovený - posledný check pred {last_check_minutes:.1f} min", device['ip'])
+                recovered += 1
+        return recovered
     except Exception as e:
         logger.error(f"Error in SNMP timer health check: {e}")
 
@@ -2198,134 +2472,17 @@ def scheduled_snmp_health_check():
         check_snmp_timers_health()
 
 def start_snmp_timer_for_device(device_id, interval_minutes, immediate=False):
-    """Start individual SNMP timer for a specific device"""
-    global device_snmp_timers
-    
-    # Stop existing timer if running
-    if device_id in device_snmp_timers:
-        device_snmp_timers[device_id].cancel()
-    
-    def snmp_check_device():
-        """Perform SNMP check for this specific device and schedule next check"""
-        try:
-            with app.app_context():
-                with get_db_connection() as conn:
-                    device = conn.execute(
-                        'SELECT id, ip, name, snmp_community, monitoring_paused, last_snmp_data '
-                        'FROM devices WHERE id = ?',
-                        (device_id,)
-                    ).fetchone()
-                    
-                    if not device:
-                        logger.warning(f"Device {device_id} not found, stopping SNMP timer")
-                        return
-                    
-                    # Skip if monitoring is paused
-                    if device['monitoring_paused']:
-                        debug_log('debug_snmp_timers', f"Device {device['name']} monitoring paused, skipping SNMP check")
-                        # Schedule next check anyway (in case pause gets disabled)
-                        schedule_next_check()
-                        return
-                    
-                    # Načítaj posledné SNMP dáta pre porovnanie
-                    previous_data = {}
-                    if device['last_snmp_data']:
-                        try:
-                            previous_data = json.loads(device['last_snmp_data'])
-                        except Exception as decode_error:
-                            debug_log('debug_snmp_data', f"Nepodarilo sa dekódovať predchádzajúce SNMP dáta: {decode_error}")
-                            previous_data = {}
-
-                    # Perform the actual SNMP check
-                    debug_log('debug_snmp_timers', f"Performing SNMP check for device {device['name']} (interval: {interval_minutes}min)")
-                    
-                    # Get SNMP data
-                    snmp_data = get_snmp_data(device['ip'], device['snmp_community'])
-                    status = 'online' if snmp_data.get('uptime') != 'N/A' else 'offline'
-                    has_valid_metrics = snmp_data and snmp_data.get('uptime') != 'N/A'
-
-                    if has_valid_metrics:
-                        evaluate_snmp_notifications(device, snmp_data, previous_data if previous_data.get('uptime') != 'N/A' else {})
-
-                    # Save to database
-                    timestamp = datetime.now()
-                    if has_valid_metrics:
-                        conn.execute(
-                            "UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ?",
-                            (json.dumps(snmp_data), status, timestamp.isoformat(), device_id)
-                        )
-                    else:
-                        conn.execute(
-                            "UPDATE devices SET status = ?, last_snmp_check = ? WHERE id = ?",
-                            (status, timestamp.isoformat(), device_id)
-                        )
-                    conn.commit()
-
-                    # Save to SNMP history (uchovávame aj neplatné dáta kvôli diagnostike)
-                    save_snmp_history(device_id, snmp_data)
-
-                    # Emit to WebSocket
-                    debug_emit('snmp_update', {
-                        'id': device_id,
-                        'data': snmp_data,
-                        'status': status
-                    })
-
-                    if has_valid_metrics:
-                        debug_log('debug_snmp_data', f"SNMP data saved and emitted for device {device['name']}")
-                    else:
-                        logger.warning(f"SNMP dáta pre {device['name']} neobsahovali platný uptime (zariadenie je pravdepodobne offline).")
-                    
-                    # Schedule next check
-                    schedule_next_check()
-                    
-        except Exception as e:
-            logger.error(f"Error in SNMP check for device {device_id}: {e}")
-            # Schedule next check even on error
-            schedule_next_check()
-    
-    def schedule_next_check():
-        """Schedule the next SNMP check for this device"""
-        try:
-            # Vytvor nový timer a spusti ho
-            timer = threading.Timer(interval_minutes * 60, snmp_check_device)
-            device_snmp_timers[device_id] = timer
-            timer.start()
-            debug_log('debug_snmp_timers', f"Next SNMP check for device {device_id} scheduled in {interval_minutes} minutes, timer active: {timer.is_alive()}")
-        except Exception as e:
-            logger.error(f"Error scheduling next SNMP check for device {device_id}: {e}")
-    
-    # Start the timer (immediately or after interval)
-    if immediate:
-        # Run immediately and then schedule next - but first create a placeholder timer
-        # to avoid missing timer reference
-        placeholder_timer = threading.Timer(0.1, lambda: None)  # Dummy timer
-        device_snmp_timers[device_id] = placeholder_timer
-        placeholder_timer.start()  # Spustíme placeholder timer
-        # Run check immediately in separate thread
-        debug_log('debug_snmp_timers', f"SNMP timer starting immediately for device {device_id} (interval: {interval_minutes}min)")
-        threading.Thread(target=snmp_check_device, daemon=True).start()
-    else:
-        # Schedule first check after interval
-        timer = threading.Timer(interval_minutes * 60, snmp_check_device)
-        device_snmp_timers[device_id] = timer
-        timer.start()
-        debug_log('debug_snmp_timers', f"SNMP timer started for device {device_id}, first check in {interval_minutes} minutes")
+    """Zabezpečí plánovanie SNMP úlohy pre dané zariadenie."""
+    delay = 0 if immediate else max(int(interval_minutes), 1) * 60
+    schedule_snmp_task(device_id, interval_minutes, delay_seconds=delay, reason="start_device")
 
 def stop_snmp_timer_for_device(device_id):
     """Stop SNMP timer for a specific device"""
-    global device_snmp_timers
-    
-    if device_id in device_snmp_timers:
-        device_snmp_timers[device_id].cancel()
-        del device_snmp_timers[device_id]
-        debug_log('debug_snmp_timers', f"SNMP timer stopped for device {device_id}")
+    pause_snmp_task(device_id, reason="manual_stop")
 
 def restart_snmp_timer_for_device(device_id, interval_minutes):
     """Restart SNMP timer for a device with new interval"""
-    stop_snmp_timer_for_device(device_id)
-    start_snmp_timer_for_device(device_id, interval_minutes, immediate=True)
-    # Log odstránený - zbytočne zahltáva systém pri manuálnych checkoch
+    schedule_snmp_task(device_id, interval_minutes, delay_seconds=0, reason="restart")
 
 def start_all_snmp_timers():
     """Start SNMP timers for all devices based on their settings - optimized startup"""
@@ -2333,55 +2490,45 @@ def start_all_snmp_timers():
         with get_db_connection() as conn:
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             global_interval = int(settings.get('snmp_check_interval_minutes', 10))
-            
-            devices = conn.execute('SELECT id, name, snmp_interval_minutes FROM devices').fetchall()
-            device_count = len(devices)
-            
-            # Ak je veľa zariadení, rozložíme ich na kratší čas
-            max_startup_time = min(300, device_count * 15)  # Max 5 minút alebo 15s na zariadenie
-            
-            # Optimalizácia: rozložiť timery na dlhšie intervaly pri štarte
-            for i, device in enumerate(devices):
-                device_interval = device['snmp_interval_minutes'] or 0
-                effective_interval = device_interval if device_interval > 0 else global_interval
-                
-                # Inteligentné rozloženie záťaže:
-                # - Prvé zariadenie: 30 sekúnd delay
-                # - Ostatné: postupne rozložené cez celý startup interval
+            devices = conn.execute('SELECT id, name, snmp_interval_minutes, monitoring_paused FROM devices').fetchall()
+        ensure_snmp_scheduler_running()
+        device_count = len(devices)
+        if device_count == 0:
+            logger.info("No devices found for SNMP scheduling")
+            return
+        max_startup_time = min(300, device_count * 15)
+        for i, device in enumerate(devices):
+            device_interval = device['snmp_interval_minutes'] or 0
+            effective_interval = device_interval if device_interval > 0 else global_interval
+            effective_interval = max(effective_interval, 1)
+            if device['monitoring_paused']:
+                pause_snmp_task(device['id'], reason="startup_paused")
+                continue
+            if device_count == 1:
+                start_delay = 30
+            else:
                 if i == 0:
-                    start_delay = 30  # Prvé zariadenie po 30 sekundách
+                    start_delay = 30
                 else:
-                    # Rozloženie zostávajúcich zariadení cez zvyšný čas
                     start_delay = 30 + ((max_startup_time - 30) * i // (device_count - 1))
-                
-                def delayed_start(device_id=device['id'], interval=effective_interval, delay=start_delay):
-                    def start_timer():
-                        try:
-                            start_snmp_timer_for_device(device_id, interval, immediate=False)
-                        except Exception as e:
-                            logger.error(f"Error starting delayed SNMP timer for device {device_id}: {e}")
-                    
-                    timer = threading.Timer(delay, start_timer)
-                    timer.daemon = True
-                    timer.start()
-                
-                delayed_start()
-                
-                # Log len pre prvé a posledné zariadenie
-                if i == 0 or i == device_count - 1:
-                    logger.info(f"Scheduled SNMP timer for device {device['name']} (delay: {start_delay}s)")
-                
+            schedule_snmp_task(device['id'], effective_interval, delay_seconds=start_delay, reason="startup")
+            if i == 0 or i == device_count - 1:
+                logger.info(f"Scheduled SNMP task for device {device['name']} (delay: {start_delay}s)")
     except Exception as e:
-        logger.error(f"Error starting SNMP timers: {e}")
+        logger.error(f"Error starting SNMP scheduler tasks: {e}")
 
 def stop_all_snmp_timers():
     """Stop all SNMP timers"""
-    global device_snmp_timers
-    
-    for device_id in list(device_snmp_timers.keys()):
-        stop_snmp_timer_for_device(device_id)
-    
-    logger.info("All SNMP timers stopped")
+    global snmp_scheduler_thread
+    snmp_scheduler_stop.set()
+    snmp_scheduler_wakeup.set()
+    if snmp_scheduler_thread and snmp_scheduler_thread.is_alive():
+        snmp_scheduler_thread.join(timeout=5)
+    snmp_scheduler_thread = None
+    with snmp_task_lock:
+        snmp_task_queue.clear()
+        snmp_task_state.clear()
+    logger.info("SNMP scheduler stopped")
 
 def setup_scheduler(log_schedule_info=False):
     # Vždy vyčistíme existujúce úlohy, aby sme predišli duplicitám alebo starým nastaveniam
@@ -2446,8 +2593,7 @@ def get_schedule_info():
     except Exception as e:
         return f"Chyba pri získavaní informácií o pláne: {e}"
 
-# SNMP checks are now handled by individual device timers (see functions above)
-# Old scheduled_snmp_check function removed - replaced by start_snmp_timer_for_device()
+# SNMP checks sú spracované centrálnym schedulerom (pozri funkcie vyššie)
 
 def run_scheduler():
     while True:
@@ -2648,7 +2794,7 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
         add_log('warning', message, device['ip'])
         send_pushover_notification(
             message,
-            title="SNMP Monitoring - Teplota",
+            title="SNMP Monitor - Teplota",
             notification_key='notify_temp_critical'
         )
 
@@ -2667,7 +2813,7 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
         add_log('warning', message, device['ip'])
         send_pushover_notification(
             message,
-            title="SNMP Monitoring - CPU",
+            title="SNMP Monitor - CPU",
             notification_key='notify_cpu_critical'
         )
 
@@ -2686,7 +2832,7 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
         add_log('warning', message, device['ip'])
         send_pushover_notification(
             message,
-            title="SNMP Monitoring - Pamäť",
+            title="SNMP Monitor - Pamäť",
             notification_key='notify_memory_critical'
         )
 
@@ -2703,10 +2849,10 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
             f"🔄 MikroTik {device['name']} ({device['ip']}) bol reštartovaný "
             f"(aktuálny uptime {uptime_human})"
         )
-        add_log('info', message, device['ip'])
+        add_log('warning', message, device['ip'])
         send_pushover_notification(
             message,
-            title="SNMP Monitoring - Reboot",
+            title="SNMP Monitor - Reboot",
             notification_key='notify_reboot_detected'
         )
 
@@ -2726,7 +2872,7 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
         add_log('info', message, device['ip'])
         send_pushover_notification(
             message,
-            title="SNMP Monitoring - Verzia OS",
+            title="SNMP Monitor - Verzia OS",
             notification_key='notify_version_change'
         )
 def ping_monitoring_loop():
@@ -2854,7 +3000,7 @@ def ping_monitoring_loop():
                             
                             if ping_result['status'] == 'online':
                                 # Úspešný ping - zariadenie je online
-                                if current_status == 'offline':
+                                if current_status != 'online':
                                     # Zariadenie bolo offline a teraz je online - zmena stavu
                                     add_log('info', f"MikroTik {device_name} ({ip}) je opäť online")
                                     send_pushover_notification(
@@ -2862,6 +3008,7 @@ def ping_monitoring_loop():
                                         title="MikroTik Monitor - Zariadenie Online",
                                         notification_key='notify_device_online'
                                     )
+                                    trigger_immediate_snmp_check_for_device(device_id, reason="ping_online_recovery")
                                 
                                 # Reset retry counter and mode
                                 device_status_tracker[device_id] = {
@@ -3645,21 +3792,17 @@ def stop_all_backups():
     stopped_count = len(backup_tasks)
     stopped_ips = list(backup_tasks.keys())
     
-    # Zastavíme sekvenčnú zálohu
+    # Zastavíme sekvenčnú zálohu – aktuálne prebiehajúce úlohy necháme bezpečne dobehnúť
     sequential_backup_running = False
     
-    # Vyčistíme všetky bežiace úlohy
-    backup_tasks.clear()
-    
     if stopped_count > 0:
-        add_log('warning', f"Používateľ zastavil všetky bežiace zálohy ({stopped_count} zariadení): {', '.join(stopped_ips)}")
-        # Pošleme WebSocket správu o zastavení všetkých záloh
+        add_log('warning', f"Používateľ požiadal o zastavenie záloh ({stopped_count} zariadení): {', '.join(stopped_ips)}")
         for ip in stopped_ips:
-            socketio.emit('backup_status', {'ip': ip, 'status': 'stopped'})
+            socketio.emit('backup_status', {'ip': ip, 'status': 'stop_requested'})
         
         return jsonify({
             'status': 'success', 
-            'message': f'Zastavené {stopped_count} bežiacich zálohov.',
+            'message': 'Zastavenie záloh bolo požadované. Prebiehajúce úlohy sa dokončia a nové sa nespustia.',
             'stopped_devices': stopped_ips
         })
     else:

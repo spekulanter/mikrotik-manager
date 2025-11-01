@@ -307,7 +307,7 @@
             top: calc(100% + 0.4rem);
             left: 0;
             right: 0;
-            background: rgba(17, 24, 39, 0.97);
+            background: rgba(28, 40, 64, 0.955);
             border: 1px solid #374151;
             border-radius: 0.75rem;
             box-shadow: 0 24px 55px rgba(15, 23, 42, 0.45);
@@ -454,10 +454,29 @@
             .right-sidebar { width: 18rem; min-width: 16rem; }
         }
         @media (max-width: 1024px) {
-            .main-content-wrapper { flex-direction: column; }
+            .main-content-wrapper {
+                flex-direction: column;
+                min-height: calc(100vh - 140px);
+            }
             .right-sidebar { display: none !important; }
-            #mobileLogs { display: block !important; }
+            #mobileLogs {
+                display: block !important;
+                margin-top: auto;
+            }
             #userStatus { text-align: right !important; }
+            .left-content {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                flex: 1 0 auto;
+            }
+            .left-content > .card {
+                flex-shrink: 0;
+            }
+            #devicesGrid {
+                flex: 1 0 auto;
+                min-height: clamp(220px, 45vh, 520px);
+            }
         }
         @media (min-width: 1025px) {
             #mobileLogs { display: none !important; }
@@ -549,10 +568,6 @@
                 display: none;
             }
             
-            /* Tlačidlo "Nastavenia" napevno na celú šírku v mobilnom zobrazení */
-            .action-buttons-container #settingsBtn {
-                grid-column: 1 / -1;
-            }
         }
         
         /* Pre trochu väčšie mobilné zariadenia (do 768px) */
@@ -1359,11 +1374,14 @@
                         <button id="monitoringBtn" class="btn bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
                             <i class="fas fa-chart-line"></i> Monitoring
                         </button>
-                        <button id="viewBackupsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm" onclick="window.location.href='/backups'">
+                        <button id="viewBackupsBtn" class="btn bg-slate-500 hover:bg-slate-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm" onclick="window.location.href='/backups'">
                             <i class="fas fa-archive"></i> Zálohy
                         </button>
                         <button id="settingsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
                             <i class="fas fa-cog"></i> Nastavenia
+                        </button>
+                        <button id="activityQuickBtn" class="btn bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm sm:hidden" aria-label="Zobraziť aktivitu">
+                            <i class="fas fa-clipboard-list"></i> Aktivita
                         </button>
                     </div>
                 </div>
@@ -1829,6 +1847,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logsModalList = document.getElementById('logsModalList');
     const closeLogsModalBtn = document.getElementById('closeLogsModalBtn');
     const logsExpandBtn = document.getElementById('logsExpandBtn');
+    const activityQuickBtn = document.getElementById('activityQuickBtn');
     const logsModalRefreshBtn = document.getElementById('logsModalRefreshBtn');
     const logsModalExportBtn = document.getElementById('logsModalExportBtn');
     const logsModalFilterBtn = document.getElementById('logsModalFilterBtn');
@@ -2044,6 +2063,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Ak bola záloha zastavená, zobrazíme správu
             if (status === 'stopped') {
                 addLog('warning', `Záloha pre ${ip} bola zastavená používateľom.`, ip);
+            } else if (status === 'stop_requested') {
+                addLog('warning', `Požiadavka na zastavenie zálohy pre ${ip} bola prijatá (prebiehajúca úloha sa dokončí).`, ip);
             }
         }
     });
@@ -2324,6 +2345,13 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         return 'system';
     };
 
+    const sanitizeLogMessageByType = (type, message) => {
+        if (type === 'device') {
+            return message.replace(/^\s*[\p{Extended_Pictographic}]+\s*/u, '');
+        }
+        return message;
+    };
+
     const syncLogsModalContent = () => {
         if (!logsModal || logsModal.classList.contains('hidden') || !logsModalList) return;
         logsModalList.innerHTML = logsContainer.innerHTML;
@@ -2411,6 +2439,7 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         }
         
         const logType = categorizeLogMessage(message);
+        const displayMessage = sanitizeLogMessageByType(logType, message);
         const createLogEntry = () => {
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry p-2 border-l-4 log-${level} bg-gray-800 text-sm`;
@@ -2419,7 +2448,7 @@ window.addEventListener('resize', () => closeAllCustomSelects());
             logEntry.setAttribute('data-type', logType);
             logEntry.setAttribute('data-timestamp', timestamp);
             
-            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${message}</p>`;
+            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${displayMessage}</p>`;
             return logEntry;
         };
         
@@ -2463,6 +2492,7 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         }
         
         const logType = categorizeLogMessage(message);
+        const displayMessage = sanitizeLogMessageByType(logType, message);
         const createLogEntry = () => {
             const logEntry = document.createElement('div');
             logEntry.className = `log-entry p-2 border-l-4 log-${level} bg-gray-800 text-sm`;
@@ -2471,7 +2501,7 @@ window.addEventListener('resize', () => closeAllCustomSelects());
             logEntry.setAttribute('data-type', logType);
             logEntry.setAttribute('data-timestamp', timestamp);
             
-            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${message}</p>`;
+            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${displayMessage}</p>`;
             return logEntry;
         };
         
@@ -3043,6 +3073,7 @@ window.addEventListener('resize', () => closeAllCustomSelects());
 
     logsExpandBtn?.addEventListener('click', openLogsModal);
     logsExpandBtnMobile?.addEventListener('click', openLogsModal);
+    activityQuickBtn?.addEventListener('click', openLogsModal);
 
     logsModalRefreshBtn?.addEventListener('click', async () => {
         if (!logsModalRefreshBtn) return;
@@ -3664,32 +3695,6 @@ window.addEventListener('resize', () => closeAllCustomSelects());
     // Spustenie inicializácie
     initializeApp();
 
-    // Po načítaní stránky automaticky obnov SNMP pre všetky zariadenia - postupne
-    window.addEventListener('DOMContentLoaded', function() {
-        // Dlhšie oneskorenie pred SNMP refresh, aby sa backend stiahol stabilizovať
-        setTimeout(() => {
-            fetch('/api/devices')
-                .then(resp => resp.json())
-                .then(devices => {
-                    // Ak je málo zariadení, nerobíme automatický refresh
-                    if (devices.length <= 2) {
-                        return;
-                    }
-                    
-                    // SNMP refresh len pre prvé 3 zariadenia s dlhším oneskorením
-                    const limitedDevices = devices.slice(0, 3);
-                    limitedDevices.forEach((device, index) => {
-                        setTimeout(() => {
-                            fetch(`/api/snmp/${device.id}`)
-                                .then(() => {/* SNMP refresh prebehol */})
-                                .catch(() => {/* Ignoruj chyby */});
-                        }, index * 3000); // 3 sekundy medzi requestmi
-                    });
-                })
-                .catch(error => console.error('Chyba pri automatickom SNMP refresh:', error));
-        }, 5000); // Zvýšené na 5 sekúnd po načítaní aplikácie
-    });
-    
     // Funkcie pre prepínanie témy
     function initTheme() {
         const savedTheme = localStorage.getItem('mikrotik-theme') || 'dark';

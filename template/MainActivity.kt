@@ -116,8 +116,12 @@ class MainActivity : AppCompatActivity() {
                 loadWithOverviewMode = true
                 javaScriptCanOpenWindowsAutomatically = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                allowUniversalAccessFromFileURLs = false
-                allowFileAccessFromFileURLs = false
+                // Modern security settings for Android 15+
+                @Suppress("DEPRECATION")
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                    allowUniversalAccessFromFileURLs = false
+                    allowFileAccessFromFileURLs = false
+                }
                 mediaPlaybackRequiresUserGesture = false
             }
             webView.overScrollMode = View.OVER_SCROLL_NEVER
@@ -144,6 +148,7 @@ class MainActivity : AppCompatActivity() {
                 fun setStatusBarIcons(mode: String) {
                     runOnUiThread {
                         try {
+                            // Use modern WindowInsetsController for Android 11+
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                 val controller = window.insetsController
                                 if (controller != null) {
@@ -160,16 +165,6 @@ class MainActivity : AppCompatActivity() {
                                             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                                         )
                                     }
-                                }
-                            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                if (mode == "dark") {
-                                    // Dark icons for light background
-                                    window.decorView.systemUiVisibility = 
-                                        window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                                } else {
-                                    // Light icons for dark background
-                                    window.decorView.systemUiVisibility = 
-                                        window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
                                 }
                             }
                         } catch (e: Exception) {
@@ -234,16 +229,6 @@ class MainActivity : AppCompatActivity() {
                     return super.shouldOverrideUrlLoading(view, request)
                 }
                 
-                @Suppress("DEPRECATION")
-                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                    if (url != null && isDownloadUrl(url)) {
-                        Log.d("MainActivity", "Intercepting download URL (deprecated): $url")
-                        startDownload(url)
-                        return true
-                    }
-                    return super.shouldOverrideUrlLoading(view, url)
-                }
-                
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     
@@ -253,8 +238,8 @@ class MainActivity : AppCompatActivity() {
                     }
                     
                     // Force cookie sync after each page load
-                    val cookieManager = CookieManager.getInstance()
-                    cookieManager.flush()
+                    val cookieMgr = CookieManager.getInstance()
+                    cookieMgr.flush()
                     Log.d("MainActivity", "Page loaded: $url, cookies synced")
                     
                     // Inject JavaScript for theme-based status bar colors
@@ -338,7 +323,10 @@ class MainActivity : AppCompatActivity() {
             
             // Solid status bar with theme-based colors
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-            window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS)
+            }
 
             // Default dark theme colors
             window.statusBarColor = android.graphics.Color.parseColor("#111827") // Dark theme
@@ -347,15 +335,12 @@ class MainActivity : AppCompatActivity() {
             // Normal layout - let system handle status bar space automatically
             WindowCompat.setDecorFitsSystemWindows(window, true)
 
-            // Light icons for dark background (will be updated by JS based on theme)
+            // Light icons for dark background - use modern API for Android 11+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 window.insetsController?.setSystemBarsAppearance(
                     0, // Light icons
                     WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                 )
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                window.decorView.systemUiVisibility = 
-                    window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
             }
         } catch (e: Exception) {
             Log.e("MainActivity", "Error enabling fullscreen", e)
@@ -457,7 +442,7 @@ class MainActivity : AppCompatActivity() {
 
     // Download handling methods
     private fun setupDownloadHandling() {
-        webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, contentLength ->
+        webView.setDownloadListener(DownloadListener { url, _, _, _, _ ->
             Log.d("MainActivity", "Download listener triggered: $url")
             startDownload(url)
         })
@@ -499,7 +484,11 @@ class MainActivity : AppCompatActivity() {
             
             // Show download in notification
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            request.setVisibleInDownloadsUi(true)
+            // Note: setVisibleInDownloadsUi is deprecated but harmless - Android handles this automatically
+            @Suppress("DEPRECATION")
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                request.setVisibleInDownloadsUi(true)
+            }
             
             // Start download
             val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager

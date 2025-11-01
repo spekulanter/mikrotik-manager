@@ -14,6 +14,9 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import kotlin.math.max
 
 class SetupActivity : AppCompatActivity() {
 
@@ -42,6 +45,7 @@ class SetupActivity : AppCompatActivity() {
 
             // Modern fullscreen for Android 15
             enableFullscreen()
+            setupKeyboardInsets()
 
             // Initialize views
             urlInput = findViewById(R.id.etServerUrl)
@@ -65,11 +69,32 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupKeyboardInsets() {
+        val rootView = findViewById<View>(R.id.setupRoot) ?: return
+        val originalPaddingLeft = rootView.paddingLeft
+        val originalPaddingTop = rootView.paddingTop
+        val originalPaddingRight = rootView.paddingRight
+        val originalPaddingBottom = rootView.paddingBottom
+
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
+            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val systemInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(
+                originalPaddingLeft,
+                originalPaddingTop + systemInsets.top,
+                originalPaddingRight,
+                originalPaddingBottom + max(imeInsets.bottom, systemInsets.bottom)
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(rootView)
+    }
+
     private fun enableFullscreen() {
         // Hide action bar
         supportActionBar?.hide()
         
-        // Modern fullscreen for Android 11+ (API 30+)
+        // Use modern fullscreen API for Android 11+ (API 30+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
             val controller = window.insetsController
@@ -77,16 +102,6 @@ class SetupActivity : AppCompatActivity() {
                 controller.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
                 controller.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
-        } else {
-            // Fallback for older Android versions
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            )
         }
     }
 

@@ -230,6 +230,200 @@
         #logsContainer::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
         #logsContainer::-webkit-scrollbar-thumb { background-color: #4b5563; border-radius: 4px; border: 1px solid #374151; }
         #logsContainer::-webkit-scrollbar-thumb:hover { background-color: #6b7280; }
+        #logsModalContent { scrollbar-width: thin; scrollbar-color: #4b5563 #1f2937; overflow-x: hidden; }
+        #logsModalContent::-webkit-scrollbar { width: 8px; }
+        #logsModalContent::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
+        #logsModalContent::-webkit-scrollbar-thumb { background-color: #4b5563; border-radius: 4px; border: 1px solid #374151; }
+        #logsModalContent::-webkit-scrollbar-thumb:hover { background-color: #6b7280; }
+        #logsModalList { word-break: break-word; }
+        .mobile-logs-container { overflow-x: hidden; }
+
+        /* Custom Dropdown (shared with monitoring) */
+        .custom-select {
+            position: relative;
+            width: 100%;
+            user-select: none;
+        }
+
+        .custom-select.open {
+            z-index: 1500;
+        }
+
+        @media (min-width: 1024px) {
+            .custom-select.expand-desktop .custom-select-dropdown {
+                right: auto;
+                width: auto;
+                min-width: max(20rem, 100%);
+                max-width: min(34rem, calc(100vw - 6rem));
+            }
+
+            .custom-select.expand-desktop .custom-select-option {
+                white-space: nowrap;
+            }
+        }
+
+        .custom-select-button {
+            background: linear-gradient(135deg, rgba(31, 41, 55, 0.95) 0%, rgba(17, 24, 39, 0.95) 100%);
+            border: 1px solid #374151;
+            border-radius: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #f8fafc;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);
+            width: 100%;
+            font-size: 0.75rem;
+        }
+
+        .custom-select-button:hover,
+        .custom-select.open .custom-select-button {
+            border-color: rgba(148, 163, 184, 0.7);
+            box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3), 0 0 14px rgba(148, 163, 184, 0.22), 0 18px 32px rgba(15, 23, 42, 0.24);
+        }
+
+        .custom-select-text {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            flex: 1 1 auto;
+        }
+
+        .custom-select-arrow {
+            color: #94a3b8;
+            transition: transform 0.2s ease;
+            font-size: 0.8rem;
+        }
+
+        .custom-select.open .custom-select-arrow {
+            transform: rotate(-180deg);
+        }
+
+        .custom-select-dropdown {
+            position: absolute;
+            top: calc(100% + 0.4rem);
+            left: 0;
+            right: 0;
+            background: rgba(17, 24, 39, 0.97);
+            border: 1px solid #374151;
+            border-radius: 0.75rem;
+            box-shadow: 0 24px 55px rgba(15, 23, 42, 0.45);
+            padding: 0.35rem;
+            display: none;
+            max-height: 260px;
+            overflow-y: auto;
+            z-index: 1400;
+        }
+
+        .custom-select.open .custom-select-dropdown {
+            display: block;
+        }
+
+        .custom-select-option {
+            padding: 0.35rem 0.6rem;
+            border-radius: 0.55rem;
+            color: #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .custom-select-option:hover {
+            background: rgba(71, 85, 105, 0.45);
+            color: #f8fafc;
+            box-shadow: 0 0 8px rgba(71, 85, 105, 0.18);
+        }
+
+        .custom-select-option.selected {
+            background: rgba(100, 116, 139, 0.45);
+            color: #ffffff;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.4), 0 0 10px rgba(148, 163, 184, 0.16);
+        }
+
+        .custom-select-option.disabled {
+            opacity: 0.5;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .custom-select-dropdown::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .custom-select-dropdown::-webkit-scrollbar-track {
+            background: rgba(30, 41, 59, 0.85);
+            border-radius: 999px;
+        }
+
+        .custom-select-dropdown::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.65);
+            border-radius: 999px;
+        }
+
+        .custom-select-dropdown::-webkit-scrollbar-thumb:hover {
+            background: rgba(191, 219, 254, 0.85);
+        }
+
+        /* Light theme adjustments */
+        body.light-theme .custom-select-button {
+            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+            border-color: #cbd5e1;
+            color: #1f2937;
+            box-shadow: 0 10px 25px rgba(148, 163, 184, 0.25);
+        }
+
+        body.light-theme .custom-select-button:hover,
+        body.light-theme .custom-select.open .custom-select-button {
+            border-color: rgba(148, 163, 184, 0.7);
+            box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3), 0 0 14px rgba(148, 163, 184, 0.16), 0 12px 28px rgba(148, 163, 184, 0.22);
+        }
+
+        body.light-theme .custom-select-dropdown {
+            background: rgba(248, 250, 252, 0.98);
+            border-color: rgba(203, 213, 225, 0.8);
+            box-shadow: 0 24px 55px rgba(15, 23, 42, 0.12);
+        }
+
+        body.light-theme .custom-select-option {
+            color: #1e293b;
+        }
+
+        body.light-theme .custom-select-option:hover {
+            background: rgba(148, 163, 184, 0.2);
+            color: #1f2937;
+            box-shadow: 0 0 8px rgba(148, 163, 184, 0.18);
+        }
+
+        body.light-theme .custom-select-option.selected {
+            background: rgba(148, 163, 184, 0.25);
+            color: #0f172a;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.3), 0 0 10px rgba(148, 163, 184, 0.14);
+        }
+
+        body.modal-open {
+            overflow: hidden;
+        }
+
+        #logsModal .modal-content {
+            min-height: calc(100vh - 1rem);
+        }
+
+        @media (max-width: 640px) {
+            #logsModal {
+                padding: 0;
+            }
+            #logsModal .modal-content {
+                min-height: 100vh;
+                max-height: 100vh;
+                border-radius: 0;
+            }
+        }
         
         /* Štýly pre log filtre */
         .filter-level-btn, .filter-level-btn-mobile { 
@@ -583,6 +777,17 @@
         body.light-theme #logsContainer::-webkit-scrollbar-thumb:hover {
             background-color: #94a3b8;
         }
+        body.light-theme #logsModalContent { scrollbar-color: #94a3b8 #f1f5f9; }
+        body.light-theme #logsModalContent::-webkit-scrollbar-track {
+            background: #f8fafc;
+        }
+        body.light-theme #logsModalContent::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border: 1px solid #e2e8f0;
+        }
+        body.light-theme #logsModalContent::-webkit-scrollbar-thumb:hover {
+            background-color: #94a3b8;
+        }
         
         body.light-theme .modal-content::-webkit-scrollbar-track {
             background: var(--card-bg);
@@ -591,6 +796,15 @@
         body.light-theme .modal-content::-webkit-scrollbar-thumb {
             background-color: var(--accent-color);
             border: 2px solid var(--card-bg);
+        }
+
+        .modal-content.no-outer-scrollbar::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+
+        .modal-content.no-outer-scrollbar {
+            scrollbar-width: none;
         }
         
         /* Modálne okná v svetlej téme */
@@ -630,6 +844,17 @@
         body.light-theme #manage2faModal .bg-gray-800 {
             background-color: #f3f4f6 !important;
             border: 1px solid #d1d5db !important;
+        }
+
+        body.light-theme #logsModal .card {
+            background-color: #ffffff !important;
+            border-color: var(--border-color) !important;
+        }
+
+        body.light-theme #logsModal .bg-gray-900 {
+            background-color: #f3f4f6 !important;
+            color: var(--text-color) !important;
+            border-color: #d1d5db !important;
         }
         
         body.light-theme #confirmPasswordModal input,
@@ -1151,15 +1376,18 @@
                 <div class="card p-4 rounded-lg flex flex-col sticky top-4 resize-y min-h-96" style="max-height: calc(100vh - 80px); height: calc(100vh - 160px);">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-white">📋 Aktivita</h2>
-                        <div class="flex gap-1">
+                        <div class="flex gap-1 items-center">
                             <button id="refreshLogsBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
                                 <i class="fas fa-sync-alt"></i>
                             </button>
                             <button id="exportLogsBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
                                 <i class="fas fa-download"></i>
                             </button>
-                            <button id="logsFilterBtn" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
+                            <button id="logsFilterBtn" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1" aria-expanded="false">
                                 <i class="fas fa-filter"></i>
+                            </button>
+                            <button id="logsExpandBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs gap-1 hidden lg:flex" title="Zobraziť logy na celú obrazovku" aria-label="Zobraziť logy na celú obrazovku">
+                                <i class="fas fa-expand"></i>
                             </button>
                         </div>
                     </div>
@@ -1167,10 +1395,10 @@
                     <!-- Filtre pre logy -->
                     <div id="logsFilters" class="mb-3 space-y-2 hidden">
                         <div class="grid grid-cols-2 gap-2">
-                            <select id="deviceFilter" class="p-1 rounded bg-gray-800 border border-gray-600 text-xs">
+                            <select id="deviceFilter" class="p-1 rounded bg-gray-800 border border-gray-600 text-xs" data-custom-select data-placeholder="Všetky zariadenia" data-expand-dropdown="desktop">
                                 <option value="">Všetky zariadenia</option>
                             </select>
-                            <select id="typeFilter" class="p-1 rounded bg-gray-800 border border-gray-600 text-xs">
+                            <select id="typeFilter" class="p-1 rounded bg-gray-800 border border-gray-600 text-xs" data-custom-select data-placeholder="Všetky typy">
                                 <option value="">Všetky typy</option>
                                 <option value="backup">Zálohovanie</option>
                                 <option value="notification">Notifikácie</option>
@@ -1194,18 +1422,21 @@
 
         <!-- Mobilná verzia activity logu - zobrazuje sa pod hlavným obsahom -->
         <div id="mobileLogs" class="lg:hidden">
-            <div class="card p-4 rounded-lg mt-8 flex flex-col">
+            <div class="card p-4 rounded-lg mt-1 sm:mt-8 flex flex-col">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-white">📋 Aktivita</h2>
                     <div class="flex gap-1">
-                        <button id="refreshLogsBtnMobile" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
-                            <i class="fas fa-sync-alt"></i>
+                        <button id="refreshLogsBtnMobile" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fas fa-sync-alt text-sm"></i>
                         </button>
-                        <button id="exportLogsBtnMobile" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
-                            <i class="fas fa-download"></i>
+                        <button id="exportLogsBtnMobile" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-2.5 rounded text-xs flex items-center gap-1">
+                            <i class="fas fa-download text-sm"></i>
                         </button>
-                        <button id="logsFilterBtnMobile" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
-                            <i class="fas fa-filter"></i>
+                        <button id="logsFilterBtnMobile" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 px-2.5 rounded text-xs flex items-center gap-1" aria-expanded="false">
+                            <i class="fas fa-filter text-sm"></i>
+                        </button>
+                        <button id="logsExpandBtnMobile" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-2.5 rounded text-xs flex items-center gap-1 sm:hidden" title="Zobraziť logy na celú obrazovku" aria-label="Zobraziť logy na celú obrazovku">
+                            <i class="fas fa-expand text-sm"></i>
                         </button>
                     </div>
                 </div>
@@ -1213,10 +1444,10 @@
                 <!-- Mobilné filtre pre logy -->
                 <div id="logsFiltersMobile" class="mb-3 space-y-2 hidden">
                     <div class="grid grid-cols-1 gap-2">
-                        <select id="deviceFilterMobile" class="p-2 rounded bg-gray-800 border border-gray-600 text-sm">
+                        <select id="deviceFilterMobile" class="p-2 rounded bg-gray-800 border border-gray-600 text-sm" data-custom-select data-placeholder="Všetky zariadenia">
                             <option value="">Všetky zariadenia</option>
                         </select>
-                        <select id="typeFilterMobile" class="p-2 rounded bg-gray-800 border border-gray-600 text-sm">
+                        <select id="typeFilterMobile" class="p-2 rounded bg-gray-800 border border-gray-600 text-sm" data-custom-select data-placeholder="Všetky typy">
                             <option value="">Všetky typy</option>
                             <option value="backup">Zálohovanie</option>
                             <option value="notification">Notifikácie</option>
@@ -1235,7 +1466,7 @@
                     </div>
                 </div>
                 
-                <div id="logsContainerMobile" class="overflow-y-auto space-y-1 pr-2 text-xs" style="max-height: 400px;"></div>
+                <div id="logsContainerMobile" class="overflow-y-auto space-y-1 pr-2 text-xs mobile-logs-container" style="max-height: 400px;"></div>
             </div>
         </div>
         </div>
@@ -1520,6 +1751,52 @@
         </div>
     </div>
 
+    <div id="logsModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-2 overflow-hidden">
+        <div class="card w-full h-full sm:h-auto max-w-full sm:max-w-6xl modal-content no-outer-scrollbar rounded-none sm:rounded-lg flex flex-col overflow-visible sm:overflow-hidden p-2 sm:p-8" style="max-height: calc(100vh - 1rem);">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-3 sm:mb-6 px-2 sm:px-0">
+                <h2 class="text-lg sm:text-2xl font-bold text-white">📋 Aktivita</h2>
+                <div class="modal-actions flex items-center gap-2 flex-wrap ml-auto">
+                    <button id="logsModalRefreshBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2" title="Obnoviť" aria-label="Obnoviť logy">
+                        <i class="fas fa-sync-alt text-xs sm:text-sm"></i><span class="hidden sm:inline">Obnoviť</span>
+                    </button>
+                    <button id="logsModalExportBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2" title="Stiahnuť" aria-label="Stiahnuť logy">
+                        <i class="fas fa-download text-xs sm:text-sm"></i><span class="hidden sm:inline">Stiahnuť</span>
+                    </button>
+                    <button id="logsModalFilterBtn" class="btn bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2" title="Filtre" aria-label="Zobraziť filtre" aria-expanded="false">
+                        <i class="fas fa-filter text-xs sm:text-sm"></i><span class="hidden sm:inline">Filtre</span>
+                    </button>
+                    <button id="closeLogsModalBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2" title="Zavrieť" aria-label="Zavrieť">
+                        <i class="fas fa-times text-xs sm:text-sm"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="logsModalFilters" class="mb-4 hidden">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+            <select id="deviceFilterModal" class="p-2 rounded bg-gray-900 border border-gray-700 text-sm" data-custom-select data-placeholder="Všetky zariadenia">
+                <option value="">Všetky zariadenia</option>
+            </select>
+            <select id="typeFilterModal" class="p-2 rounded bg-gray-900 border border-gray-700 text-sm" data-custom-select data-placeholder="Všetky typy">
+                <option value="">Všetky typy</option>
+                <option value="backup">Zálohovanie</option>
+                        <option value="notification">Notifikácie</option>
+                        <option value="status">Online/Offline</option>
+                        <option value="device">Zariadenie</option>
+                        <option value="system">Systém</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <button id="levelAllModal" class="filter-level-btn btn bg-gray-700 hover:bg-gray-600 text-white py-1.5 px-3 sm:py-2 sm:px-4 rounded text-xs sm:text-sm">Všetky</button>
+                    <button id="levelInfoModal" class="filter-level-btn btn bg-blue-700 hover:bg-blue-600 text-white py-1.5 px-3 sm:py-2 sm:px-4 rounded text-xs sm:text-sm">Info</button>
+                    <button id="levelWarningModal" class="filter-level-btn btn bg-yellow-700 hover:bg-yellow-600 text-white py-1.5 px-3 sm:py-2 sm:px-4 rounded text-xs sm:text-sm">Warn</button>
+                    <button id="levelErrorModal" class="filter-level-btn btn bg-red-700 hover:bg-red-600 text-white py-1.5 px-3 sm:py-2 sm:px-4 rounded text-xs sm:text-sm">Error</button>
+                </div>
+            </div>
+            <div id="logsModalContent" class="bg-gray-900 border border-gray-700 rounded-lg p-3 sm:p-4 overflow-y-auto flex-1" style="height: 100%; max-height: calc(100vh - 5rem);">
+                <div id="logsModalList" class="space-y-1 text-sm"></div>
+            </div>
+        </div>
+    </div>
+
 <script>
 // Funkcie pre správu refresh stavu
 const setRefreshingState = (enable = true) => {
@@ -1548,6 +1825,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmPasswordModal = document.getElementById('confirmPasswordModal');
     const backupCodesModal = document.getElementById('backupCodesModal');
     const snmpStatusModal = document.getElementById('snmpStatusModal');
+    const logsModal = document.getElementById('logsModal');
+    const logsModalList = document.getElementById('logsModalList');
+    const closeLogsModalBtn = document.getElementById('closeLogsModalBtn');
+    const logsExpandBtn = document.getElementById('logsExpandBtn');
+    const logsModalRefreshBtn = document.getElementById('logsModalRefreshBtn');
+    const logsModalExportBtn = document.getElementById('logsModalExportBtn');
+    const logsModalFilterBtn = document.getElementById('logsModalFilterBtn');
+    const logsModalFilters = document.getElementById('logsModalFilters');
+    const deviceFilterModal = document.getElementById('deviceFilterModal');
+    const typeFilterModal = document.getElementById('typeFilterModal');
+    const deviceFilter = document.getElementById('deviceFilter');
+    const typeFilter = document.getElementById('typeFilter');
+    const deviceFilterMobile = document.getElementById('deviceFilterMobile');
+    const typeFilterMobile = document.getElementById('typeFilterMobile');
+    const logsExpandBtnMobile = document.getElementById('logsExpandBtnMobile');
+    const logsFilters = document.getElementById('logsFilters');
+    const logsFiltersMobile = document.getElementById('logsFiltersMobile');
+    const logsFilterBtn = document.getElementById('logsFilterBtn');
+    const logsFilterBtnMobile = document.getElementById('logsFilterBtnMobile');
     const deviceForm = document.getElementById('deviceForm');
     const settingsForm = document.getElementById('settingsForm');
     const changePasswordForm = document.getElementById('changePasswordForm');
@@ -1849,13 +2145,164 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Flag pre potlačenie automatického skrolovania počas refresh operácie
     let suppressAutoScroll = false;
-    
+
     // Globálne nastavenia načítané zo servera
     let globalSettings = {
         log_retention_days: 30, // default hodnota
         ping_retention_days: 30, // default hodnota  
         snmp_retention_days: 30 // default hodnota
     };
+
+    const LOG_FILTERS_KEY = 'mikrotik-log-filters';
+    const LOG_FILTERS_STATE_KEY = 'mikrotik-log-filters-visible';
+
+    const customSelectRegistry = {};
+
+    function closeAllCustomSelects(exceptId = null) {
+        Object.entries(customSelectRegistry).forEach(([id, instance]) => {
+            if (id !== exceptId) {
+                instance.wrapper.classList.remove('open');
+                instance.button.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    function updateCustomSelectDisplay(selectId) {
+        const instance = customSelectRegistry[selectId];
+        if (!instance) return;
+        const { select, textSpan, dropdown, placeholder } = instance;
+        const value = select.value;
+        const selectedOption = Array.from(select.options).find(opt => opt.value === value);
+        textSpan.textContent = selectedOption ? selectedOption.textContent : placeholder;
+        dropdown.querySelectorAll('.custom-select-option').forEach(optionEl => {
+            const isSelected = optionEl.dataset.value === value;
+            optionEl.classList.toggle('selected', isSelected);
+            optionEl.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        });
+    }
+
+    function buildCustomSelectOptions(selectId) {
+        const instance = customSelectRegistry[selectId];
+        if (!instance) return;
+        const { select, dropdown } = instance;
+        dropdown.innerHTML = '';
+        Array.from(select.options).forEach(option => {
+            const optionEl = document.createElement('div');
+            optionEl.className = 'custom-select-option';
+            optionEl.dataset.value = option.value;
+            optionEl.textContent = option.textContent;
+            optionEl.setAttribute('role', 'option');
+            optionEl.setAttribute('aria-selected', option.value === select.value ? 'true' : 'false');
+            if (option.disabled) {
+                optionEl.classList.add('disabled');
+            }
+            dropdown.appendChild(optionEl);
+        });
+        updateCustomSelectDisplay(selectId);
+    }
+
+    function createCustomSelect(select) {
+        if (!select || !select.id) return;
+        const selectId = select.id;
+        const placeholder = select.dataset.placeholder || 'Vyberte možnosť';
+        if (customSelectRegistry[selectId]) {
+            buildCustomSelectOptions(selectId);
+            return;
+        }
+
+        select.classList.add('hidden');
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'custom-select w-full';
+        if (select.dataset.expandDropdown === 'desktop') {
+            wrapper.classList.add('expand-desktop');
+        }
+        wrapper.dataset.selectId = selectId;
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'custom-select-button';
+        button.setAttribute('aria-haspopup', 'listbox');
+        button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-label', placeholder);
+
+        const textSpan = document.createElement('span');
+        textSpan.className = 'custom-select-text';
+        textSpan.textContent = placeholder;
+
+        const arrowIcon = document.createElement('i');
+        arrowIcon.className = 'fas fa-chevron-down custom-select-arrow';
+
+        button.append(textSpan, arrowIcon);
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'custom-select-dropdown';
+        dropdown.setAttribute('role', 'listbox');
+
+        wrapper.append(button, dropdown);
+        select.insertAdjacentElement('afterend', wrapper);
+
+        customSelectRegistry[selectId] = {
+            select,
+            wrapper,
+            button,
+            dropdown,
+            textSpan,
+            placeholder
+        };
+
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const wasOpen = wrapper.classList.contains('open');
+            closeAllCustomSelects();
+            if (!wasOpen) {
+                wrapper.classList.add('open');
+                button.setAttribute('aria-expanded', 'true');
+            }
+        });
+
+        dropdown.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const optionEl = event.target.closest('.custom-select-option');
+            if (!optionEl || optionEl.classList.contains('disabled')) return;
+            const value = optionEl.dataset.value;
+            if (select.value !== value) {
+                select.value = value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            wrapper.classList.remove('open');
+            button.setAttribute('aria-expanded', 'false');
+        });
+
+        select.addEventListener('change', () => updateCustomSelectDisplay(selectId));
+
+        buildCustomSelectOptions(selectId);
+    }
+
+    function initializeCustomSelects() {
+        document.querySelectorAll('select[data-custom-select]').forEach(select => {
+            createCustomSelect(select);
+        });
+    }
+
+    function refreshCustomSelect(selectId) {
+        if (customSelectRegistry[selectId]) {
+            buildCustomSelectOptions(selectId);
+        } else {
+            const select = document.getElementById(selectId);
+            if (select) {
+                createCustomSelect(select);
+            }
+        }
+    }
+
+document.addEventListener('click', () => closeAllCustomSelects());
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        closeAllCustomSelects();
+    }
+});
+window.addEventListener('resize', () => closeAllCustomSelects());
     
     // Funkcia na kategorizáciu logov podľa typu
     const categorizeLogMessage = (message) => {
@@ -1875,6 +2322,86 @@ document.addEventListener('DOMContentLoaded', () => {
         // Online/Offline správy (okrem Pushover notifikácií)
         if (msgLower.includes('online') || msgLower.includes('offline') || msgLower.includes('pripojené') || msgLower.includes('nedostupné')) return 'status';
         return 'system';
+    };
+
+    const syncLogsModalContent = () => {
+        if (!logsModal || logsModal.classList.contains('hidden') || !logsModalList) return;
+        logsModalList.innerHTML = logsContainer.innerHTML;
+    };
+
+    const setFilterPanelVisibility = (panel, button, visible) => {
+        if (!panel) return;
+        if (visible) {
+            panel.classList.remove('hidden');
+        } else {
+            panel.classList.add('hidden');
+            closeAllCustomSelects();
+        }
+        if (button) {
+            button.setAttribute('aria-expanded', visible ? 'true' : 'false');
+        }
+    };
+
+    const persistFiltersVisibility = () => {
+        try {
+            const state = {
+                desktop: logsFilters ? !logsFilters.classList.contains('hidden') : false,
+                mobile: logsFiltersMobile ? !logsFiltersMobile.classList.contains('hidden') : false
+            };
+            localStorage.setItem(LOG_FILTERS_STATE_KEY, JSON.stringify(state));
+        } catch (error) {
+            console.error('Nepodarilo sa uložiť zobrazenie filtrov:', error);
+        }
+    };
+
+    const syncFilterControls = () => {
+        const deviceValue = currentFilters.device || '';
+        [deviceFilter, deviceFilterMobile, deviceFilterModal].forEach(select => {
+            if (select) {
+                select.value = deviceValue;
+            }
+        });
+
+        const typeValue = currentFilters.type || '';
+        [typeFilter, typeFilterMobile, typeFilterModal].forEach(select => {
+            if (select) {
+                select.value = typeValue;
+            }
+        });
+
+        const targetLevel = (currentFilters.level || 'all');
+        const capitalizedLevel = targetLevel.charAt(0).toUpperCase() + targetLevel.slice(1);
+        const allLevelButtons = document.querySelectorAll('.filter-level-btn');
+        const allLevelButtonsMobile = document.querySelectorAll('.filter-level-btn-mobile');
+        [...allLevelButtons, ...allLevelButtonsMobile].forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll(`#level${capitalizedLevel}, #level${capitalizedLevel}Mobile, #level${capitalizedLevel}Modal`).forEach(btn => btn?.classList.add('active'));
+
+        ['deviceFilter', 'deviceFilterMobile', 'deviceFilterModal', 'typeFilter', 'typeFilterMobile', 'typeFilterModal'].forEach(updateCustomSelectDisplay);
+    };
+
+    const closeLogsModal = () => {
+        if (!logsModal) return;
+        logsModal.classList.add('hidden');
+        logsModalFilterBtn?.setAttribute('aria-expanded', 'false');
+        logsModalFilterBtn?.classList.remove('ring-2', 'ring-purple-300');
+        closeAllCustomSelects();
+        document.body.classList.remove('modal-open');
+    };
+
+    const openLogsModal = () => {
+        if (!logsModal) return;
+        logsModal.classList.remove('hidden');
+        if (logsModalFilters) {
+            logsModalFilters.classList.remove('hidden');
+        }
+        if (logsModalFilterBtn) {
+            logsModalFilterBtn.setAttribute('aria-expanded', 'true');
+            logsModalFilterBtn.classList.add('ring-2', 'ring-purple-300');
+        }
+        document.body.classList.add('modal-open');
+        closeAllCustomSelects();
+        syncLogsModalContent();
+        syncFilterControls();
     };
 
     const addLogToContainer = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
@@ -1918,6 +2445,8 @@ document.addEventListener('DOMContentLoaded', () => {
         while (logsContainer.children.length > maxLogs) {
             logsContainer.lastChild.remove();
         }
+
+        syncLogsModalContent();
     };
 
     // Globálna pamäť pre dôležité správy - ODSTRÁNENÁ (zjednodušujeme logging)
@@ -1968,14 +2497,16 @@ document.addEventListener('DOMContentLoaded', () => {
         while (logsContainer.children.length > maxLogs) {
             logsContainer.lastChild.remove();
         }
-        
+
         // Aplikujeme filtre na nové logy
         applyLogFilters();
-        
+
         // Automatické skrolovanie k najnovšiemu logu (len ak je log viditeľný a nie je potlačené)
         if (!desktopLogEntry.classList.contains('filtered') && !suppressAutoScroll) {
             desktopLogEntry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
+
+        syncLogsModalContent();
     };
     
 
@@ -2088,6 +2619,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Po načítaní logov aplikujeme aktuálne filtre
             applyLogFilters();
+            syncLogsModalContent();
             
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -2152,14 +2684,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Funkcie pre filtrovanie logov
     const updateDeviceFilters = async () => {
         const devices = await api.get('devices');
-        const deviceSelect = document.getElementById('deviceFilter');
-        const deviceSelectMobile = document.getElementById('deviceFilterMobile');
-        
         const options = '<option value="">Všetky zariadenia</option>' + 
             devices.map(device => `<option value="${device.ip}">${device.name} (${device.ip})</option>`).join('');
         
-        deviceSelect.innerHTML = options;
-        deviceSelectMobile.innerHTML = options;
+        if (deviceFilter) deviceFilter.innerHTML = options;
+        if (deviceFilterMobile) deviceFilterMobile.innerHTML = options;
+        if (deviceFilterModal) deviceFilterModal.innerHTML = options;
+        refreshCustomSelect('deviceFilter');
+        refreshCustomSelect('deviceFilterMobile');
+        refreshCustomSelect('deviceFilterModal');
+        syncFilterControls();
     };
     
     const applyLogFilters = () => {
@@ -2194,54 +2728,87 @@ document.addEventListener('DOMContentLoaded', () => {
             
             entry.classList.toggle('filtered', !visible);
         });
+        syncLogsModalContent();
     };
     
+    const persistFilters = () => {
+        try {
+            const payload = JSON.stringify(currentFilters);
+            localStorage.setItem(LOG_FILTERS_KEY, payload);
+        } catch (error) {
+            console.error('Nepodarilo sa uložiť filtre logov:', error);
+        }
+    };
+
     const setupLogFilters = () => {
-        // Desktop filtre
-        const deviceFilter = document.getElementById('deviceFilter');
-        const typeFilter = document.getElementById('typeFilter');
+        try {
+            const savedFilters = localStorage.getItem(LOG_FILTERS_KEY);
+            if (savedFilters) {
+                const parsed = JSON.parse(savedFilters);
+                currentFilters = {
+                    device: parsed.device || '',
+                    type: parsed.type || '',
+                    level: parsed.level || 'all'
+                };
+            }
+        } catch (error) {
+            console.warn('Nepodarilo sa načítať filtre logov:', error);
+        }
+
+        try {
+            const savedVisibility = localStorage.getItem(LOG_FILTERS_STATE_KEY);
+            if (savedVisibility) {
+                const parsed = JSON.parse(savedVisibility);
+                setFilterPanelVisibility(logsFilters, logsFilterBtn, !!parsed.desktop);
+                setFilterPanelVisibility(logsFiltersMobile, logsFilterBtnMobile, !!parsed.mobile);
+            } else {
+                setFilterPanelVisibility(logsFilters, logsFilterBtn, false);
+                setFilterPanelVisibility(logsFiltersMobile, logsFilterBtnMobile, false);
+            }
+        } catch (error) {
+            console.warn('Nepodarilo sa načítať zobrazenie filtrov:', error);
+            setFilterPanelVisibility(logsFilters, logsFilterBtn, false);
+            setFilterPanelVisibility(logsFiltersMobile, logsFilterBtnMobile, false);
+        }
+        const deviceFilters = [deviceFilter, deviceFilterMobile, deviceFilterModal].filter(Boolean);
+        const typeFilters = [typeFilter, typeFilterMobile, typeFilterModal].filter(Boolean);
         const levelButtons = document.querySelectorAll('.filter-level-btn');
-        
-        // Mobile filtre
-        const deviceFilterMobile = document.getElementById('deviceFilterMobile');
-        const typeFilterMobile = document.getElementById('typeFilterMobile');
         const levelButtonsMobile = document.querySelectorAll('.filter-level-btn-mobile');
-        
-        // Device filter events
-        [deviceFilter, deviceFilterMobile].forEach(filter => {
+
+        deviceFilters.forEach(filter => {
             filter.addEventListener('change', (e) => {
                 currentFilters.device = e.target.value;
                 applyLogFilters();
-                // Sync both selects
-                deviceFilter.value = e.target.value;
-                deviceFilterMobile.value = e.target.value;
+                syncFilterControls();
+                persistFilters();
             });
         });
-        
-        // Type filter events
-        [typeFilter, typeFilterMobile].forEach(filter => {
+
+        typeFilters.forEach(filter => {
             filter.addEventListener('change', (e) => {
                 currentFilters.type = e.target.value;
                 applyLogFilters();
-                // Sync both selects
-                typeFilter.value = e.target.value;
-                typeFilterMobile.value = e.target.value;
+                syncFilterControls();
+                persistFilters();
             });
         });
-        
-        // Level filter events
+
         [...levelButtons, ...levelButtonsMobile].forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const level = e.target.id.replace('level', '').replace('Mobile', '').toLowerCase();
-                currentFilters.level = level;
-                
-                // Update active states
-                [...levelButtons, ...levelButtonsMobile].forEach(b => b.classList.remove('active'));
-                document.querySelectorAll(`#level${level.charAt(0).toUpperCase() + level.slice(1)}, #level${level.charAt(0).toUpperCase() + level.slice(1)}Mobile`).forEach(b => b.classList.add('active'));
-                
+                const level = e.target.id
+                    .replace('level', '')
+                    .replace('Mobile', '')
+                    .replace('Modal', '')
+                    .toLowerCase();
+                currentFilters.level = level || 'all';
+
+                syncFilterControls();
                 applyLogFilters();
+                persistFilters();
             });
         });
+
+        syncFilterControls();
     };
 
     document.getElementById('addDeviceBtn').addEventListener('click', () => openDeviceModal());
@@ -2473,6 +3040,97 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
     });
+
+    logsExpandBtn?.addEventListener('click', openLogsModal);
+    logsExpandBtnMobile?.addEventListener('click', openLogsModal);
+
+    logsModalRefreshBtn?.addEventListener('click', async () => {
+        if (!logsModalRefreshBtn) return;
+        const modalIcon = logsModalRefreshBtn.querySelector('i');
+        const mainRefreshBtn = document.getElementById('refreshLogsBtn');
+        const mainIcon = mainRefreshBtn?.querySelector('i');
+
+        modalIcon?.classList.add('fa-spin');
+        logsModalRefreshBtn.disabled = true;
+        if (mainRefreshBtn && mainIcon) {
+            mainIcon.classList.add('fa-spin');
+            mainRefreshBtn.disabled = true;
+        }
+
+        try {
+            await loadLogs();
+        } catch (error) {
+            addLog('error', 'Chyba pri obnove logov.');
+        } finally {
+            modalIcon?.classList.remove('fa-spin');
+            logsModalRefreshBtn.disabled = false;
+            if (mainRefreshBtn && mainIcon) {
+                mainIcon.classList.remove('fa-spin');
+                mainRefreshBtn.disabled = false;
+            }
+        }
+    });
+
+    logsModalExportBtn?.addEventListener('click', async () => {
+        const mainExportBtn = document.getElementById('exportLogsBtn');
+        const mainIcon = mainExportBtn?.querySelector('i');
+        const modalIcon = logsModalExportBtn?.querySelector('i');
+
+        if (logsModalExportBtn) {
+            logsModalExportBtn.disabled = true;
+        }
+        modalIcon?.classList.add('fa-spin');
+        if (mainExportBtn && mainIcon) {
+            mainExportBtn.disabled = true;
+            mainIcon.classList.add('fa-spin');
+        }
+
+        try {
+            const link = document.createElement('a');
+            link.href = '/api/logs/export';
+            link.download = `mikrotik_logy_${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '_')}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (error) {
+            addLog('error', 'Chyba pri exporte logov');
+        } finally {
+            modalIcon?.classList.remove('fa-spin');
+            if (logsModalExportBtn) {
+                logsModalExportBtn.disabled = false;
+            }
+            if (mainExportBtn && mainIcon) {
+                mainExportBtn.disabled = false;
+                mainIcon.classList.remove('fa-spin');
+            }
+        }
+    });
+
+    logsModalFilterBtn?.addEventListener('click', () => {
+        if (!logsModalFilters) return;
+        const willShow = logsModalFilters.classList.contains('hidden');
+        logsModalFilters.classList.toggle('hidden');
+        logsModalFilterBtn.setAttribute('aria-expanded', willShow ? 'true' : 'false');
+        logsModalFilterBtn.classList.toggle('ring-2', willShow);
+        logsModalFilterBtn.classList.toggle('ring-purple-300', willShow);
+        if (willShow) {
+            syncFilterControls();
+        }
+    });
+
+    closeLogsModalBtn?.addEventListener('click', closeLogsModal);
+
+    logsModal?.addEventListener('click', (event) => {
+        if (event.target === logsModal) {
+            closeLogsModal();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && logsModal && !logsModal.classList.contains('hidden')) {
+            closeLogsModal();
+        }
+    });
     document.getElementById('monitoringBtn').addEventListener('click', () => {
         // Otvoríme monitoring stránku v aktuálnej záložke
         window.location.href = '/monitoring.html';
@@ -2504,14 +3162,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Filter tlačidlá pre logy
-    document.getElementById('logsFilterBtn').addEventListener('click', () => {
-        const filters = document.getElementById('logsFilters');
-        filters.classList.toggle('hidden');
+    logsFilterBtn?.addEventListener('click', () => {
+        if (!logsFilters) return;
+        const willShow = logsFilters.classList.contains('hidden');
+        setFilterPanelVisibility(logsFilters, logsFilterBtn, willShow);
+        persistFiltersVisibility();
     });
-    
-    document.getElementById('logsFilterBtnMobile').addEventListener('click', () => {
-        const filters = document.getElementById('logsFiltersMobile');
-        filters.classList.toggle('hidden');
+
+    logsFilterBtnMobile?.addEventListener('click', () => {
+        if (!logsFiltersMobile) return;
+        const willShow = logsFiltersMobile.classList.contains('hidden');
+        setFilterPanelVisibility(logsFiltersMobile, logsFilterBtnMobile, willShow);
+        persistFiltersVisibility();
     });
 
     // Event listenery pre mobilné tlačidlá
@@ -2963,6 +3625,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadUserStatus();
             populateNotificationTypes();
             setupLogFilters();
+            initializeCustomSelects();
+            ['deviceFilter', 'deviceFilterMobile', 'deviceFilterModal', 'typeFilter', 'typeFilterMobile', 'typeFilterModal'].forEach(refreshCustomSelect);
             
             // Malé oneskorenie medzi operáciami
             await new Promise(resolve => setTimeout(resolve, 100));

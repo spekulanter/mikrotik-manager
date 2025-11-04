@@ -1395,16 +1395,16 @@
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-white">📋 Aktivita</h2>
                         <div class="flex gap-1 items-center">
-                            <button id="refreshLogsBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
+                            <button id="refreshLogsBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-2 rounded text-xs flex items-center gap-1">
                                 <i class="fas fa-sync-alt"></i>
                             </button>
-                            <button id="exportLogsBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1">
+                            <button id="exportLogsBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-2 rounded text-xs flex items-center gap-1">
                                 <i class="fas fa-download"></i>
                             </button>
-                            <button id="logsFilterBtn" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded text-xs flex items-center gap-1" aria-expanded="false">
+                            <button id="logsFilterBtn" class="btn bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 px-2 rounded text-xs flex items-center gap-1" aria-expanded="false">
                                 <i class="fas fa-filter"></i>
                             </button>
-                            <button id="logsExpandBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded text-xs gap-1 hidden lg:flex" title="Zobraziť logy na celú obrazovku" aria-label="Zobraziť logy na celú obrazovku">
+                            <button id="logsExpandBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-1.5 px-2 rounded text-xs gap-1 hidden lg:flex" title="Zobraziť logy na celú obrazovku" aria-label="Zobraziť logy na celú obrazovku">
                                 <i class="fas fa-expand"></i>
                             </button>
                         </div>
@@ -1547,6 +1547,25 @@
                                         </div>
                                     </div>
                                 </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div>
+                                                <label for="snmp_health_check_enabled" class="block font-medium mb-1">Automatický SNMP health check</label>
+                                                <p class="text-xs text-gray-400">Stráži plánovanie SNMP úloh a reštartuje chýbajúce alebo zaseknuté položky.</p>
+                                            </div>
+                                            <label for="snmp_health_check_enabled" class="inline-flex items-center cursor-pointer select-none">
+                                                <input type="checkbox" id="snmp_health_check_enabled" name="snmp_health_check_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                                                <span class="ml-2 text-xs font-medium">Zapnuté</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label for="snmp_health_check_interval_minutes" class="block mb-1 font-semibold">Frekvencia health checku (minúty)</label>
+                                        <input type="number" id="snmp_health_check_interval_minutes" name="snmp_health_check_interval_minutes" class="w-full p-2 rounded bg-gray-800 border border-gray-600 transition-opacity" value="15" min="1" max="1440">
+                                        <small class="text-gray-400 block mt-1">Definuje, ako často sa má spustiť kontrola plánovača SNMP úloh. Odporúčané 15 minút.</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2331,8 +2350,18 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         // Pushover notifikácie majú prioritu a zostávajú v kategórii notification
         if (msgLower.includes('notifikácia') || msgLower.includes('notification') || msgLower.includes('pushover')) return 'notification';
         // Všetky zálohovacie správy vrátane "spúšťam pokročilú zálohu" (okrem Pushover)
+        const extendedBackupKeywords = [
+            'spúšťam čistenie starých záloh',
+            'nahraný na ftp',
+            'súbory úspešne stiahnuté',
+            'zariadenie nemá /flash',
+            'priamy export úspešne získaný',
+            'získavam priamy ssh export',
+            'ssh pripojenie úspešne'
+        ];
         if (msgLower.includes('záloha') || msgLower.includes('backup') || 
-            msgLower.includes('spúšťam pokročilú zálohu') || msgLower.includes('spúšťam zálohu')) return 'backup';
+            msgLower.includes('spúšťam pokročilú zálohu') || msgLower.includes('spúšťam zálohu') ||
+            extendedBackupKeywords.some(keyword => msgLower.includes(keyword))) return 'backup';
         // Udalosti týkajúce sa zariadenia (reštart, kritické hodnoty, verzia)
         const deviceKeywords = ['reštartovan', 'reštart', 'kritick', 'verziu', 'uptime', 'routeros', 'cpu', 'pamät', 'pamäte', 'teplot'];
         const isDeviceEvent = msgLower.includes('mikrotik') &&
@@ -2586,6 +2615,7 @@ window.addEventListener('resize', () => closeAllCustomSelects());
             if(el) el.checked = settings[key] === 'true';
         });
         toggleWeeklySettings();
+        toggleSnmpHealthInterval();
         settingsModal.classList.remove('hidden');
     };
 
@@ -2700,6 +2730,16 @@ window.addEventListener('resize', () => closeAllCustomSelects());
 
     const toggleWeeklySettings = () => {
         document.getElementById('weeklySettings').style.display = document.getElementById('backup_schedule_type').value === 'weekly' ? 'block' : 'none';
+    };
+
+    const toggleSnmpHealthInterval = () => {
+        const toggle = document.getElementById('snmp_health_check_enabled');
+        const intervalField = document.getElementById('snmp_health_check_interval_minutes');
+        if (!toggle || !intervalField) return;
+        const shouldDisable = !toggle.checked;
+        intervalField.readOnly = shouldDisable;
+        intervalField.classList.toggle('opacity-50', shouldDisable);
+        intervalField.classList.toggle('cursor-not-allowed', shouldDisable);
     };
     
     const populateNotificationTypes = () => {
@@ -3167,6 +3207,7 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         window.location.href = '/monitoring.html';
     });
     document.getElementById('backup_schedule_type').addEventListener('change', toggleWeeklySettings);
+    document.getElementById('snmp_health_check_enabled').addEventListener('change', toggleSnmpHealthInterval);
     document.getElementById('testPushoverBtn').addEventListener('click', () => api.post('notifications/test'));
     
     // Event listenery pre logy

@@ -48,6 +48,144 @@ import base64 as b64
 DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
 DB_PATH = os.path.join(DATA_DIR, 'mikrotik_manager.db')
 BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
+BOOLEAN_SETTING_KEYS = {
+    'ping_monitor_enabled', 'snmp_health_check_enabled', 'backup_schedule_enabled',
+    'backup_detailed_logging', 'notify_backup_success', 'notify_backup_failure',
+    'notify_device_offline', 'notify_device_online', 'notify_temp_critical',
+    'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
+    'notify_version_change', 'quiet_hours_enabled', 'availability_monitoring_enabled',
+    'debug_terminal'
+}
+
+SETTING_LABELS = {
+    'availability_monitoring_enabled': 'Povoliť monitorovanie dostupnosti zariadení',
+    'backup_delay_seconds': 'Oneskorenie medzi zálohami (sekundy)',
+    'backup_detailed_logging': 'Detailné logovanie zálohového procesu',
+    'backup_retention_count': 'Počet uchovávaných záloh (na zariadenie)',
+    'backup_schedule_day': 'Deň v týždni',
+    'backup_schedule_enabled': 'Povoliť automatické zálohovanie',
+    'backup_schedule_time': 'Čas zálohovania (HH:MM)',
+    'backup_schedule_type': 'Interval zálohovania',
+    'cpu_critical_threshold': 'CPU (%)',
+    'debug_terminal': 'Debug Terminal',
+    'ftp_directory': 'FTP Adresár',
+    'ftp_password': 'FTP Heslo',
+    'ftp_port': 'FTP Port',
+    'ftp_server': 'FTP Server',
+    'ftp_username': 'FTP Používateľ',
+    'log_max_entries': 'Max zobrazených logov v okne',
+    'log_retention_days': 'Uchovávanie aktivity logov (dni)',
+    'memory_critical_threshold': 'Pamäť (%)',
+    'ping_check_interval_seconds': 'Ping interval (sekundy)',
+    'ping_heartbeat_interval': 'Globálny ping interval (sekundy)',
+    'ping_monitor_enabled': 'Ping monitoring (globálny prepínač)',
+    'ping_retention_days': 'ICMP ping dáta (dni)',
+    'ping_retries': 'Počet neúspešných pokusov',
+    'ping_retry_interval': 'Retry interval pri výpadku (sekundy)',
+    'ping_timeout': 'Timeout pre jeden ping (sekundy)',
+    'pushover_app_key': 'Pushover App Key/Token',
+    'pushover_user_key': 'Pushover User Key',
+    'quiet_hours_enabled': 'Povoliť \"Quiet Hours\" (tichý režim)',
+    'quiet_hours_end': 'Tichý režim do',
+    'quiet_hours_start': 'Tichý režim od',
+    'snmp_check_interval_minutes': 'Globálny interval SNMP zberu dát (minúty)',
+    'snmp_health_check_enabled': 'Automatický SNMP health check',
+    'snmp_health_check_interval_minutes': 'Frekvencia health checku (minúty)',
+    'snmp_retention_days': 'SNMP výkonnostné dáta (dni)',
+    'temp_critical_threshold': 'Teplota (°C)',
+    'notify_device_offline': 'Notifikácia: zariadenie offline (ICMP)',
+    'notify_device_online': 'Notifikácia: zariadenie online (ICMP)',
+    'notify_backup_success': 'Notifikácia: úspešná záloha',
+    'notify_backup_failure': 'Notifikácia: neúspešná záloha',
+    'notify_temp_critical': 'Notifikácia: kritická teplota (SNMP)',
+    'notify_cpu_critical': 'Notifikácia: kritická záťaž CPU (SNMP)',
+    'notify_memory_critical': 'Notifikácia: kritická pamäť (SNMP)',
+    'notify_reboot_detected': 'Notifikácia: detekovaný reštart',
+    'notify_version_change': 'Notifikácia: zmena verzie OS',
+    'viewport': 'Režim zobrazenia'
+}
+
+SENSITIVE_SETTINGS = {'ftp_password', 'pushover_app_key', 'pushover_user_key'}
+
+SETTING_VALUE_SUFFIXES = {
+    'ping_check_interval_seconds': ' s',
+    'ping_retry_interval': ' s',
+    'ping_timeout': ' s',
+    'ping_heartbeat_interval': ' s',
+    'ping_retention_days': ' dní',
+    'ping_retries': ' pokusov',
+    'backup_delay_seconds': ' s',
+    'backup_retention_count': ' ks',
+    'snmp_check_interval_minutes': ' min',
+    'snmp_health_check_interval_minutes': ' min',
+    'snmp_retention_days': ' dní',
+    'log_retention_days': ' dní',
+    'log_max_entries': ' záznamov',
+    'cpu_critical_threshold': ' %',
+    'memory_critical_threshold': ' %',
+    'temp_critical_threshold': ' °C'
+}
+
+SCHEDULE_TYPE_LABELS = {
+    'daily': 'denne',
+    'weekly': 'týždenne',
+    'monthly': 'mesačne',
+    'custom': 'vlastný plán'
+}
+
+SCHEDULE_DAY_LABELS = {
+    'monday': 'pondelok',
+    'tuesday': 'utorok',
+    'wednesday': 'streda',
+    'thursday': 'štvrtok',
+    'friday': 'piatok',
+    'saturday': 'sobota',
+    'sunday': 'nedeľa'
+}
+
+VIEWPORT_LABELS = {
+    'desktop': 'Desktop režim',
+    'mobile': 'Mobilný režim',
+    'auto': 'Automaticky'
+}
+
+def get_setting_label(key):
+    """Vráti čitateľný názov nastavenia"""
+    return SETTING_LABELS.get(key, key.replace('_', ' ').capitalize())
+
+def format_setting_value(key, value):
+    """Formátovanie hodnoty nastavenia pre logy"""
+    if value is None or value == '':
+        return 'nenastavené'
+    value_str = str(value)
+    lower_value = value_str.lower()
+    bool_like = key in BOOLEAN_SETTING_KEYS or key.startswith('notify_') or key.endswith('_enabled')
+    if bool_like:
+        return 'zapnuté' if lower_value == 'true' else 'vypnuté'
+    if key == 'backup_schedule_type':
+        return SCHEDULE_TYPE_LABELS.get(lower_value, value_str)
+    if key == 'backup_schedule_day':
+        return SCHEDULE_DAY_LABELS.get(lower_value, value_str)
+    if key == 'viewport':
+        return VIEWPORT_LABELS.get(lower_value, value_str)
+    suffix = SETTING_VALUE_SUFFIXES.get(key)
+    if suffix:
+        return f"{value_str}{suffix}"
+    return value_str
+DEFAULT_SETTING_VALUES = {
+    'ping_check_interval_seconds': '120',
+    'ping_monitor_enabled': 'true',
+    'snmp_check_interval_minutes': '10',
+    'snmp_health_check_enabled': 'true',
+    'snmp_health_check_interval_minutes': '15',
+    'backup_schedule_enabled': 'false',
+    'backup_schedule_type': 'daily',
+    'backup_schedule_day': 'sunday',
+    'backup_schedule_time': '02:00',
+    'backup_retention_count': '10',
+    'backup_delay_seconds': '30',
+    'backup_detailed_logging': 'false'
+}
 
 # --- Nastavenie aplikácie (upravené pre HTML šablóny) ---
 app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
@@ -422,6 +560,8 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('backup_retention_count', '10'))
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('backup_delay_seconds', '30'))
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_check_interval_minutes', '10'))
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_health_check_enabled', 'true'))
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_health_check_interval_minutes', '15'))
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('backup_detailed_logging', 'false'))
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('log_retention_days', '30'))  # Pridané: uchovávanie logov
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retention_days', '30'))  # Pridané: uchovávanie ping dát
@@ -544,8 +684,12 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
             filtered = []
             skip_indented = False
 
-            for raw_line in lines[1:]:  # preskočíme časovú hlavičku
+            for raw_line in lines:
                 stripped = raw_line.strip()
+
+                # Ignorujeme všetky komentové riadky, napr. časové hlavičky.
+                if stripped.startswith('#'):
+                    continue
 
                 if skip_indented:
                     if not stripped or raw_line[:1].isspace():
@@ -1856,46 +2000,108 @@ def handle_settings():
                         return jsonify({'status': 'error', 'message': 'Globálny ping interval musí byť 20-86400 sekúnd'}), 400
                 except (ValueError, TypeError):
                     return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre ping interval'}), 400
+
+            # Validácia intervalu SNMP health checku
+            health_interval = request.json.get('snmp_health_check_interval_minutes')
+            if health_interval is not None:
+                try:
+                    health_interval_int = int(health_interval)
+                    if health_interval_int < 1 or health_interval_int > 1440:
+                        return jsonify({'status': 'error', 'message': 'SNMP health check interval musí byť 1-1440 minút'}), 400
+                except (ValueError, TypeError):
+                    return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre SNMP health check interval'}), 400
             
-            # Kontrola pre zmenu ping monitoring nastavení
-            old_settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key IN (?, ?)', 
-                                                                           ('ping_check_interval_seconds', 'ping_monitor_enabled')).fetchall()}
+            # Načítame pôvodné nastavenia pre porovnanie zmien
+            old_settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+
+            def normalize_setting_value(key, value):
+                if value is None:
+                    return ''
+                value_str = str(value)
+                if key in BOOLEAN_SETTING_KEYS:
+                    return value_str.lower()
+                return value_str
+
+            def old_value(key):
+                stored = old_settings.get(key)
+                if stored is None or stored == '':
+                    stored = DEFAULT_SETTING_VALUES.get(key, '')
+                return normalize_setting_value(key, stored)
+
+            def request_value(key):
+                return normalize_setting_value(key, request.json.get(key))
+
+            def setting_changed(key):
+                if key not in request.json:
+                    return False
+                return request_value(key) != old_value(key)
+
+            def new_value(key):
+                return request_value(key) if key in request.json else old_value(key)
             
             for key, value in request.json.items():
                 conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
             conn.commit()
-            add_log('info', "Nastavenia boli uložené.")
-            add_log('info', "Nastavenia boli aktualizované.")
+            add_log('info', "Globálne nastavenia uložené používateľom.")
+            
+            changed_keys = sorted(key for key in request.json.keys() if setting_changed(key))
+            for key in changed_keys:
+                label = get_setting_label(key)
+                if key in SENSITIVE_SETTINGS:
+                    add_log('info', f"{label} bolo aktualizované (hodnota je skrytá).")
+                else:
+                    previous_value = format_setting_value(key, old_value(key))
+                    current_value = format_setting_value(key, new_value(key))
+                    add_log('info', f"{label} zmenené z {previous_value} na {current_value}.")
             
             # Kontrola či sa zmenili ping nastavenia
-            new_ping_interval = request.json.get('ping_check_interval_seconds')
-            new_ping_enabled = request.json.get('ping_monitor_enabled')
-            ping_settings_changed = (
-                new_ping_interval and str(new_ping_interval) != old_settings.get('ping_check_interval_seconds', '120') or
-                new_ping_enabled and str(new_ping_enabled) != old_settings.get('ping_monitor_enabled', 'true')
-            )
+            ping_settings_changed = setting_changed('ping_check_interval_seconds') or setting_changed('ping_monitor_enabled')
             
             # Kontrola či sa zmenili SNMP nastavenia
-            snmp_settings_changed = 'snmp_check_interval_minutes' in request.json
+            snmp_interval_changed = setting_changed('snmp_check_interval_minutes')
+            snmp_health_changed = setting_changed('snmp_health_check_enabled') or setting_changed('snmp_health_check_interval_minutes')
+            backup_schedule_keys = ('backup_schedule_enabled', 'backup_schedule_type', 'backup_schedule_day', 'backup_schedule_time')
+            backup_schedule_changed = any(setting_changed(key) for key in backup_schedule_keys)
             
             if ping_settings_changed:
                 restart_ping_monitoring()
-                add_log('info', f"Ping monitoring reštartovaný s novými nastaveniami: interval {new_ping_interval}s, povolený: {new_ping_enabled}")
+                add_log('info', f"Ping monitoring reštartovaný s novými nastaveniami: interval {new_value('ping_check_interval_seconds')}s, povolený: {new_value('ping_monitor_enabled')}")
             
-            if snmp_settings_changed:
+            if snmp_interval_changed:
                 stop_all_snmp_timers()
                 start_all_snmp_timers()
                 # Okamžitý health check po zmene intervalu pre zabezpečenie správneho fungovania
                 trigger_immediate_health_check("globálna zmena SNMP intervalu")
-                add_log('info', f"SNMP timery reštartované s novým globálnym intervalom: {request.json['snmp_check_interval_minutes']} minút")
+                add_log('info', f"SNMP timery reštartované s novým globálnym intervalom: {new_value('snmp_check_interval_minutes')} minút")
+
+            if snmp_health_changed:
+                details = []
+                if setting_changed('snmp_health_check_enabled'):
+                    is_enabled = new_value('snmp_health_check_enabled') == 'true'
+                    details.append(f"stav: {'zapnutý' if is_enabled else 'vypnutý'}")
+                if setting_changed('snmp_health_check_interval_minutes'):
+                    details.append(f"interval: {new_value('snmp_health_check_interval_minutes')} minút")
+                detail_text = f" ({', '.join(details)})" if details else ""
+                add_log('info', f"SNMP health check nastavenia aktualizované{detail_text}.")
+            
+            backup_general_changes = []
+            if setting_changed('backup_delay_seconds'):
+                backup_general_changes.append(f"oneskorenie medzi zálohami: {new_value('backup_delay_seconds')}s")
+            if setting_changed('backup_retention_count'):
+                backup_general_changes.append(f"retencia záloh: {new_value('backup_retention_count')} ks")
+            if setting_changed('backup_detailed_logging'):
+                backup_general_changes.append(f"detailné logovanie: {'zapnuté' if new_value('backup_detailed_logging') == 'true' else 'vypnuté'}")
+            if backup_general_changes:
+                add_log('info', f"Automatické zálohovanie — upravené nastavenia ({'; '.join(backup_general_changes)}).")
             
             # Znovu nastavíme scheduler bez logovania
             setup_scheduler(log_schedule_info=False)
             
-            # Pridáme info o pláne priamo do databázy logov
-            schedule_info = get_schedule_info()
-            if schedule_info:
-                add_log('info', schedule_info)
+            # Pridáme info o pláne len ak sa zmenilo nastavenie automatických záloh
+            if backup_schedule_changed:
+                schedule_info = get_schedule_info()
+                if schedule_info:
+                    add_log('info', schedule_info)
             
             return jsonify({
                 'status': 'success'
@@ -2541,8 +2747,19 @@ def setup_scheduler(log_schedule_info=False):
     # Only keep essential scheduled tasks
     schedule.every().day.at("03:00").do(scheduled_log_cleanup)  # Čistenie starých logov každý deň o 3:00
     
-    # NOVÉ: Kontrola zdravia SNMP timerov každých 15 minút
-    schedule.every(15).minutes.do(scheduled_snmp_health_check)
+    snmp_health_enabled = settings.get('snmp_health_check_enabled', 'true').lower() == 'true'
+    try:
+        snmp_health_interval = int(settings.get('snmp_health_check_interval_minutes', 15))
+    except (TypeError, ValueError):
+        snmp_health_interval = 15
+    snmp_health_interval = max(1, min(snmp_health_interval, 1440))
+
+    if snmp_health_enabled:
+        schedule.every(snmp_health_interval).minutes.do(scheduled_snmp_health_check)
+        if log_schedule_info:
+            add_log('info', f"SNMP health check je aktívny: každých {snmp_health_interval} minút.")
+    elif log_schedule_info:
+        add_log('info', "SNMP health check je v nastaveniach vypnutý.")
     
     # Nastavenie automatického zálohovania
     if settings.get('backup_schedule_enabled', 'false').lower() != 'true':

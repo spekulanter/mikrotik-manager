@@ -567,7 +567,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const updatePingStatus = (pingData) => {
         // Use cached DOM elements for better performance
         const pingStatus = domCache.pingStatus || document.getElementById('pingStatus');
-        const avgLatency = domCache.avgLatency || document.getElementById('avgLatency');
         const uptime24h = domCache.uptime24h || document.getElementById('uptime24h');
         const lastPing = domCache.lastPing || document.getElementById('lastPing');
         
@@ -584,11 +583,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (indicator) indicator.className = `ping-indicator ${pingData.status}`;
             if (statusText) statusText.textContent = isOnline ? 'Online' : 'Offline';
             
-            // Update metrics
-            if (avgLatency) {
-                avgLatency.textContent = pingData.avg_latency ? `${pingData.avg_latency.toFixed(1)} ms` : '-';
-            }
-            
             if (lastPing) {
                 lastPing.textContent = new Date(pingData.timestamp).toLocaleTimeString('sk-SK');
             }
@@ -598,31 +592,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // Nové: výpočet uptime percenta pre ľubovoľný rozsah podľa ping histórie
     // Výpočet uptime na základe trvania (durations), nie len počtu záznamov
     // Predpoklad: záznamy v lastPingHistory sú chronologicky (ak nie, zoradíme)
-    const computeUptimeForRange = (rangeKey) => {
+    const getHistoryWindowForRange = (rangeKey) => {
         if (!Array.isArray(lastPingHistory) || lastPingHistory.length === 0) return null;
+        const normalizedRange = rangeKey === '30m' ? 'recent' : rangeKey;
+        const rangeMs = getTimeRangeMs(normalizedRange);
+        if (!rangeMs || rangeMs <= 0) return null;
         const nowTs = Date.now();
-        const rangeMs = getTimeRangeMs(rangeKey === '30m' ? 'recent' : rangeKey);
         const fromTs = nowTs - rangeMs;
 
-        // Zoberieme aj jeden záznam tesne pred fromTs kvôli kontinuite stavu
-        // (ak zariadenie bolo online tesne pred oknom a prvý bod vo vnútri je neskôr)
         let history = lastPingHistory.filter(p => {
             const t = new Date(p.timestamp).getTime();
-            return !isNaN(t) && (t >= fromTs - (5 * 60 * 1000)) && t <= nowTs; // malá tolerancia 5 min pred oknom
+            return !isNaN(t) && (t >= fromTs - (5 * 60 * 1000)) && t <= nowTs;
         });
         if (history.length === 0) return null;
-        // Usporiadať (pre istotu)
         history.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp));
 
-        // Nájsť prvý referenčný záznam (ak prvý je ešte pred oknom, posunúť jeho timestamp na fromTs)
-        if (new Date(history[0].timestamp).getTime() < fromTs) {
-            // klon s posunutým timestampom
+        const firstTs = new Date(history[0].timestamp).getTime();
+        if (firstTs < fromTs) {
             history[0] = { ...history[0], timestamp: new Date(fromTs).toISOString() };
-        } else if (new Date(history[0].timestamp).getTime() > fromTs) {
-            // Ak prvý bod je neskôr ako fromTs a nemáme žiadny predtým, vložíme syntetický bod s rovnakým stavom ako prvý (konzervatívne)
+        } else if (firstTs > fromTs) {
             const first = history[0];
             history.unshift({ timestamp: new Date(fromTs).toISOString(), status: first.status, avg_latency: first.avg_latency });
         }
+
+        return { history, rangeMs, nowTs };
+    };
+
+    const computeUptimeForRange = (rangeKey) => {
+        const windowData = getHistoryWindowForRange(rangeKey);
+        if (!windowData) return null;
+        const { history, rangeMs, nowTs } = windowData;
 
         let onlineDuration = 0;
         for (let i=0;i<history.length-1;i++) {
@@ -634,7 +633,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const segment = nextTs - curTs;
             if (cur.status === 'online') onlineDuration += segment;
         }
-        // Posledný segment až po nowTs
         const last = history[history.length-1];
         const lastTs = new Date(last.timestamp).getTime();
         if (!isNaN(lastTs) && lastTs < nowTs) {
@@ -647,15 +645,54 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.min(100, Math.max(0, percent));
     };
 
+    const computeAverageLatencyForRange = (rangeKey) => {
+        const windowData = getHistoryWindowForRange(rangeKey);
+        if (!windowData) return null;
+        const { history, nowTs } = windowData;
+
+        let weightedLatency = 0;
+        let onlineDuration = 0;
+
+        for (let i = 0; i < history.length - 1; i++) {
+            const cur = history[i];
+            const next = history[i + 1];
+            const curTs = new Date(cur.timestamp).getTime();
+            const nextTs = new Date(next.timestamp).getTime();
+            if (isNaN(curTs) || isNaN(nextTs) || nextTs <= curTs) continue;
+
+            if (cur.status === 'online') {
+                const latency = Number(cur.avg_latency);
+                if (Number.isFinite(latency)) {
+                    const segment = nextTs - curTs;
+                    weightedLatency += latency * segment;
+                    onlineDuration += segment;
+                }
+            }
+        }
+
+        const last = history[history.length - 1];
+        const lastTs = new Date(last.timestamp).getTime();
+        if (!isNaN(lastTs) && lastTs < nowTs && last.status === 'online') {
+            const latency = Number(last.avg_latency);
+            if (Number.isFinite(latency)) {
+                const segment = nowTs - lastTs;
+                weightedLatency += latency * segment;
+                onlineDuration += segment;
+            }
+        }
+
+        if (onlineDuration === 0) return null;
+        return weightedLatency / onlineDuration;
+    };
+
     const updateDynamicUptime = () => {
         const uptimeEl = document.getElementById('uptime24h');
         const labelEl = document.getElementById('uptimeLabel');
         if (!uptimeEl || !labelEl) return;
-    // Ak čakáme na plný dataset po rýchlom (optimized) načítaní, nerefreshuj (zabránime blikaniu)
-    if (pendingFullPingHistory) return;
         const range = currentTimeRange;
-        // Pre label
         labelEl.textContent = `Uptime (${range})`;
+        // Ak čakáme na plný dataset po rýchlom (optimized) načítaní, nerefreshuj (zabránime blikaniu)
+        if (pendingFullPingHistory) return;
         const val = computeUptimeForRange(range);
         if (val === null) {
             uptimeEl.textContent = '-';
@@ -671,6 +708,29 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             uptimeEl.className = 'text-lg font-bold text-red-400';
         }
+    };
+
+    const updateAverageLatency = () => {
+        const avgLatencyEl = domCache.avgLatency || document.getElementById('avgLatency');
+        if (!avgLatencyEl) return;
+        if (pendingFullPingHistory) {
+            avgLatencyEl.textContent = '-';
+            avgLatencyEl.className = 'text-lg font-bold text-gray-400';
+            return;
+        }
+        const val = computeAverageLatencyForRange(currentTimeRange);
+        if (val === null) {
+            avgLatencyEl.textContent = '-';
+            avgLatencyEl.className = 'text-lg font-bold text-gray-400';
+            return;
+        }
+        avgLatencyEl.textContent = `${val.toFixed(1)} ms`;
+        avgLatencyEl.className = 'text-lg font-bold text-blue-400';
+    };
+
+    const updateHeaderMetrics = () => {
+        updateDynamicUptime();
+        updateAverageLatency();
     };
     
     // Get time format configuration based on time range
@@ -1754,8 +1814,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 chart.update('none');
             });
         }
-    // Po každej aktualizácii prepočítať uptime pre aktuálny rozsah (nie ak čakáme na full dataset)
-    updateDynamicUptime();
+    // Po každej aktualizácii prepočítaj metriky (nie ak čakáme na full dataset)
+    updateHeaderMetrics();
     };
 
     // Dynamic point size adjustment based on data density and time range
@@ -2311,8 +2371,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof addDebugLog === 'function') addDebugLog(`⚠️ Predbežný reset osi X zlyhal: ${e.message}`);
         }
         updateChartTimeFormats(timeRange);
-    // Prepočet uptime pri zmene intervalu
-    updateDynamicUptime();
+        // Prepočet panelových metrík pri zmene intervalu
+        updateHeaderMetrics();
         // Okamžité finálne zarovnanie pri vypnutých animáciách
         if (disableRangeAnimations) {
             disableChartAnimationsForRangeChange();
@@ -2664,7 +2724,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                     // Teraz už máme plný dataset
                                     pendingFullPingHistory = false;
-                                    updateDynamicUptime();
+                                    updateHeaderMetrics();
                                     
                                     // Apply full time range horizon after background loading
                                     if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
@@ -2695,14 +2755,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // For refresh operations, use simplified approach like long intervals (7d+)
                 if (isRefreshOperation) {
                     // Simple update for refresh - no complex stabilization
-                    updateDynamicUptime();
+                    updateHeaderMetrics();
                 } else {
                     // Po optimalizácii Y osí ešte zjednotíme časové okno – vyrieši rozdiely medzi SNMP a Ping
                     unifyTimeAxis();
                     // Dodatočná stabilizácia pre krátke rozsahy (rieši miznúce tick-y a skákanie)
                     stabilizeShortRangeTimeAxis(timeRange);
-                    // Aktualizovať dynamický uptime po komplet načítaní
-                    updateDynamicUptime();
+                    // Aktualizovať metriky po komplet načítaní
+                    updateHeaderMetrics();
                 }
             }, 200);
             

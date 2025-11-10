@@ -467,7 +467,8 @@ def init_database():
                 username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
                 snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
                 last_backup TIMESTAMP, last_snmp_data TEXT, snmp_interval_minutes INTEGER DEFAULT 0,
-                last_snmp_check TIMESTAMP
+                last_snmp_check TIMESTAMP, ping_interval_seconds INTEGER DEFAULT 0,
+                ping_retry_interval_seconds INTEGER DEFAULT 0, monitoring_paused BOOLEAN DEFAULT 0
             )
         ''')
         # Pridanie nových stĺpcov pre existujúce databázy
@@ -481,6 +482,10 @@ def init_database():
             pass
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN ping_interval_seconds INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN ping_retry_interval_seconds INTEGER DEFAULT 0')
         except sqlite3.OperationalError:
             pass
         try:
@@ -1663,7 +1668,7 @@ def handle_devices():
     with get_db_connection() as conn:
         if request.method == 'GET': 
             # Include all necessary fields including status and last_snmp_data
-            return jsonify([dict(row) for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY name').fetchall()])
+            return jsonify([dict(row) for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY name').fetchall()])
         if request.method == 'POST':
             data = request.json
             try:
@@ -1677,16 +1682,16 @@ def handle_devices():
                     if data.get('password'):
                         # Ak je zadané nové heslo, aktualizujeme všetko vrátane hesla
                         encrypted_password = encrypt_password(data['password'])
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=? WHERE id=?", 
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
                                    (data['name'], data['ip'], data['username'], encrypted_password, data.get('low_memory', False), 
                                     data.get('snmp_community', 'public'), new_snmp_interval, 
-                                    data.get('ping_interval_seconds', 0), data['id']))
+                                    data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0), data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=? WHERE id=?", 
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
                                    (data['name'], data['ip'], data['username'], data.get('low_memory', False), 
                                     data.get('snmp_community', 'public'), new_snmp_interval, 
-                                    data.get('ping_interval_seconds', 0), data['id']))
+                                    data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0), data['id']))
                     conn.commit()
                     
                     # Okamžitý health check ak sa zmenil SNMP interval zariadenia
@@ -1701,10 +1706,10 @@ def handle_devices():
                 else:
                     cursor = conn.cursor()
                     encrypted_password = encrypt_password(data['password'])
-                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
                                  (data['name'], data['ip'], data['username'], encrypted_password, data.get('low_memory', False), 
                                   data.get('snmp_community', 'public'), data.get('snmp_interval_minutes', 0), 
-                                  data.get('ping_interval_seconds', 0)))
+                                  data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0)))
                     device_id = cursor.lastrowid
                     conn.commit()
                     add_log('info', f"Zariadenie {data['ip']} pridané.")
@@ -3130,7 +3135,7 @@ def ping_monitoring_loop():
                 
                 # Získaj zariadenia s ich ping interval nastaveniami (okrem paused zariadení)
                 cursor.execute('''
-                    SELECT id, name, ip, ping_interval_seconds, status
+                    SELECT id, name, ip, ping_interval_seconds, ping_retry_interval_seconds, status
                     FROM devices
                     WHERE monitoring_paused = 0 OR monitoring_paused IS NULL
                 ''')
@@ -3143,7 +3148,7 @@ def ping_monitoring_loop():
                 shortest_interval = global_ping_interval
                 
                 for device in devices:
-                    device_id, device_name, ip, device_ping_interval, db_status = device
+                    device_id, device_name, ip, device_ping_interval, device_ping_retry_interval, db_status = device
                     
                     # Iniciálne nastavenie tracker-a pre zariadenie ak neexistuje
                     if device_id not in device_status_tracker:
@@ -3159,10 +3164,11 @@ def ping_monitoring_loop():
                     
                     # Použij device-specific interval, ak je nastavený, inak global
                     effective_interval = device_ping_interval if device_ping_interval and device_ping_interval > 0 else global_ping_interval
+                    device_effective_retry = device_ping_retry_interval if device_ping_retry_interval and device_ping_retry_interval > 0 else retry_interval
                     
                     # Ak je zariadenie v retry mode, použijeme retry interval namiesto normálneho
                     if device_status_tracker[device_id]['in_retry_mode']:
-                        effective_interval = retry_interval
+                        effective_interval = device_effective_retry
                     
                     # Sleduj najkratší interval
                     if effective_interval < shortest_interval:
@@ -3193,7 +3199,7 @@ def ping_monitoring_loop():
                                       f"Device {ip} ({device_name}) (ID: {device_id}): zostáva {remaining:.2f}s do ďalšieho pingu")
                     
                     if should_ping:
-                        devices_to_ping.append((device_id, device_name, ip, effective_interval, retry_interval, max_retries, ping_timeout))
+                        devices_to_ping.append((device_id, device_name, ip, effective_interval, device_effective_retry, max_retries, ping_timeout))
                 
                 # Ping všetky zariadenia, ktoré potrebujú ping - spustíme ich paralelne pre presnosť
                 if devices_to_ping:
@@ -3330,7 +3336,7 @@ def monitoring_device_settings(device_id):
         try:
             with get_db_connection() as conn:
                 device = conn.execute('''
-                    SELECT id, name, ip, ping_interval_seconds, snmp_interval_minutes, monitoring_paused 
+                    SELECT id, name, ip, ping_interval_seconds, ping_retry_interval_seconds, snmp_interval_minutes, monitoring_paused 
                     FROM devices WHERE id = ?
                 ''', (device_id,)).fetchone()
                 
@@ -3339,8 +3345,8 @@ def monitoring_device_settings(device_id):
                 
                 # Získaj globálne nastavenia
                 settings = {row['key']: row['value'] for row in 
-                           conn.execute('SELECT key, value FROM settings WHERE key IN (?, ?)', 
-                                      ('ping_check_interval_seconds', 'snmp_check_interval_minutes')).fetchall()}
+                           conn.execute('SELECT key, value FROM settings WHERE key IN (?, ?, ?)', 
+                                      ('ping_check_interval_seconds', 'ping_retry_interval', 'snmp_check_interval_minutes')).fetchall()}
                 
                 return jsonify({
                     'device': {
@@ -3348,11 +3354,13 @@ def monitoring_device_settings(device_id):
                         'name': device[1], 
                         'ip': device[2],
                         'ping_interval_seconds': device[3] or 0,
-                        'snmp_interval_minutes': device[4] or 0,
-                        'monitoring_paused': bool(device[5])
+                        'ping_retry_interval_seconds': device[4] or 0,
+                        'snmp_interval_minutes': device[5] or 0,
+                        'monitoring_paused': bool(device[6])
                     },
                     'global_settings': {
                         'ping_interval_seconds': int(settings.get('ping_check_interval_seconds', 120)),
+                        'ping_retry_interval_seconds': int(settings.get('ping_retry_interval', 20)),
                         'snmp_interval_minutes': int(settings.get('snmp_check_interval_minutes', 10))
                     }
                 })
@@ -3364,6 +3372,7 @@ def monitoring_device_settings(device_id):
         try:
             data = request.json
             ping_interval = data.get('ping_interval_seconds', 0)
+            ping_retry_interval = data.get('ping_retry_interval_seconds', 0)
             snmp_interval = data.get('snmp_interval_minutes', 0)
             
             # Validácia
@@ -3371,6 +3380,10 @@ def monitoring_device_settings(device_id):
                 return jsonify({'status': 'error', 'message': 'Ping interval musí byť 0-86400 sekúnd'}), 400
             if ping_interval > 0 and ping_interval < 20:
                 return jsonify({'status': 'error', 'message': 'Ping interval musí byť 0 (globálne) alebo minimálne 20 sekúnd'}), 400
+            if ping_retry_interval < 0 or ping_retry_interval > 120:
+                return jsonify({'status': 'error', 'message': 'Retry interval musí byť 0 (globálne) alebo 5-120 sekúnd'}), 400
+            if 0 < ping_retry_interval < 5:
+                return jsonify({'status': 'error', 'message': 'Retry interval musí byť 0 (globálne) alebo 5-120 sekúnd'}), 400
             if snmp_interval < 0 or snmp_interval > 1440:  # 0-24 hodín
                 return jsonify({'status': 'error', 'message': 'SNMP interval musí byť 0-1440 minút'}), 400
             
@@ -3381,14 +3394,14 @@ def monitoring_device_settings(device_id):
                 
                 conn.execute('''
                     UPDATE devices 
-                    SET ping_interval_seconds = ?, snmp_interval_minutes = ?
+                    SET ping_interval_seconds = ?, ping_retry_interval_seconds = ?, snmp_interval_minutes = ?
                     WHERE id = ?
-                ''', (ping_interval, snmp_interval, device_id))
+                ''', (ping_interval, ping_retry_interval, snmp_interval, device_id))
                 conn.commit()
                 
                 device = conn.execute('SELECT name, ip FROM devices WHERE id = ?', (device_id,)).fetchone()
                 if device:
-                    add_log('info', f"Monitoring nastavenia aktualizované pre {device[1]} ({device[0]}): ping {ping_interval}s, SNMP {snmp_interval}min")
+                    add_log('info', f"Monitoring nastavenia aktualizované pre {device[1]} ({device[0]}): ping {ping_interval}s, retry {ping_retry_interval}s, SNMP {snmp_interval}min")
                 
                 # Restart SNMP timer if interval changed
                 if old_snmp_interval != snmp_interval:
@@ -3509,7 +3522,7 @@ def debug_monitoring_settings():
             
             # Získaj device nastavenia
             devices = conn.execute('''
-                SELECT id, name, ip, ping_interval_seconds, 
+                SELECT id, name, ip, ping_interval_seconds, ping_retry_interval_seconds,
                        (SELECT MAX(timestamp) FROM ping_history WHERE device_id = devices.id) as last_ping
                 FROM devices
             ''').fetchall()
@@ -3517,10 +3530,12 @@ def debug_monitoring_settings():
             device_info = []
             current_time = datetime.now()
             for device in devices:
-                device_id, name, ip, device_ping_interval, last_ping_str = device
+                device_id, name, ip, device_ping_interval, device_retry_interval, last_ping_str = device
                 
                 global_ping_interval = int(settings.get('ping_check_interval_seconds', '120'))
                 effective_interval = device_ping_interval if device_ping_interval and device_ping_interval > 0 else global_ping_interval
+                global_retry_interval = int(settings.get('ping_retry_interval', '20'))
+                effective_retry_interval = device_retry_interval if device_retry_interval and device_retry_interval > 0 else global_retry_interval
                 
                 seconds_since_ping = None
                 if last_ping_str:
@@ -3535,7 +3550,9 @@ def debug_monitoring_settings():
                     'name': name,
                     'ip': ip,
                     'device_ping_interval': device_ping_interval,
+                    'device_retry_interval': device_retry_interval,
                     'effective_interval': effective_interval,
+                    'effective_retry_interval': effective_retry_interval,
                     'last_ping': last_ping_str,
                     'seconds_since_ping': seconds_since_ping,
                     'should_ping_soon': seconds_since_ping is None or seconds_since_ping >= effective_interval

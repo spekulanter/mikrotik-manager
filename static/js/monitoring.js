@@ -589,51 +589,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 avgLatency.textContent = pingData.avg_latency ? `${pingData.avg_latency.toFixed(1)} ms` : '-';
             }
             
-            // Load uptime data when ping status updates
-            if (currentDeviceId && uptime24h) {
-                loadUptimeData(currentDeviceId);
-            }
-            
             if (lastPing) {
                 lastPing.textContent = new Date(pingData.timestamp).toLocaleTimeString('sk-SK');
             }
         });
-    };
-    
-    // Load uptime data for current device
-    const loadUptimeData = async (deviceId) => {
-        try {
-            const response = await api.get(`monitoring/uptime/${deviceId}`);
-            if (response && response.uptime_periods) {
-                updateUptimeDisplay(response.uptime_periods);
-            }
-        } catch (error) {
-            debugLog('api', 'Error loading uptime data:', error);
-            // Set uptime to 0% on error
-            const uptime24h = document.getElementById('uptime24h');
-            if (uptime24h) {
-                uptime24h.textContent = '0.00%';
-                uptime24h.className = 'text-lg font-bold text-red-400';
-            }
-        }
-    };
-    
-    // Update uptime display with color coding like Uptime Kuma
-    const updateUptimeDisplay = (uptimePeriods) => {
-        const uptime24h = document.getElementById('uptime24h');
-        if (!uptime24h || !uptimePeriods['24h']) return;
-        
-        const uptime = uptimePeriods['24h'];
-        uptime24h.textContent = `${uptime.toFixed(2)}%`;
-        
-        // Color coding based on uptime percentage (Uptime Kuma style)
-        if (uptime >= 95) {
-            uptime24h.className = 'text-lg font-bold text-green-400';
-        } else if (uptime >= 80) {
-            uptime24h.className = 'text-lg font-bold text-yellow-400';
-        } else {
-            uptime24h.className = 'text-lg font-bold text-red-400';
-        }
     };
 
     // Nové: výpočet uptime percenta pre ľubovoľný rozsah podľa ping histórie
@@ -2904,7 +2863,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 await Promise.all([
                     loadHistoricalData(currentDeviceId),
                     getCurrentPingStatus(currentDeviceId),
-                    loadUptimeData(currentDeviceId)  // Load uptime data
                 ]);
                 // Po prvom načítaní hneď stabilizuj ak je krátky interval
                 stabilizeShortRangeTimeAxis(currentTimeRange);
@@ -3221,6 +3179,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('settingsDeviceInfo').textContent = 
                 `${settings.device.name} (${settings.device.ip})`;
             document.getElementById('pingInterval').value = settings.device.ping_interval_seconds;
+            document.getElementById('retryInterval').value = settings.device.ping_retry_interval_seconds || 0;
             document.getElementById('snmpInterval').value = settings.device.snmp_interval_minutes;
             
             // Show modal
@@ -3277,6 +3236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData(e.target);
         const data = {
             ping_interval_seconds: parseInt(formData.get('ping_interval_seconds')) || 0,
+            ping_retry_interval_seconds: parseInt(formData.get('ping_retry_interval_seconds')) || 0,
             snmp_interval_minutes: parseInt(formData.get('snmp_interval_minutes')) || 0
         };
         

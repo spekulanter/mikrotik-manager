@@ -1543,6 +1543,22 @@
                     </div>
                 </div>
                 
+                <div class="mb-4">
+                    <label for="retryInterval" class="block text-sm font-medium mb-2">
+                        Retry interval pri výpadku (sekundy)
+                    </label>
+                    <input type="number" id="retryInterval" name="ping_retry_interval_seconds" 
+                           min="0" max="120" 
+                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                           oninput="validateRetryInterval(this)">
+                    <div class="text-xs text-gray-400 mt-1 italic">
+                        Počas výpadku sa zariadenie pingá týmto intervalom, kým sa nepotvrdí návrat online.
+                    </div>
+                    <div class="text-xs text-gray-400 mt-1">
+                        0 = globálne nastavenie zo sekcie Nastavenia, 5-120 sekúnd.
+                    </div>
+                </div>
+                
                 <div class="mb-6">
                     <label for="snmpInterval" class="block text-sm font-medium mb-2">
                         SNMP interval (minúty)
@@ -4160,6 +4176,25 @@
                 const error = document.createElement('div');
                 error.className = 'ping-interval-error text-xs text-red-400 mt-1';
                 error.textContent = 'Ping interval musí byť 0 (globálne) alebo minimálne 20 sekúnd';
+                input.parentElement.appendChild(error);
+                input.style.borderColor = '#f87171';
+            } else {
+                input.style.borderColor = '#6b7280';
+            }
+        }
+
+        function validateRetryInterval(input) {
+            const value = parseInt(input.value);
+            const errorElement = input.parentElement.querySelector('.retry-interval-error');
+            
+            if (errorElement) {
+                errorElement.remove();
+            }
+            
+            if (input.value !== '' && value !== 0 && (value < 5 || value > 120)) {
+                const error = document.createElement('div');
+                error.className = 'retry-interval-error text-xs text-red-400 mt-1';
+                error.textContent = 'Retry interval musí byť 0 (globálne) alebo v rozsahu 5-120 sekúnd';
                 input.parentElement.appendChild(error);
                 input.style.borderColor = '#f87171';
             } else {

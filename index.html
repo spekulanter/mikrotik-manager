@@ -2097,6 +2097,9 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'card p-6 rounded-lg flex flex-col gap-4';
         card.dataset.id = device.id;
         card.dataset.ip = device.ip;
+        const snmpIntervalDisplay = device.snmp_interval_minutes ? `${device.snmp_interval_minutes}min` : 'globálny';
+        const icmpIntervalDisplay = device.ping_interval_seconds ? `${device.ping_interval_seconds}s` : 'globálny';
+        const lastBackupDisplay = device.last_backup ? formatLocalDate(device.last_backup) : 'Nikdy';
         card.innerHTML = `
             <div class="h-20 flex flex-col justify-between">
                 <div class="grid grid-cols-[1fr_auto] gap-4 items-start">
@@ -2112,8 +2115,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><strong>CPU:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_load || 'N/A'}%</span></p>
                 <p><strong>Teplota:</strong> <span class="font-mono text-gray-300">${snmpData.temperature || 'N/A'} °C</span></p>
                 <p><strong>CPU jadrá:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_count || 'N/A'}</span></p>
-                <p><strong>SNMP interval:</strong> <span class="font-mono text-gray-300">${device.snmp_interval_minutes ? device.snmp_interval_minutes + 'min' : 'globálny'}</span></p>
-                <div><strong>Posl. záloha:</strong><br><span class="font-mono text-gray-300 last-backup-val">${device.last_backup ? formatLocalDate(device.last_backup) : 'Nikdy'}</span></div>
+                <div class="col-span-2 grid gap-2 sm:grid-cols-2">
+                    <p class="text-sm flex flex-col gap-0.5"><strong>SNMP interval:</strong> <span class="font-mono text-gray-300 snmp-interval-val block">${snmpIntervalDisplay}</span></p>
+                    <p class="text-sm flex flex-col gap-0.5"><strong>ICMP interval:</strong> <span class="font-mono text-gray-300 icmp-interval-val block">${icmpIntervalDisplay}</span></p>
+                </div>
+                <div class="col-span-2"><strong>Posl. záloha:</strong><br><span class="font-mono text-gray-300 last-backup-val">${lastBackupDisplay}</span></div>
             </div>
             <div class="flex gap-2 mt-auto pt-4 border-t border-gray-700">
                 <button class="backup-btn btn flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1 px-1.5 rounded-lg device-btn-text flex items-center justify-center gap-1.5"><i class="fas fa-save device-btn-icon"></i> Zálohovať</button>

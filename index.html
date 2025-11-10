@@ -2115,9 +2115,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><strong>CPU:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_load || 'N/A'}%</span></p>
                 <p><strong>Teplota:</strong> <span class="font-mono text-gray-300">${snmpData.temperature || 'N/A'} °C</span></p>
                 <p><strong>CPU jadrá:</strong> <span class="font-mono text-gray-300">${snmpData.cpu_count || 'N/A'}</span></p>
-                <div class="col-span-2 grid gap-2 sm:grid-cols-2">
-                    <p class="text-sm flex flex-col gap-0.5"><strong>SNMP interval:</strong> <span class="font-mono text-gray-300 snmp-interval-val block">${snmpIntervalDisplay}</span></p>
-                    <p class="text-sm flex flex-col gap-0.5"><strong>ICMP interval:</strong> <span class="font-mono text-gray-300 icmp-interval-val block">${icmpIntervalDisplay}</span></p>
+                <div class="col-span-2 grid grid-cols-2 gap-2 text-sm">
+                    <div class="flex flex-col">
+                        <strong>SNMP interval:</strong>
+                        <span class="font-mono text-gray-300 snmp-interval-val">${snmpIntervalDisplay}</span>
+                    </div>
+                    <div class="flex flex-col">
+                        <strong>ICMP interval:</strong>
+                        <span class="font-mono text-gray-300 icmp-interval-val">${icmpIntervalDisplay}</span>
+                    </div>
                 </div>
                 <div class="col-span-2"><strong>Posl. záloha:</strong><br><span class="font-mono text-gray-300 last-backup-val">${lastBackupDisplay}</span></div>
             </div>

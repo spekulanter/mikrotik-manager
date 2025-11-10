@@ -1138,14 +1138,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Page Visibility API - handle tab visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                // Page became visible - restart optimizations and refresh data if device selected
                 if (currentDeviceId) {
                     startYAxisOptimization();
-                    // Refresh current device data to get latest updates
-                    loadHistoricalData(currentDeviceId);
                 }
             } else {
-                // Page became hidden - stop optimizations to save CPU
                 stopYAxisOptimization();
             }
         });

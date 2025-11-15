@@ -2969,62 +2969,124 @@ window.addEventListener('resize', () => closeAllCustomSelects());
             btn.disabled = false;
         }
     });
-    document.getElementById('backupAllBtn').addEventListener('click', async () => {
-        const btn = document.getElementById('backupAllBtn');
-        const stopBtn = document.getElementById('stopAllBackupsBtn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spúšťam...';
-        btn.disabled = true;
+    const backupAllBtn = document.getElementById('backupAllBtn');
+    const stopAllBackupsBtn = document.getElementById('stopAllBackupsBtn');
+    const backupAllDefaultText = '<i class="fas fa-save"></i> Zálohovať všetky';
+    let backupStatusInterval = null;
+    // Persist stop request cez refresh, vyčistí sa až keď nič nebeží
+    let backupStopRequested = localStorage.getItem('backupStopRequested') === 'true';
+
+    const stopBackupStatusPolling = () => {
+        if (backupStatusInterval) {
+            clearInterval(backupStatusInterval);
+            backupStatusInterval = null;
+        }
+    };
+
+    const renderBackupStatus = (status = {}) => {
+        const totalRunning = status.total_running || 0;
+        const seqRunning = status.sequential_backup_running;
+        const seqTotal = status.sequential_backup_total || 0;
+        const seqCurrent = status.sequential_backup_current || 0;
+        const isRunning = totalRunning > 0 || seqRunning;
+
+        if (isRunning) {
+            const hasSequentialTotal = seqRunning && seqTotal > 0;
+            const activeCount = hasSequentialTotal ? (seqCurrent || totalRunning || 0) : totalRunning;
+            const progressLabel = hasSequentialTotal ? `${activeCount}/${seqTotal}` : activeCount;
+            backupAllBtn.innerHTML = `<i class="fas fa-clock"></i> Prebieha (${progressLabel})`;
+            backupAllBtn.disabled = true;
+            if (!backupStopRequested) {
+                stopAllBackupsBtn.classList.remove('hidden');
+            } else {
+                stopAllBackupsBtn.classList.add('hidden');
+            }
+        } else {
+            backupAllBtn.innerHTML = backupAllDefaultText;
+            backupAllBtn.disabled = false;
+            stopAllBackupsBtn.classList.add('hidden');
+            backupStopRequested = false; // reset flag keď nič nebeží
+            localStorage.removeItem('backupStopRequested');
+        }
+
+        return isRunning;
+    };
+
+    const fetchAndApplyBackupStatus = async () => {
+        try {
+            const status = await api.get('backup/status');
+            const running = renderBackupStatus(status);
+            if (running && !backupStatusInterval) {
+                startBackupStatusPolling();
+            }
+            if (!running) {
+                stopBackupStatusPolling();
+            }
+            return status;
+        } catch (error) {
+            console.error('Chyba pri načítaní stavu záloh:', error);
+            return null;
+        }
+    };
+
+    const startBackupStatusPolling = () => {
+        if (backupStatusInterval) return;
+        backupStatusInterval = setInterval(fetchAndApplyBackupStatus, 5000);
+    };
+
+    // Pri načítaní stránky obnovíme stav tlačidla ak už beží hromadná záloha
+    fetchAndApplyBackupStatus().then((status) => {
+        // Ak status signalizuje bežiacu úlohu, spustíme pravidelný refresh
+        if (status && (status.total_running || status.sequential_backup_running)) {
+            startBackupStatusPolling();
+        }
+    }).catch(() => {});
+
+    backupAllBtn.addEventListener('click', async () => {
+        backupStopRequested = false;
+        localStorage.removeItem('backupStopRequested');
+        const originalText = backupAllBtn.innerHTML;
+        backupAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Spúšťam...';
+        backupAllBtn.disabled = true;
         
         try {
             const result = await api.post('backup/all');
             if (result.status === 'success') {
-                btn.innerHTML = '<i class="fas fa-clock"></i> Prebieha...';
-                stopBtn.classList.remove('hidden'); // Zobrazíme stop tlačidlo
-                
-                // Každých 5 sekúnd kontrolujeme stav
-                const checkStatus = setInterval(async () => {
-                    const status = await api.get('backup/status');
-                    if (status.total_running === 0 && !status.sequential_backup_running) {
-                        clearInterval(checkStatus);
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                        stopBtn.classList.add('hidden'); // Skryjeme stop tlačidlo
-                    } else {
-                        btn.innerHTML = `<i class="fas fa-clock"></i> Prebieha (${status.total_running})`;
-                    }
-                }, 5000);
+                const totalDevices = result.total_devices || 0;
+                const initialLabel = totalDevices ? `0/${totalDevices}` : '...';
+                backupAllBtn.innerHTML = `<i class="fas fa-clock"></i> Prebieha (${initialLabel})`;
+                stopAllBackupsBtn.classList.remove('hidden');
+                startBackupStatusPolling();
+                fetchAndApplyBackupStatus();
             } else {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                backupAllBtn.innerHTML = originalText;
+                backupAllBtn.disabled = false;
             }
         } catch (error) {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            stopBtn.classList.add('hidden');
+            backupAllBtn.innerHTML = originalText;
+            backupAllBtn.disabled = false;
+            stopAllBackupsBtn.classList.add('hidden');
         }
     });
 
-    document.getElementById('stopAllBackupsBtn').addEventListener('click', async () => {
-        const stopBtn = document.getElementById('stopAllBackupsBtn');
-        const backupBtn = document.getElementById('backupAllBtn');
-        
-        stopBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Zastavujem...';
-        stopBtn.disabled = true;
+    stopAllBackupsBtn.addEventListener('click', async () => {
+        backupStopRequested = true;
+        localStorage.setItem('backupStopRequested', 'true');
+        stopAllBackupsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Zastavujem...';
+        stopAllBackupsBtn.disabled = true;
+        stopAllBackupsBtn.classList.add('hidden'); // schovať hneď po kliknutí
+        backupAllBtn.innerHTML = '<i class="fas fa-clock"></i> Dokončujem…';
+        backupAllBtn.disabled = true;
         
         try {
             const result = await api.post('backup/stop-all');
             addLog('warning', result.message || 'Zálohy boli zastavené.');
-            
-            // Skryjeme stop tlačidlo a obnovíme backup tlačidlo
-            stopBtn.classList.add('hidden');
-            backupBtn.innerHTML = '<i class="fas fa-save"></i> Zálohovať všetky';
-            backupBtn.disabled = false;
+            await fetchAndApplyBackupStatus();
         } catch (error) {
             addLog('error', 'Chyba pri zastavovaní záloh.');
         } finally {
-            stopBtn.innerHTML = '<i class="fas fa-stop"></i> Zastaviť zálohy';
-            stopBtn.disabled = false;
+            stopAllBackupsBtn.innerHTML = '<i class="fas fa-stop"></i> Zastaviť zálohy';
+            stopAllBackupsBtn.disabled = false;
         }
     });
     document.getElementById('refreshAllSnmpBtn').addEventListener('click', async () => {

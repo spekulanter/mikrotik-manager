@@ -291,6 +291,9 @@ logger = logging.getLogger(__name__)
 
 backup_tasks = {}
 sequential_backup_running = False
+# Tracking for sequential backup progress so frontend can show e.g. 1/16
+sequential_backup_total = 0
+sequential_backup_current = 0
 
 # --- Password Encryption ---
 def get_encryption_key():
@@ -1856,17 +1859,24 @@ def backup_all_devices():
     if not available_devices:
         return jsonify({'status': 'error', 'message': 'Všetky zariadenia už majú bežiacu zálohu alebo nie sú dostupné zariadenia.'})
     
-    add_log('info', f"Spúšťam sekvenčnú hromadnú zálohu pre {len(available_devices)} zariadení s odstupom {backup_delay}s.")
+    total_devices = len(available_devices)
+    add_log('info', f"Spúšťam sekvenčnú hromadnú zálohu pre {total_devices} zariadení s odstupom {backup_delay}s.")
     
     # Spustíme sekvenčnú zálohu v samostatnom vlákne
     threading.Thread(target=run_sequential_backup, args=(available_devices, backup_delay)).start()
     
-    return jsonify({'status': 'success', 'message': f'Sekvenčná hromadná záloha spustená pre {len(available_devices)} zariadení.'})
+    return jsonify({
+        'status': 'success', 
+        'message': f'Sekvenčná hromadná záloha spustená pre {total_devices} zariadení.',
+        'total_devices': total_devices
+    })
 
 def run_sequential_backup(devices, delay_seconds):
     """Spúšťa zálohy postupne s oneskorením medzi nimi"""
-    global sequential_backup_running
+    global sequential_backup_running, sequential_backup_total, sequential_backup_current
     sequential_backup_running = True
+    sequential_backup_total = len(devices)
+    sequential_backup_current = 0
     
     try:
         total_devices = len(devices)
@@ -1875,7 +1885,8 @@ def run_sequential_backup(devices, delay_seconds):
             if not sequential_backup_running:
                 add_log('warning', "Sekvenčná záloha bola zastavená používateľom.")
                 break
-                
+
+            sequential_backup_current = i
             ip = device['ip']
             if ip in backup_tasks:
                 add_log('warning', "Záloha už prebieha, preskakujem.", ip)
@@ -1898,6 +1909,8 @@ def run_sequential_backup(devices, delay_seconds):
                     time.sleep(1)
     finally:
         sequential_backup_running = False
+        sequential_backup_current = 0
+        sequential_backup_total = 0
         add_log('info', "Sekvenčná záloha dokončená.")
 
 @app.route('/api/snmp/<int:device_id>', methods=['GET'])
@@ -4125,20 +4138,24 @@ def backup_status():
     return jsonify({
         'running_backups': running_backups,
         'total_running': len(running_backups),
-        'sequential_backup_running': sequential_backup_running
+        'sequential_backup_running': sequential_backup_running,
+        'sequential_backup_total': sequential_backup_total,
+        'sequential_backup_current': sequential_backup_current
     })
 
 @app.route('/api/backup/stop-all', methods=['POST'])
 @login_required
 def stop_all_backups():
     """Zastaví všetky bežiace zálohy"""
-    global sequential_backup_running
+    global sequential_backup_running, sequential_backup_total, sequential_backup_current
     
     stopped_count = len(backup_tasks)
     stopped_ips = list(backup_tasks.keys())
     
     # Zastavíme sekvenčnú zálohu – aktuálne prebiehajúce úlohy necháme bezpečne dobehnúť
     sequential_backup_running = False
+    sequential_backup_total = 0
+    sequential_backup_current = 0
     
     if stopped_count > 0:
         add_log('warning', f"Používateľ požiadal o zastavenie záloh ({stopped_count} zariadení): {', '.join(stopped_ips)}")

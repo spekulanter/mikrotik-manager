@@ -302,9 +302,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let socket = null;
     let isLoadingData = false; // Flag to prevent multiple simultaneous requests
     let lastTotalMemoryValue = null; // For real-time forward-fill
-    let lastPingHistory = []; // cache ping history for uptime výpočet
+    let lastPingHistory = []; // cache ping history pre uptime výpočet
     let pendingFullPingHistory = false; // či čakáme na plný dataset po rýchlom skrátenom načítaní
     let lastPingHistoryTimestamp = 0; // timestamp poslednej aktualizácie histórie
+    let lastSnmpDataTimestamp = null;
+    let lastSnmpIntervalEstimateMs = null;
+    const SNMP_GAP_MIN_MS = 5 * 60 * 1000;
+    const SNMP_GAP_DEFAULT_MS = 15 * 60 * 1000;
+    const SNMP_GAP_MAX_MS = 60 * 60 * 1000;
+    const SNMP_INTERVAL_MIN_GUESS_MS = 60 * 1000;
+    const SHORT_RANGES = new Set(['30m','recent','3h','6h','12h','24h']);
     
     // Export charts to window for access from monitoring.html
     window.charts = charts;
@@ -428,6 +435,113 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error loading state:', e);
         }
         return null;
+    };
+
+    const getOfflineIntervalsFromPingHistory = () => {
+        if (!Array.isArray(lastPingHistory) || lastPingHistory.length === 0) {
+            return [];
+        }
+        const intervals = [];
+        let currentInterval = null;
+        lastPingHistory.forEach(point => {
+            if (!point || !point.timestamp) return;
+            const ts = new Date(point.timestamp).getTime();
+            if (!Number.isFinite(ts)) return;
+            const isOffline = point.status !== 'online' || point.avg_latency === null;
+            if (isOffline) {
+                if (!currentInterval) {
+                    currentInterval = { start: ts, end: ts };
+                } else {
+                    currentInterval.end = ts;
+                }
+            } else if (currentInterval) {
+                currentInterval.end = ts;
+                intervals.push({ ...currentInterval });
+                currentInterval = null;
+            }
+        });
+        if (currentInterval) {
+            const lastKnown = lastPingHistory[lastPingHistory.length - 1];
+            const lastKnownTs = lastKnown && lastKnown.timestamp
+                ? new Date(lastKnown.timestamp).getTime()
+                : currentInterval.end || currentInterval.start;
+            if (Number.isFinite(lastKnownTs)) {
+                currentInterval.end = lastKnownTs;
+            }
+            intervals.push({ ...currentInterval });
+        }
+        return intervals;
+    };
+
+    const estimateSnmpIntervalMs = (history) => {
+        if (!Array.isArray(history) || history.length < 2) return null;
+        const diffs = [];
+        let prevTs = null;
+        history.forEach(point => {
+            if (!point || !point.timestamp) return;
+            const ts = new Date(point.timestamp).getTime();
+            if (!Number.isFinite(ts)) return;
+            if (prevTs !== null) {
+                const diff = ts - prevTs;
+                if (diff > 0) {
+                    diffs.push(diff);
+                }
+            }
+            prevTs = ts;
+        });
+        if (!diffs.length) return null;
+        diffs.sort((a, b) => a - b);
+        const percentileIndex = Math.min(diffs.length - 1, Math.max(0, Math.floor(diffs.length * 0.25)));
+        const estimate = diffs[percentileIndex];
+        return Math.max(estimate, SNMP_INTERVAL_MIN_GUESS_MS);
+    };
+
+    const getGapThresholdFromInterval = (intervalMs) => {
+        if (!intervalMs || !Number.isFinite(intervalMs)) {
+            return SNMP_GAP_DEFAULT_MS;
+        }
+        const scaled = intervalMs * 4;
+        return Math.min(Math.max(scaled, SNMP_GAP_MIN_MS), SNMP_GAP_MAX_MS);
+    };
+
+    const doesOfflineOverlapRange = (offlineIntervals, startMs, endMs) => {
+        if (!Array.isArray(offlineIntervals) || offlineIntervals.length === 0) {
+            return false;
+        }
+        return offlineIntervals.some(interval => {
+            const intervalStart = interval.start;
+            const intervalEnd = interval.end ?? interval.start;
+            if (!Number.isFinite(intervalStart) || !Number.isFinite(intervalEnd)) {
+                return false;
+            }
+            return intervalStart < endMs && intervalEnd > startMs;
+        });
+    };
+
+    const shouldInsertSnmpGap = (previousTimestampMs, currentTimestampMs, offlineIntervals, thresholdMs) => {
+        if (!Number.isFinite(previousTimestampMs) || !Number.isFinite(currentTimestampMs)) {
+            return false;
+        }
+        if (currentTimestampMs <= previousTimestampMs) {
+            return false;
+        }
+        if (doesOfflineOverlapRange(offlineIntervals, previousTimestampMs, currentTimestampMs)) {
+            return true;
+        }
+        if (!thresholdMs) {
+            return false;
+        }
+        return (currentTimestampMs - previousTimestampMs) >= thresholdMs;
+    };
+
+    const pushGapMarker = (targetArray, currentTimestampMs) => {
+        if (!Array.isArray(targetArray) || targetArray.length === 0) {
+            return;
+        }
+        targetArray.push({
+            x: new Date(Math.max(currentTimestampMs - 1, 0)),
+            y: null
+        });
     };
     
     // API helper
@@ -1234,7 +1348,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     pointRadius: 0,
                     pointHoverRadius: 0,  // Completely disable hover points
                     borderWidth: 2,
-                    spanGaps: true,  // Connect points even if there are gaps
+                    spanGaps: false,  // Break the line when SNMP dáta chýbajú
                     showLine: true   // Ensure line is always shown
                 }]
             },
@@ -1269,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     pointRadius: 0,
                     pointHoverRadius: 0,  // Completely disable hover points
                     borderWidth: 2,
-                    spanGaps: true,  // Connect points even if there are gaps
+                    spanGaps: false,
                     showLine: true   // Ensure line is always shown
                 }]
             },
@@ -1308,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         borderWidth: 2,
                         pointRadius: 0,
                         pointHoverRadius: 0,  // Completely disable hover points
-                        spanGaps: true,  // Connect points even if there are gaps
+                        spanGaps: false,  // Break line na výpadky
                         showLine: true   // Ensure line is always shown
                     },
                     {
@@ -1321,7 +1435,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         borderWidth: 2,
                         pointRadius: 0,
                         pointHoverRadius: 0,  // Completely disable hover points
-                        spanGaps: true,  // Connect points even if there are gaps
+                        spanGaps: false,
                         showLine: true   // Ensure line is always shown
                     }
                 ]
@@ -1835,8 +1949,75 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Ensure lines are always shown even with few points
             dataset.showLine = true;
-            dataset.spanGaps = true;
+            if (dataset.spanGaps === undefined) {
+                dataset.spanGaps = true;
+            }
         });
+    };
+
+    const getPointTimestampMs = (point) => {
+        if (!point) return null;
+        const candidate = point.x !== undefined ? point.x : point;
+        if (candidate instanceof Date) {
+            return candidate.getTime();
+        }
+        if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+            return candidate;
+        }
+        if (typeof candidate === 'string') {
+            const parsed = Date.parse(candidate);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        return null;
+    };
+
+    const getChartTimeRange = (chart) => {
+        if (!chart?.data?.datasets?.length) return null;
+        let minTs = null;
+        let maxTs = null;
+        chart.data.datasets.forEach(dataset => {
+            if (!dataset?.data?.length) return;
+            dataset.data.forEach(point => {
+                const ts = getPointTimestampMs(point);
+                if (!Number.isFinite(ts)) return;
+                if (minTs === null || ts < minTs) minTs = ts;
+                if (maxTs === null || ts > maxTs) maxTs = ts;
+            });
+        });
+        if (minTs === null || maxTs === null) {
+            return null;
+        }
+        return { min: minTs, max: maxTs };
+    };
+
+    const shouldSkipAutoAlign = (chart) => {
+        if (!chart?.canvas) return false;
+        if (window._userZoomActive) return true;
+        if (window._singleChartZoomOut && chart.canvas.id === window._singleChartZoomOut) return true;
+        if (window._expandedCharts && window._expandedCharts.has(chart.canvas.id)) return true;
+        return false;
+    };
+
+    const autoAlignChartTimeRange = (chart, rangeOverride = currentTimeRange) => {
+        if (!chart?.options?.scales?.x) return;
+        if (shouldSkipAutoAlign(chart)) return;
+        const timeRange = getChartTimeRange(chart);
+        if (!timeRange) {
+            delete chart.options.scales.x.min;
+            delete chart.options.scales.x.max;
+            return;
+        }
+
+        const effectiveRange = rangeOverride || currentTimeRange || '24h';
+        const rangeMs = getTimeRangeMs(effectiveRange);
+        if (SHORT_RANGES.has(effectiveRange)) {
+            const desiredMin = Math.max(timeRange.max - rangeMs, timeRange.min);
+            chart.options.scales.x.min = desiredMin;
+            chart.options.scales.x.max = timeRange.max;
+        } else {
+            chart.options.scales.x.min = timeRange.min;
+            chart.options.scales.x.max = timeRange.max;
+        }
     };
 
     // Update SNMP charts
@@ -1848,7 +2029,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 addDebugLog(`📊 updateSNMPCharts: real-time SNMP bod`);
             }
         }
-    const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
+        const offlineIntervals = getOfflineIntervalsFromPingHistory();
+        let snmpIntervalEstimate = null;
+        if (snmpData.history && Array.isArray(snmpData.history)) {
+            const computedEstimate = estimateSnmpIntervalMs(snmpData.history);
+            if (computedEstimate) {
+                snmpIntervalEstimate = computedEstimate;
+                lastSnmpIntervalEstimateMs = computedEstimate;
+            } else if (lastSnmpIntervalEstimateMs) {
+                snmpIntervalEstimate = lastSnmpIntervalEstimateMs;
+            }
+        } else if (lastSnmpIntervalEstimateMs) {
+            snmpIntervalEstimate = lastSnmpIntervalEstimateMs;
+        }
+        const snmpGapThresholdMs = getGapThresholdFromInterval(snmpIntervalEstimate);
+        const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
         
         // Check if this is historical data (array) or real-time data (single point)  
         if (snmpData.history && Array.isArray(snmpData.history)) {
@@ -1861,63 +2056,107 @@ document.addEventListener('DOMContentLoaded', () => {
             let tempCount = 0;
             let memoryCount = 0;
             let lastTotalMem = null; // Forward-fill for Total Memory
+            let lastCpuTimestampMs = null;
+            let lastTempTimestampMs = null;
+            let lastUsedMemTimestampMs = null;
+            let lastTotalMemTimestampMs = null;
+            let latestSnmpTimestamp = null;
             
             // Single pass through data for all charts
             snmpData.history.forEach(point => {
-                if (point.timestamp) {
-                    const timestamp = new Date(point.timestamp);
-                    if (!isNaN(timestamp.getTime())) {
-                        // CPU data
-                        if (point.cpu_load !== null && point.cpu_load !== undefined) {
-                            cpuData.push({
-                                x: timestamp,
-                                y: parseFloat(point.cpu_load)
-                            });
-                            cpuCount++;
+                if (!point || !point.timestamp) return;
+                const timestamp = new Date(point.timestamp);
+                const timestampMs = timestamp.getTime();
+                if (!Number.isFinite(timestampMs)) {
+                    console.warn('Invalid timestamp for SNMP data:', point.timestamp);
+                    return;
+                }
+                let rowHadMetric = false;
+                
+                // CPU data
+                if (point.cpu_load !== null && point.cpu_load !== undefined) {
+                    const cpuValue = parseFloat(point.cpu_load);
+                    if (Number.isFinite(cpuValue)) {
+                        if (shouldInsertSnmpGap(lastCpuTimestampMs, timestampMs, offlineIntervals, snmpGapThresholdMs)) {
+                            pushGapMarker(cpuData, timestampMs);
                         }
-                        
-                        // Temperature data
-                        if (point.temperature !== null && point.temperature !== undefined) {
-                            tempData.push({
-                                x: timestamp,
-                                y: parseFloat(point.temperature)
-                            });
-                            tempCount++;
+                        cpuData.push({
+                            x: timestamp,
+                            y: cpuValue
+                        });
+                        cpuCount++;
+                        lastCpuTimestampMs = timestampMs;
+                        rowHadMetric = true;
+                    }
+                }
+                
+                // Temperature data
+                if (point.temperature !== null && point.temperature !== undefined) {
+                    const tempValue = parseFloat(point.temperature);
+                    if (Number.isFinite(tempValue)) {
+                        if (shouldInsertSnmpGap(lastTempTimestampMs, timestampMs, offlineIntervals, snmpGapThresholdMs)) {
+                            pushGapMarker(tempData, timestampMs);
                         }
+                        tempData.push({
+                            x: timestamp,
+                            y: tempValue
+                        });
+                        tempCount++;
+                        lastTempTimestampMs = timestampMs;
+                        rowHadMetric = true;
+                    }
+                }
 
-                        // Memory data (v MB) - process independently to avoid truncation
-                        if (point.used_memory !== null && point.used_memory !== undefined) {
-                            const usedMem = parseFloat(point.used_memory);
-                            if (!isNaN(usedMem)) {
-                                // Dataset 0: Used Memory (red line)
-                                usedMemData.push({
-                                    x: timestamp,
-                                    y: usedMem
-                                });
-                                memoryCount++;
-                            }
+                // Memory data (v MB) - process independently to avoid truncation
+                if (point.used_memory !== null && point.used_memory !== undefined) {
+                    const usedMem = parseFloat(point.used_memory);
+                    if (Number.isFinite(usedMem)) {
+                        if (shouldInsertSnmpGap(lastUsedMemTimestampMs, timestampMs, offlineIntervals, snmpGapThresholdMs)) {
+                            pushGapMarker(usedMemData, timestampMs);
                         }
-                        
-                        // Total Memory with forward-fill to prevent truncation
-                        if (point.total_memory !== null && point.total_memory !== undefined) {
-                            const totalMem = parseFloat(point.total_memory);
-                            if (!isNaN(totalMem)) {
-                                lastTotalMem = totalMem;
-                                // Dataset 1: Total Memory (blue line)
-                                totalMemData.push({
-                                    x: timestamp,
-                                    y: totalMem
-                                });
-                            }
-                        } else if (lastTotalMem !== null && point.used_memory !== null && point.used_memory !== undefined) {
-                            // Forward-fill: use last known Total Memory value when used_memory is present but total_memory is missing
-                            totalMemData.push({
-                                x: timestamp,
-                                y: lastTotalMem
-                            });
+                        // Dataset 0: Used Memory (red line)
+                        usedMemData.push({
+                            x: timestamp,
+                            y: usedMem
+                        });
+                        memoryCount++;
+                        lastUsedMemTimestampMs = timestampMs;
+                        rowHadMetric = true;
+                    }
+                }
+                
+                // Total Memory with forward-fill to prevent truncation
+                if (point.total_memory !== null && point.total_memory !== undefined) {
+                    const totalMem = parseFloat(point.total_memory);
+                    if (Number.isFinite(totalMem)) {
+                        if (shouldInsertSnmpGap(lastTotalMemTimestampMs, timestampMs, offlineIntervals, snmpGapThresholdMs)) {
+                            pushGapMarker(totalMemData, timestampMs);
                         }
-                    } else {
-                        console.warn('Invalid timestamp for SNMP data:', point.timestamp);
+                        lastTotalMem = totalMem;
+                        // Dataset 1: Total Memory (blue line)
+                        totalMemData.push({
+                            x: timestamp,
+                            y: totalMem
+                        });
+                        lastTotalMemTimestampMs = timestampMs;
+                        rowHadMetric = true;
+                    }
+                } else if (Number.isFinite(lastTotalMem) && point.used_memory !== null && point.used_memory !== undefined) {
+                    // Forward-fill: use last known Total Memory value when used_memory is present but total_memory is missing
+                    if (shouldInsertSnmpGap(lastTotalMemTimestampMs, timestampMs, offlineIntervals, snmpGapThresholdMs)) {
+                        pushGapMarker(totalMemData, timestampMs);
+                    }
+                    totalMemData.push({
+                        x: timestamp,
+                        y: lastTotalMem
+                    });
+                    lastTotalMemTimestampMs = timestampMs;
+                    rowHadMetric = true;
+                }
+                
+                if (rowHadMetric) {
+                    if (!latestSnmpTimestamp || timestampMs > latestSnmpTimestamp) {
+                        latestSnmpTimestamp = timestampMs;
                     }
                 }
             });
@@ -1927,11 +2166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update CPU chart
                 if (charts.cpu && cpuData.length > 0) {
                     charts.cpu.data.datasets[0].data = cpuData;
-                    if (shortRangeActive) {
-                        const nowTs = Date.now();
-                        const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
-                        charts.cpu.data.datasets[0].data = charts.cpu.data.datasets[0].data.filter(p => p.x && p.x.getTime() >= minAllowed);
-                    }
+                    autoAlignChartTimeRange(charts.cpu);
                     adjustPointSizes(charts.cpu, cpuData.length, currentTimeRange);
                     applyYAxisOptimization(charts.cpu, 'cpu');
                     charts.cpu.update('none');
@@ -1943,11 +2178,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update temperature chart
                 if (charts.temperature && tempData.length > 0) {
                     charts.temperature.data.datasets[0].data = tempData;
-                    if (shortRangeActive) {
-                        const nowTs = Date.now();
-                        const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
-                        charts.temperature.data.datasets[0].data = charts.temperature.data.datasets[0].data.filter(p => p.x && p.x.getTime() >= minAllowed);
-                    }
+                    autoAlignChartTimeRange(charts.temperature);
                     adjustPointSizes(charts.temperature, tempData.length, currentTimeRange);
                     applyYAxisOptimization(charts.temperature, 'temperature');
                     charts.temperature.update('none');
@@ -1960,13 +2191,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (charts.memory && (usedMemData.length > 0 || totalMemData.length > 0)) {
                     charts.memory.data.datasets[0].data = usedMemData;  // Used Memory (red line)
                     charts.memory.data.datasets[1].data = totalMemData;  // Total Memory (blue line)
-                    if (shortRangeActive) {
-                        const nowTs = Date.now();
-                        const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
-                        charts.memory.data.datasets.forEach(ds => {
-                            ds.data = ds.data.filter(p => p.x && p.x.getTime() >= minAllowed);
-                        });
-                    }
+                    autoAlignChartTimeRange(charts.memory);
                     
                     // Update lastTotalMemoryValue for real-time forward-fill
                     if (totalMemData.length > 0) {
@@ -1992,10 +2217,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            
+            lastSnmpDataTimestamp = latestSnmpTimestamp || null;
         } else {
             // Real-time single data point - lightweight update
             const now = new Date();
+            const nowTs = now.getTime();
+            const cpuValue = snmpData.cpu_load !== undefined ? parseFloat(snmpData.cpu_load) : NaN;
+            const hasCpuValue = Number.isFinite(cpuValue);
+            const tempValue = snmpData.temperature !== undefined ? parseFloat(snmpData.temperature) : NaN;
+            const hasTempValue = Number.isFinite(tempValue);
+            const usedMemValue = snmpData.used_memory !== undefined ? parseFloat(snmpData.used_memory) : NaN;
+            const hasUsedMemValue = Number.isFinite(usedMemValue);
+            const totalMemValue = snmpData.total_memory !== undefined ? parseFloat(snmpData.total_memory) : NaN;
+            const hasTotalMemValue = Number.isFinite(totalMemValue);
+            const canForwardFillTotal = !hasTotalMemValue && hasUsedMemValue && Number.isFinite(lastTotalMemoryValue);
+            const realtimeGapNeeded = shouldInsertSnmpGap(lastSnmpDataTimestamp, nowTs, offlineIntervals, snmpGapThresholdMs);
             
             // Update device model and RouterOS version if available
             if ((snmpData.board_name && snmpData.board_name !== 'N/A') || (snmpData.version && snmpData.version !== 'N/A')) {
@@ -2019,11 +2255,42 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             requestAnimationFrame(() => {
+                let realtimeUpdated = false;
+                
+                if (realtimeGapNeeded) {
+                    if (hasCpuValue && charts.cpu && charts.cpu.data.datasets[0] && charts.cpu.data.datasets[0].data.length > 0) {
+                        charts.cpu.data.datasets[0].data.push({
+                            x: new Date(nowTs - 1),
+                            y: null
+                        });
+                    }
+                    if (hasTempValue && charts.temperature && charts.temperature.data.datasets[0] && charts.temperature.data.datasets[0].data.length > 0) {
+                        charts.temperature.data.datasets[0].data.push({
+                            x: new Date(nowTs - 1),
+                            y: null
+                        });
+                    }
+                    if (charts.memory) {
+                        if (hasUsedMemValue && charts.memory.data.datasets[0] && charts.memory.data.datasets[0].data.length > 0) {
+                            charts.memory.data.datasets[0].data.push({
+                                x: new Date(nowTs - 1),
+                                y: null
+                            });
+                        }
+                        if ((hasTotalMemValue || canForwardFillTotal) && charts.memory.data.datasets[1] && charts.memory.data.datasets[1].data.length > 0) {
+                            charts.memory.data.datasets[1].data.push({
+                                x: new Date(nowTs - 1),
+                                y: null
+                            });
+                        }
+                    }
+                }
+                
                 // Update CPU chart
-                if (charts.cpu && snmpData.cpu_load !== undefined) {
+                if (charts.cpu && hasCpuValue) {
                     charts.cpu.data.datasets[0].data.push({
                         x: now,
-                        y: parseFloat(snmpData.cpu_load)
+                        y: cpuValue
                     });
                     
                     // Keep only reasonable amount of real-time data
@@ -2032,13 +2299,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     charts.cpu.update('none');
+                    realtimeUpdated = true;
                 }
                 
                 // Update temperature chart
-                if (charts.temperature && snmpData.temperature !== undefined) {
+                if (charts.temperature && hasTempValue) {
                     charts.temperature.data.datasets[0].data.push({
                         x: now,
-                        y: parseFloat(snmpData.temperature)
+                        y: tempValue
                     });
                     
                     // Keep only reasonable amount of real-time data
@@ -2047,6 +2315,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     charts.temperature.update('none');
+                    realtimeUpdated = true;
                 }
 
                 // Update memory chart (independent datasets for real-time)
@@ -2054,30 +2323,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     let memoryUpdated = false;
                     
                     // Update Used Memory if available
-                    if (snmpData.used_memory !== undefined) {
-                        const usedMem = parseFloat(snmpData.used_memory);
-                        if (!isNaN(usedMem)) {
-                            charts.memory.data.datasets[0].data.push({
-                                x: now,
-                                y: usedMem
-                            });
-                            memoryUpdated = true;
-                        }
+                    if (hasUsedMemValue) {
+                        charts.memory.data.datasets[0].data.push({
+                            x: now,
+                            y: usedMemValue
+                        });
+                        memoryUpdated = true;
                     }
                     
                     // Update Total Memory if available, or forward-fill if used memory is present
-                    if (snmpData.total_memory !== undefined) {
-                        const totalMem = parseFloat(snmpData.total_memory);
-                        if (!isNaN(totalMem)) {
-                            lastTotalMemoryValue = totalMem;
-                            charts.memory.data.datasets[1].data.push({
-                                x: now,
-                                y: totalMem
-                            });
-                            memoryUpdated = true;
-                        }
-                    } else if (lastTotalMemoryValue !== null && snmpData.used_memory !== undefined) {
-                        // Forward-fill: use last known Total Memory when used_memory is present but total_memory is missing
+                    if (hasTotalMemValue) {
+                        lastTotalMemoryValue = totalMemValue;
+                        charts.memory.data.datasets[1].data.push({
+                            x: now,
+                            y: totalMemValue
+                        });
+                        memoryUpdated = true;
+                    } else if (canForwardFillTotal) {
                         charts.memory.data.datasets[1].data.push({
                             x: now,
                             y: lastTotalMemoryValue
@@ -2095,7 +2357,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         
                         charts.memory.update('none');
+                        realtimeUpdated = true;
                     }
+                }
+                
+                if (realtimeUpdated) {
+                    lastSnmpDataTimestamp = nowTs;
                 }
             });
         }
@@ -2166,20 +2433,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // rýchle prepisovanie min/max (applyFullTimeRangeToAllCharts, unifyTimeAxis, reset zoom, atď.)
     // Riešenie: po dokončení načítania historických dát (a po refresh) urobíme jeden konsolidovaný
     // krok, ktorý nastaví konzistentné min/max pre všetky grafy len raz a až potom vykoná update.
-    const SHORT_RANGES = new Set(['30m','recent','3h','6h','12h','24h']);
     const stabilizeShortRangeTimeAxis = (range = currentTimeRange) => {
         if (!SHORT_RANGES.has(range)) return; // iba pre krátke rozsahy
         if (window._userZoomActive || window._singleChartZoomOut) return; // nerešpektuj pri aktívnom zoome
         try {
             const rangeMs = getTimeRangeMs(range);
-            const nowTs = Date.now();
-            const minTs = nowTs - rangeMs;
             Object.values(charts).forEach(ch => {
                 if (!ch?.options?.scales?.x) return;
+                const chartRange = getChartTimeRange(ch);
+                let maxTs;
+                let minTs;
+                if (chartRange) {
+                    maxTs = chartRange.max;
+                    minTs = Math.max(chartRange.max - rangeMs, chartRange.min);
+                } else {
+                    maxTs = Date.now();
+                    minTs = maxTs - rangeMs;
+                }
                 // Zachovaj typ 'time'
                 ch.options.scales.x.type = 'time';
                 ch.options.scales.x.min = minTs;
-                ch.options.scales.x.max = nowTs;
+                ch.options.scales.x.max = maxTs;
                 ch.options.scales.x.offset = false;
                 // Pre istotu znovu prirad formáty (môže zaniknúť pri konfliktných updateoch)
                 const tf = getTimeFormats(range);
@@ -2694,6 +2968,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         charts.memory.data.datasets[1].data = [];
                         charts.memory.update('none');
                     }
+                    lastSnmpDataTimestamp = null;
+                    lastSnmpIntervalEstimateMs = null;
                 }
                 
                 // Load availability data (always load, independent of time range) - REMOVED

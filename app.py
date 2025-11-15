@@ -1780,10 +1780,14 @@ def handle_devices():
             data = request.json
             try:
                 if data.get('id'):
-                    # Získame staré nastavenia pre detekciu zmeny SNMP intervalu
-                    old_device = conn.execute('SELECT snmp_interval_minutes FROM devices WHERE id = ?', (data['id'],)).fetchone()
+                    # Získame staré nastavenia pre detekciu zmien intervalov
+                    old_device = conn.execute('SELECT snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds FROM devices WHERE id = ?', (data['id'],)).fetchone()
                     old_snmp_interval = old_device['snmp_interval_minutes'] if old_device else 0
+                    old_ping_interval = old_device['ping_interval_seconds'] if old_device else 0
+                    old_ping_retry_interval = old_device['ping_retry_interval_seconds'] if old_device else 0
                     new_snmp_interval = data.get('snmp_interval_minutes', 0)
+                    new_ping_interval = data.get('ping_interval_seconds', 0)
+                    new_ping_retry_interval = data.get('ping_retry_interval_seconds', 0)
                     
                     # Pri editácii zachováme pôvodné heslo ak nie je zadané nové
                     if data.get('password'):
@@ -1792,22 +1796,28 @@ def handle_devices():
                         conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
                                    (data['name'], data['ip'], data['username'], encrypted_password, data.get('low_memory', False), 
                                     data.get('snmp_community', 'public'), new_snmp_interval, 
-                                    data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0), data['id']))
+                                    new_ping_interval, new_ping_retry_interval, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
                         conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
                                    (data['name'], data['ip'], data['username'], data.get('low_memory', False), 
                                     data.get('snmp_community', 'public'), new_snmp_interval, 
-                                    data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0), data['id']))
+                                    new_ping_interval, new_ping_retry_interval, data['id']))
                     conn.commit()
                     
+                    change_messages = []
                     # Okamžitý health check ak sa zmenil SNMP interval zariadenia
                     if old_snmp_interval != new_snmp_interval:
                         device_name = data.get('name', f'ID {data["id"]}')
                         trigger_immediate_health_check(f"zmena SNMP intervalu zariadenia {device_name} ({old_snmp_interval}→{new_snmp_interval}min)")
-                        add_log('info', f"Zariadenie {data['ip']} aktualizované, SNMP interval zmenený z {old_snmp_interval} na {new_snmp_interval} minút - spustený health check.")
-                    else:
-                        add_log('info', f"Zariadenie {data['ip']} aktualizované.")
+                        change_messages.append(f"SNMP interval {old_snmp_interval}→{new_snmp_interval} min (spustený health check)")
+                    if old_ping_interval != new_ping_interval:
+                        change_messages.append(f"Ping interval {old_ping_interval}→{new_ping_interval} s")
+                    if old_ping_retry_interval != new_ping_retry_interval:
+                        change_messages.append(f"Retry interval {old_ping_retry_interval}→{new_ping_retry_interval} s")
+
+                    if change_messages:
+                        add_log('info', f"Zariadenie {data['ip']} aktualizované: " + ", ".join(change_messages))
                     
                     return jsonify({'status': 'success'})
                 else:

@@ -18,6 +18,7 @@ import secrets
 import string
 import csv
 from contextlib import contextmanager
+import socket
 # PRIDANÉ: g pre globálny kontext požiadavky
 from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, session, g
 from flask_socketio import SocketIO, emit
@@ -54,7 +55,7 @@ BOOLEAN_SETTING_KEYS = {
     'notify_device_offline', 'notify_device_online', 'notify_temp_critical',
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
     'notify_version_change', 'quiet_hours_enabled', 'availability_monitoring_enabled',
-    'debug_terminal'
+    'debug_terminal', 'ftp_wol_enabled'
 }
 
 SETTING_LABELS = {
@@ -73,6 +74,12 @@ SETTING_LABELS = {
     'ftp_port': 'FTP Port',
     'ftp_server': 'FTP Server',
     'ftp_username': 'FTP Používateľ',
+    'ftp_wol_enabled': 'Wake-on-LAN pri zlyhaní FTP',
+    'ftp_wol_ip': 'Wake-on-LAN IP adresa',
+    'ftp_wol_mac': 'Wake-on-LAN MAC adresa',
+    'ftp_wol_port': 'Wake-on-LAN port',
+    'ftp_wol_wait_seconds': 'Čakanie po WOL (sekundy)',
+    'ftp_wol_retry_count': 'Počet pokusov po WOL',
     'log_max_entries': 'Max zobrazených logov v okne',
     'log_retention_days': 'Uchovávanie aktivity logov (dni)',
     'memory_critical_threshold': 'Pamäť (%)',
@@ -123,7 +130,9 @@ SETTING_VALUE_SUFFIXES = {
     'log_max_entries': ' záznamov',
     'cpu_critical_threshold': ' %',
     'memory_critical_threshold': ' %',
-    'temp_critical_threshold': ' °C'
+    'temp_critical_threshold': ' °C',
+    'ftp_wol_wait_seconds': ' s',
+    'ftp_wol_retry_count': ' pokusov'
 }
 
 SCHEDULE_TYPE_LABELS = {
@@ -184,7 +193,14 @@ DEFAULT_SETTING_VALUES = {
     'backup_schedule_time': '02:00',
     'backup_retention_count': '10',
     'backup_delay_seconds': '30',
-    'backup_detailed_logging': 'false'
+    'backup_detailed_logging': 'false',
+    'ftp_port': '21',
+    'ftp_wol_enabled': 'false',
+    'ftp_wol_ip': '',
+    'ftp_wol_mac': '',
+    'ftp_wol_port': '9',
+    'ftp_wol_wait_seconds': '120',
+    'ftp_wol_retry_count': '2'
 }
 
 # --- Nastavenie aplikácie (upravené pre HTML šablóny) ---
@@ -1028,11 +1044,29 @@ def get_snmp_data(ip, community='public'):
                 results['free_memory'] = 'N/A'
                 results['memory_usage'] = 'N/A'
         else:
-            # Fallback estimation ak OIDy nefungujú
-            results['total_memory'] = '1024'
-            results['used_memory'] = '569'  # 55.6% usage
-            results['free_memory'] = '455'
-            results['memory_usage'] = '56'
+            # Fallback estimation ak OIDy nefungujú - ale len pre online zariadenia
+            if results.get('uptime') and results.get('uptime') != 'N/A':
+                try:
+                    total_mb = int(results.get('total_memory')) if results.get('total_memory') not in [None, 'N/A'] else 1024
+                except (ValueError, TypeError):
+                    total_mb = 1024
+                try:
+                    used_mb = int(results.get('used_memory')) if results.get('used_memory') not in [None, 'N/A'] else 569
+                except (ValueError, TypeError):
+                    used_mb = 569
+                free_mb = max(total_mb - used_mb, 0)
+                usage_percent = int((used_mb / total_mb) * 100) if total_mb else 0
+                
+                results['total_memory'] = str(total_mb)
+                results['used_memory'] = str(used_mb)
+                results['free_memory'] = str(free_mb)
+                results['memory_usage'] = str(usage_percent)
+            else:
+                # Offline zariadenia - ponecháme N/A, aby sa nevytvárali falošné body
+                results['total_memory'] = 'N/A'
+                results['used_memory'] = 'N/A'
+                results['free_memory'] = 'N/A'
+                results['memory_usage'] = 'N/A'
         
         # Odstránime pomocné polia, ktoré nechceme zobrazovať
         for key in ['architecture']:
@@ -1047,19 +1081,89 @@ def get_snmp_data(ip, community='public'):
         fallback['uptime_seconds'] = '0'
         return fallback
 
-def upload_to_ftp(local_path, detailed_logging=True):
+def send_wol_packet(mac_address, ip_address='255.255.255.255', port=9):
+    """
+    Odošle Wake-on-LAN magic packet. MAC podporuje zápis s dvojbodkami, pomlčkami aj bez oddeľovačov.
+    """
     try:
-        with get_db_connection() as conn:
-            settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE "ftp_%"')}
-        if all(k in settings and settings[k] for k in ['ftp_server', 'ftp_username', 'ftp_password']):
-            with FTP(settings['ftp_server']) as ftp:
-                ftp.login(settings['ftp_username'], settings['ftp_password'])
-                if 'ftp_directory' in settings and settings['ftp_directory']: ftp.cwd(settings['ftp_directory'])
+        clean_mac = mac_address.replace(':', '').replace('-', '').replace('.', '').strip()
+        if len(clean_mac) != 12:
+            raise ValueError("MAC adresa musí mať 12 hex znakov")
+        payload = bytes.fromhex('FF' * 6 + clean_mac * 16)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.settimeout(3)
+            target_ip = ip_address or '255.255.255.255'
+            target_port = int(port) if port else 9
+            sock.sendto(payload, (target_ip, target_port))
+        add_log('info', f"WOL paket odoslaný na {target_ip}:{target_port} (MAC {mac_address}).")
+        return True
+    except Exception as e:
+        add_log('error', f"Wake-on-LAN zlyhal: {e}")
+        return False
+
+def upload_to_ftp(local_path, detailed_logging=True):
+    def parse_int(value, default):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def attempt_upload(settings):
+        try:
+            server = settings.get('ftp_server')
+            username = settings.get('ftp_username')
+            password = settings.get('ftp_password')
+            if not (server and username and password):
+                return False, "Chýbajú FTP nastavenia (server/používateľ/heslo)."
+            port = parse_int(settings.get('ftp_port'), 21)
+            with FTP() as ftp:
+                ftp.connect(server, port)
+                ftp.login(username, password)
+                if settings.get('ftp_directory'):
+                    ftp.cwd(settings['ftp_directory'])
                 with open(local_path, 'rb') as f:
                     ftp.storbinary(f'STOR {os.path.basename(local_path)}', f)
                 if detailed_logging:
                     add_log('info', f"Súbor {os.path.basename(local_path)} nahraný na FTP.")
-    except Exception as e: add_log('error', f"FTP upload zlyhal: {e}")
+            return True, None
+        except Exception as e:
+            return False, str(e)
+
+    with get_db_connection() as conn:
+        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE "ftp_%"')}
+
+    success, error_msg = attempt_upload(settings)
+    if success:
+        return
+
+    wol_enabled = settings.get('ftp_wol_enabled', 'false').lower() == 'true'
+    wol_mac = settings.get('ftp_wol_mac')
+    wol_ip = settings.get('ftp_wol_ip') or '255.255.255.255'
+    wol_port = parse_int(settings.get('ftp_wol_port'), 9)
+    wait_seconds = parse_int(settings.get('ftp_wol_wait_seconds'), 120)
+    retry_count = parse_int(settings.get('ftp_wol_retry_count'), 2)
+
+    if not wol_enabled or not wol_mac:
+        add_log('error', f"FTP upload zlyhal: {error_msg}")
+        return
+
+    add_log('warning', f"FTP upload zlyhal ({error_msg}). Spúšťam Wake-on-LAN a opakovania.")
+    wol_sent = send_wol_packet(wol_mac, wol_ip, wol_port)
+    if not wol_sent:
+        add_log('error', "Wake-on-LAN sa nepodarilo odoslať, upload sa neopakoval.")
+        return
+
+    attempts_total = max(retry_count, 1)
+    for attempt in range(1, attempts_total + 1):
+        time.sleep(max(wait_seconds, 1))
+        success, error_msg = attempt_upload(settings)
+        if success:
+            add_log('info', f"FTP upload úspešný po Wake-on-LAN (pokus {attempt}/{attempts_total}).")
+            return
+        add_log('warning', f"FTP upload po Wake-on-LAN zlyhal (pokus {attempt}/{attempts_total}): {error_msg}")
+
+    add_log('error', "FTP upload zlyhal aj po Wake-on-LAN a všetkých opakovaniach.")
 
 def send_pushover_notification(message, title="MikroTik Manager", notification_key=None, default_enabled=True):
     try:
@@ -2934,6 +3038,10 @@ def save_ping_result(device_id, ping_result):
 def save_snmp_history(device_id, snmp_data):
     """Uloží SNMP dáta do history tabuľky"""
     try:
+        # Offline alebo prázdne SNMP dáta by nemali vytvárať falošné zápisy
+        if not snmp_data or snmp_data.get('uptime') in (None, 'N/A'):
+            return
+        
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -3950,6 +4058,9 @@ def get_monitoring_history(device_id):
             snmp_rows = cursor.fetchall()
             snmp_data = []
             for row in snmp_rows:
+                if row[4] in (None, 'N/A'):
+                    # Preskoč offline/pokazené SNMP záznamy, aby sa nevykresľovali ako aktívne dáta
+                    continue
                 # Bezpečné získanie memory hodnôt s type checking
                 total_mem = row[5] if len(row) > 5 else None
                 free_mem = row[6] if len(row) > 6 else None

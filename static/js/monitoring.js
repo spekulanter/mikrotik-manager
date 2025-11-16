@@ -312,6 +312,61 @@ document.addEventListener('DOMContentLoaded', () => {
     const SNMP_GAP_MAX_MS = 60 * 60 * 1000;
     const SNMP_INTERVAL_MIN_GUESS_MS = 60 * 1000;
     const SHORT_RANGES = new Set(['30m','recent','3h','6h','12h','24h']);
+    const CHART_COLOR_THEMES = {
+        dark: {
+            ping: {
+                onlineBorder: '#10b981',
+                onlineBackground: 'rgba(16, 185, 129, 0.1)',
+                legendOnlineFill: 'rgba(16, 185, 129, 0.1)',
+                legendOnlineBorder: '#10b981',
+                legendOfflineFill: 'rgba(239, 68, 68, 0.1)',
+                legendOfflineBorder: 'rgba(239, 68, 68, 0.6)',
+                offlineFill: 'rgba(239, 68, 68, 0.3)',
+                offlineBorder: 'rgba(239, 68, 68, 0.6)'
+            },
+            cpu: {
+                border: '#3b82f6',
+                background: 'rgba(59, 130, 246, 0.1)'
+            },
+            temperature: {
+                border: '#ef4444',
+                background: 'rgba(239, 68, 68, 0.1)'
+            },
+            memory: {
+                usedBorder: '#ef4444',
+                usedBackground: 'rgba(239, 68, 68, 0.15)',
+                totalBorder: '#3b82f6',
+                totalBackground: 'rgba(59, 130, 246, 0.1)'
+            }
+        },
+        light: {
+            ping: {
+                onlineBorder: '#0ea5a3',
+                onlineBackground: 'rgba(14, 165, 163, 0.22)',
+                legendOnlineFill: 'rgba(14, 165, 163, 0.22)',
+                legendOnlineBorder: '#0ea5a3',
+                legendOfflineFill: 'rgba(220, 38, 38, 0.22)',
+                legendOfflineBorder: 'rgba(220, 38, 38, 0.7)',
+                offlineFill: 'rgba(220, 38, 38, 0.3)',
+                offlineBorder: 'rgba(220, 38, 38, 0.7)'
+            },
+            cpu: {
+                border: '#1d4ed8',
+                background: 'rgba(29, 78, 216, 0.22)'
+            },
+            temperature: {
+                border: '#dc2626',
+                background: 'rgba(220, 38, 38, 0.22)'
+            },
+            memory: {
+                usedBorder: '#dc2626',
+                usedBackground: 'rgba(220, 38, 38, 0.24)',
+                totalBorder: '#1d4ed8',
+                totalBackground: 'rgba(29, 78, 216, 0.18)'
+            }
+        }
+    };
+    const getChartColorTheme = () => document.body.classList.contains('light-theme') ? CHART_COLOR_THEMES.light : CHART_COLOR_THEMES.dark;
     
     // Export charts to window for access from monitoring.html
     window.charts = charts;
@@ -1260,6 +1315,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        const chartColors = getChartColorTheme();
+        const pingColors = chartColors.ping;
+        const cpuColors = chartColors.cpu;
+        const temperatureColors = chartColors.temperature;
+        const memoryColors = chartColors.memory;
         const chartOptions = getChartOptions();
         
         // Ping Chart - Uptime Kuma style with dynamic segments
@@ -1269,8 +1329,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'Ping Latencia (ms)',
                     data: [],
-                    borderColor: '#0ea5a3',
-                    backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                    borderColor: pingColors.onlineBorder,
+                    backgroundColor: pingColors.onlineBackground,
                     tension: 0.12,
                     fill: true,
                     pointRadius: 0,
@@ -1302,12 +1362,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             ...chartOptions.plugins?.legend?.labels,
                             color: '#d1d5db', // Light gray text like other charts
                             generateLabels: function(chart) {
+                                const activePingColors = getChartColorTheme().ping;
                                 // Generate only two fixed legend items: Online and Offline
                                 return [
                                     {
                                         text: 'Online',
-                                        fillStyle: 'rgba(14, 165, 163, 0.22)', // Sytejšie pozadie pre čitateľnosť
-                                        strokeStyle: '#0ea5a3',
+                                        fillStyle: activePingColors.legendOnlineFill,
+                                        strokeStyle: activePingColors.legendOnlineBorder,
                                         lineWidth: 2,
                                         hidden: false,
                                         index: 0,
@@ -1315,8 +1376,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                     },
                                     {
                                         text: 'Offline',
-                                        fillStyle: 'rgba(220, 38, 38, 0.22)', // Sytejšie pozadie pre čitateľnosť
-                                        strokeStyle: 'rgba(220, 38, 38, 0.7)',
+                                        fillStyle: activePingColors.legendOfflineFill,
+                                        strokeStyle: activePingColors.legendOfflineBorder,
                                         lineWidth: 2,
                                         hidden: false,
                                         index: 1,
@@ -1341,8 +1402,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'CPU Load (%)',
                     data: [],
-                    borderColor: '#1d4ed8',
-                    backgroundColor: 'rgba(29, 78, 216, 0.22)',
+                    borderColor: cpuColors.border,
+                    backgroundColor: cpuColors.background,
                     tension: 0.12,
                     fill: true,
                     pointRadius: 0,
@@ -1376,8 +1437,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'Teplota (°C)',
                     data: [],
-                    borderColor: '#dc2626',
-                    backgroundColor: 'rgba(220, 38, 38, 0.22)',
+                    borderColor: temperatureColors.border,
+                    backgroundColor: temperatureColors.background,
                     tension: 0.12,
                     fill: true,
                     pointRadius: 0,
@@ -1415,8 +1476,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Used Memory',
                         data: [],
-                        borderColor: '#dc2626',
-                        backgroundColor: 'rgba(220, 38, 38, 0.24)',
+                        borderColor: memoryColors.usedBorder,
+                        backgroundColor: memoryColors.usedBackground,
                         fill: true,
                         tension: 0.12,
                         borderWidth: 2.5,
@@ -1428,8 +1489,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Total Memory',
                         data: [],
-                        borderColor: '#1d4ed8',
-                        backgroundColor: 'rgba(29, 78, 216, 0.18)',
+                        borderColor: memoryColors.totalBorder,
+                        backgroundColor: memoryColors.totalBackground,
                         fill: true,
                         tension: 0.12,
                         borderWidth: 2.5,
@@ -1513,6 +1574,55 @@ document.addEventListener('DOMContentLoaded', () => {
         setupMobileTooltipDismiss();
     };
 
+    const applyChartThemeToCharts = () => {
+        const chartColors = getChartColorTheme();
+        const pingColors = chartColors.ping;
+        const cpuColors = chartColors.cpu;
+        const temperatureColors = chartColors.temperature;
+        const memoryColors = chartColors.memory;
+
+        if (charts.ping && charts.ping.data?.datasets) {
+            charts.ping.data.datasets.forEach(dataset => {
+                if (dataset.order === 1) {
+                    dataset.borderColor = pingColors.onlineBorder;
+                    dataset.backgroundColor = pingColors.onlineBackground;
+                } else if (dataset.order === 2) {
+                    dataset.backgroundColor = pingColors.offlineFill;
+                    dataset.borderColor = pingColors.offlineBorder;
+                }
+            });
+            charts.ping.update('none');
+        }
+
+        if (charts.cpu?.data?.datasets?.[0]) {
+            const cpuDataset = charts.cpu.data.datasets[0];
+            cpuDataset.borderColor = cpuColors.border;
+            cpuDataset.backgroundColor = cpuColors.background;
+            charts.cpu.update('none');
+        }
+
+        if (charts.temperature?.data?.datasets?.[0]) {
+            const temperatureDataset = charts.temperature.data.datasets[0];
+            temperatureDataset.borderColor = temperatureColors.border;
+            temperatureDataset.backgroundColor = temperatureColors.background;
+            charts.temperature.update('none');
+        }
+
+        if (charts.memory?.data?.datasets) {
+            const [usedDataset, totalDataset] = charts.memory.data.datasets;
+            if (usedDataset) {
+                usedDataset.borderColor = memoryColors.usedBorder;
+                usedDataset.backgroundColor = memoryColors.usedBackground;
+            }
+            if (totalDataset) {
+                totalDataset.borderColor = memoryColors.totalBorder;
+                totalDataset.backgroundColor = memoryColors.totalBackground;
+            }
+            charts.memory.update('none');
+        }
+    };
+    window.applyChartThemeToCharts = applyChartThemeToCharts;
+
     // Pomocná funkcia: skryť všetky tooltippy na všetkých grafoch
     const hideAllChartTooltips = () => {
         if (!charts) return;
@@ -1578,7 +1688,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!charts.ping) return;
         
         const chart = charts.ping;
-    const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
+        const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
+        const pingColors = getChartColorTheme().ping;
         
         // Check if this is historical data (array) or real-time data (single point)
         if (pingData.history && Array.isArray(pingData.history)) {
@@ -1676,8 +1787,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets.push({
                     label: index === 0 ? 'Ping Latencia (ms)' : '',
                     data: segment,
-                    borderColor: '#0ea5a3',
-                    backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                    borderColor: pingColors.onlineBorder,
+                    backgroundColor: pingColors.onlineBackground,
                     tension: 0.12,
                     fill: true,
                     pointRadius: 0,
@@ -1709,8 +1820,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets.push({
                     label: '',  // No label for offline segments
                     data: segment,
-                    backgroundColor: 'rgba(220, 38, 38, 0.3)',
-                    borderColor: 'rgba(220, 38, 38, 0.7)',
+                    backgroundColor: pingColors.offlineFill,
+                    borderColor: pingColors.offlineBorder,
                     borderWidth: 1,
                     fill: '-1', // Fill to previous dataset (the invisible bottom line)
                     pointRadius: 0,
@@ -1726,8 +1837,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets.push({
                     label: 'Ping Latencia (ms)',
                     data: [],
-                    borderColor: '#0ea5a3',
-                    backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                    borderColor: pingColors.onlineBorder,
+                    backgroundColor: pingColors.onlineBackground,
                     tension: 0.12,
                     fill: true,
                     pointRadius: 0,
@@ -1794,8 +1905,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     datasets = [{
                         label: 'Ping Latencia (ms)',
                         data: [],
-                        borderColor: '#0ea5a3',
-                        backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                        borderColor: pingColors.onlineBorder,
+                        backgroundColor: pingColors.onlineBackground,
                         tension: 0.12,
                         fill: true,
                         pointRadius: 0,
@@ -1812,15 +1923,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (isOnline) {
                     // Look for the last online dataset or create new one
-                    if (lastDataset && lastDataset.borderColor === '#0ea5a3') {
+                    if (lastDataset && lastDataset.borderColor === pingColors.onlineBorder) {
                         targetDataset = lastDataset;
                     } else {
                         // Create new online dataset
                         targetDataset = {
                             label: '',
                             data: [],
-                            borderColor: '#0ea5a3',
-                            backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                            borderColor: pingColors.onlineBorder,
+                            backgroundColor: pingColors.onlineBackground,
                             tension: 0.12,
                             fill: true,
                             pointRadius: 0,
@@ -1841,7 +1952,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let maxOnlineLatency = 0;
                     let minOnlineLatency = Infinity;
                     datasets.forEach(dataset => {
-                        if (dataset.borderColor === '#0ea5a3') {
+                        if (dataset.borderColor === pingColors.onlineBorder) {
                             dataset.data.forEach(point => {
                                 if (point.y > maxOnlineLatency) {
                                     maxOnlineLatency = point.y;
@@ -1866,15 +1977,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const offlineHeight = maxOnlineLatency;
                     
                     // Look for the last offline dataset or create new one
-                    if (lastDataset && lastDataset.backgroundColor === 'rgba(220, 38, 38, 0.3)') {
+                    if (lastDataset && lastDataset.backgroundColor === pingColors.offlineFill) {
                         targetDataset = lastDataset;
                     } else {
                         // Create new offline dataset - use origin fill and adjust chart min
                         targetDataset = {
                             label: '',
                             data: [],
-                            backgroundColor: 'rgba(220, 38, 38, 0.3)',
-                            borderColor: 'rgba(220, 38, 38, 0.7)',
+                            backgroundColor: pingColors.offlineFill,
+                            borderColor: pingColors.offlineBorder,
                             borderWidth: 1,
                             fill: 'origin', // Fill from origin, but we'll adjust chart min to minOnlineLatency
                             pointRadius: 0,

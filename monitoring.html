@@ -3662,6 +3662,9 @@
                 localStorage.setItem('mikrotik-theme', 'light');
             }
             updateThemeIcon();
+            if (window.applyChartThemeToCharts) {
+                window.applyChartThemeToCharts();
+            }
         }
         
         function updateThemeIcon() {

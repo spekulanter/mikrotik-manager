@@ -1269,13 +1269,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'Ping Latencia (ms)',
                     data: [],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.1,
+                    borderColor: '#0ea5a3',
+                    backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                    tension: 0.12,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,
-                    borderWidth: 2,
+                    borderWidth: 2.5,
                     spanGaps: false,
                     order: 1
                 }]
@@ -1306,8 +1306,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 return [
                                     {
                                         text: 'Online',
-                                        fillStyle: 'rgba(16, 185, 129, 0.1)', // Light transparent fill like other charts
-                                        strokeStyle: '#10b981',
+                                        fillStyle: 'rgba(14, 165, 163, 0.22)', // Sytejšie pozadie pre čitateľnosť
+                                        strokeStyle: '#0ea5a3',
                                         lineWidth: 2,
                                         hidden: false,
                                         index: 0,
@@ -1315,8 +1315,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                     },
                                     {
                                         text: 'Offline',
-                                        fillStyle: 'rgba(239, 68, 68, 0.1)', // Light transparent fill like other charts
-                                        strokeStyle: 'rgba(239, 68, 68, 0.6)',
+                                        fillStyle: 'rgba(220, 38, 38, 0.22)', // Sytejšie pozadie pre čitateľnosť
+                                        strokeStyle: 'rgba(220, 38, 38, 0.7)',
                                         lineWidth: 2,
                                         hidden: false,
                                         index: 1,
@@ -1341,13 +1341,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'CPU Load (%)',
                     data: [],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.1,
+                    borderColor: '#1d4ed8',
+                    backgroundColor: 'rgba(29, 78, 216, 0.22)',
+                    tension: 0.12,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,  // Completely disable hover points
-                    borderWidth: 2,
+                    borderWidth: 2.5,
                     spanGaps: false,  // Break the line when SNMP dáta chýbajú
                     showLine: true   // Ensure line is always shown
                 }]
@@ -1376,13 +1376,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'Teplota (°C)',
                     data: [],
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.1,
+                    borderColor: '#dc2626',
+                    backgroundColor: 'rgba(220, 38, 38, 0.22)',
+                    tension: 0.12,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,  // Completely disable hover points
-                    borderWidth: 2,
+                    borderWidth: 2.5,
                     spanGaps: false,
                     showLine: true   // Ensure line is always shown
                 }]
@@ -1415,11 +1415,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Used Memory',
                         data: [],
-                        borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        borderColor: '#dc2626',
+                        backgroundColor: 'rgba(220, 38, 38, 0.24)',
                         fill: true,
-                        tension: 0.1,
-                        borderWidth: 2,
+                        tension: 0.12,
+                        borderWidth: 2.5,
                         pointRadius: 0,
                         pointHoverRadius: 0,  // Completely disable hover points
                         spanGaps: false,  // Break line na výpadky
@@ -1428,11 +1428,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Total Memory',
                         data: [],
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderColor: '#1d4ed8',
+                        backgroundColor: 'rgba(29, 78, 216, 0.18)',
                         fill: true,
-                        tension: 0.1,
-                        borderWidth: 2,
+                        tension: 0.12,
+                        borderWidth: 2.5,
                         pointRadius: 0,
                         pointHoverRadius: 0,  // Completely disable hover points
                         spanGaps: false,
@@ -1676,13 +1676,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets.push({
                     label: index === 0 ? 'Ping Latencia (ms)' : '',
                     data: segment,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.1,
+                    borderColor: '#0ea5a3',
+                    backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                    tension: 0.12,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,
-                    borderWidth: 2,
+                    borderWidth: 2.5,
                     spanGaps: false,
                     order: 1
                 });
@@ -1709,8 +1709,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets.push({
                     label: '',  // No label for offline segments
                     data: segment,
-                    backgroundColor: 'rgba(239, 68, 68, 0.3)',
-                    borderColor: 'rgba(239, 68, 68, 0.6)',
+                    backgroundColor: 'rgba(220, 38, 38, 0.3)',
+                    borderColor: 'rgba(220, 38, 38, 0.7)',
                     borderWidth: 1,
                     fill: '-1', // Fill to previous dataset (the invisible bottom line)
                     pointRadius: 0,
@@ -1726,13 +1726,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets.push({
                     label: 'Ping Latencia (ms)',
                     data: [],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.1,
+                    borderColor: '#0ea5a3',
+                    backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                    tension: 0.12,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 0,
-                    borderWidth: 2,
+                    borderWidth: 2.5,
                     spanGaps: false,
                     order: 1
                 });
@@ -1794,13 +1794,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     datasets = [{
                         label: 'Ping Latencia (ms)',
                         data: [],
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        tension: 0.1,
+                        borderColor: '#0ea5a3',
+                        backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                        tension: 0.12,
                         fill: true,
                         pointRadius: 0,
                         pointHoverRadius: 0,
-                        borderWidth: 2,
+                        borderWidth: 2.5,
                         spanGaps: false,
                         order: 1
                     }];
@@ -1812,20 +1812,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (isOnline) {
                     // Look for the last online dataset or create new one
-                    if (lastDataset && lastDataset.borderColor === '#10b981') {
+                    if (lastDataset && lastDataset.borderColor === '#0ea5a3') {
                         targetDataset = lastDataset;
                     } else {
                         // Create new online dataset
                         targetDataset = {
                             label: '',
                             data: [],
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            tension: 0.1,
+                            borderColor: '#0ea5a3',
+                            backgroundColor: 'rgba(14, 165, 163, 0.22)',
+                            tension: 0.12,
                             fill: true,
                             pointRadius: 0,
                             pointHoverRadius: 0,
-                            borderWidth: 2,
+                            borderWidth: 2.5,
                             spanGaps: false,
                             order: 1
                         };
@@ -1841,7 +1841,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let maxOnlineLatency = 0;
                     let minOnlineLatency = Infinity;
                     datasets.forEach(dataset => {
-                        if (dataset.borderColor === '#10b981') {
+                        if (dataset.borderColor === '#0ea5a3') {
                             dataset.data.forEach(point => {
                                 if (point.y > maxOnlineLatency) {
                                     maxOnlineLatency = point.y;
@@ -1866,15 +1866,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const offlineHeight = maxOnlineLatency;
                     
                     // Look for the last offline dataset or create new one
-                    if (lastDataset && lastDataset.backgroundColor === 'rgba(239, 68, 68, 0.3)') {
+                    if (lastDataset && lastDataset.backgroundColor === 'rgba(220, 38, 38, 0.3)') {
                         targetDataset = lastDataset;
                     } else {
                         // Create new offline dataset - use origin fill and adjust chart min
                         targetDataset = {
                             label: '',
                             data: [],
-                            backgroundColor: 'rgba(239, 68, 68, 0.3)',
-                            borderColor: 'rgba(239, 68, 68, 0.6)',
+                            backgroundColor: 'rgba(220, 38, 38, 0.3)',
+                            borderColor: 'rgba(220, 38, 38, 0.7)',
                             borderWidth: 1,
                             fill: 'origin', // Fill from origin, but we'll adjust chart min to minOnlineLatency
                             pointRadius: 0,

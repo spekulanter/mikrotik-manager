@@ -27,8 +27,8 @@
         
         /* Svetlá téma */
         body.light-theme {
-            --main-bg: #f9fafb; --card-bg: #ffffff; --border-color: #e5e7eb; 
-            --text-color: #374151; --accent-color: #0ea5e9; --accent-color-hover: #0284c7;
+            --main-bg: #cddbf2; --card-bg: #deeafa; --border-color: #b8c9e6; 
+            --text-color: #1f2937; --accent-color: #0369a1; --accent-color-hover: #0284c7;
             background-color: var(--main-bg); color: var(--text-color);
         }
         
@@ -46,11 +46,41 @@
         }
         
         body.light-theme input, body.light-theme select, body.light-theme textarea {
-            background-color: #f9fafb; border-color: #d1d5db; color: #374151;
+            background-color: #e3edfa; border-color: #b8c9e6; color: var(--text-color);
         }
         
         body.light-theme input:focus, body.light-theme select:focus, body.light-theme textarea:focus {
             border-color: var(--accent-color); box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        /* Info boxy v svetlej téme - lepší kontrast */
+        body.light-theme .info-blue {
+            background-color: #e5f0ff !important;
+            border-color: #b7cff9 !important;
+            color: #102a43 !important;
+        }
+        body.light-theme .info-blue h3,
+        body.light-theme .info-blue strong {
+            color: #0f2740 !important;
+        }
+        body.light-theme .info-blue ul li,
+        body.light-theme .info-blue .text-sm,
+        body.light-theme .info-blue .text-blue-200 {
+            color: #1b3656 !important;
+        }
+
+        body.light-theme .info-yellow {
+            background-color: #fff7e5 !important;
+            border-color: #f2d48a !important;
+            color: #4a3210 !important;
+        }
+        body.light-theme .info-yellow i,
+        body.light-theme .info-yellow strong {
+            color: #8a5c0a !important;
+        }
+        body.light-theme .info-yellow .text-sm,
+        body.light-theme .info-yellow .text-yellow-200 {
+            color: #5c3c12 !important;
         }
         
         /* Header v svetlej téme */
@@ -277,7 +307,7 @@
                 </h2>
                 
                 <!-- SNMP Overview -->
-                <div class="mb-6 p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg">
+                <div class="mb-6 p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg info-box info-blue">
                     <h3 class="text-lg font-semibold text-blue-300 mb-3">
                         <i class="fas fa-chart-line mr-2"></i>Účel SNMP monitoringu
                     </h3>
@@ -290,7 +320,7 @@
                 </div>
                 
                 <!-- Global Values Notice -->
-                <div class="mb-4 p-3 bg-yellow-900/30 border border-yellow-500/50 rounded-lg">
+                <div class="mb-4 p-3 bg-yellow-900/30 border border-yellow-500/50 rounded-lg info-box info-yellow">
                     <div class="flex items-start gap-3">
                         <i class="fas fa-globe text-yellow-400 mt-0.5"></i>
                         <div class="text-sm text-yellow-200">

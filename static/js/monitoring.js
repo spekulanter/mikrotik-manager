@@ -1342,6 +1342,11 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             options: {
                 ...chartOptions,
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                },
                 scales: {
                     ...chartOptions.scales,
                     y: {
@@ -1389,6 +1394,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         onClick: function(e, legendItem) {
                             // Disable legend click functionality since we have dynamic datasets
                             return;
+                        }
+                    }
+                    ,
+                    tooltip: {
+                        ...chartOptions.plugins?.tooltip,
+                        mode: 'nearest',
+                        intersect: false,
+                        axis: 'x',
+                        filter: (context) => context?.dataset?.order === 1 && context.raw?.y !== null,
+                        callbacks: {
+                            ...chartOptions.plugins?.tooltip?.callbacks,
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return `Ping Latencia: ${value !== null && value !== undefined ? value.toFixed(1) : 'N/A'} ms`;
+                            }
                         }
                     }
                 }
@@ -1707,10 +1727,16 @@ document.addEventListener('DOMContentLoaded', () => {
             let lastStatus = null;
             
             // Process data to create separate continuous segments
-            pingData.history.forEach((point, index) => {
+            const toMs = (ts) => {
+                const v = ts instanceof Date ? ts.getTime() : Date.parse(ts);
+                return Number.isFinite(v) ? v : null;
+            };
+            
+            pingData.history.forEach((point) => {
                 if (!point.timestamp) return;
                 
-                const timestamp = new Date(point.timestamp);
+                const timestampMs = toMs(point.timestamp);
+                if (!Number.isFinite(timestampMs)) return;
                 const isOnline = point.status === 'online' && point.avg_latency !== null;
                 
                 if (isOnline) {
@@ -1722,7 +1748,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Add to current online segment
                     currentOnlineSegment.push({
-                        x: timestamp,
+                        x: timestampMs,
                         y: point.avg_latency
                     });
                 } else {
@@ -1735,7 +1761,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Add to current offline segment (we'll calculate height later)
                     currentOfflineSegment.push({
-                        x: timestamp,
+                        x: timestampMs,
                         y: null  // Will be calculated based on online data
                     });
                 }
@@ -1861,7 +1887,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const nowTs = Date.now();
                     const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
                     chart.data.datasets.forEach(ds => {
-                        ds.data = ds.data.filter(p => p.x && p.x.getTime() >= minAllowed);
+                        ds.data = ds.data.filter(p => p.x && p.x >= minAllowed);
                     });
                 }
                 
@@ -1887,7 +1913,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } else {
             // Real-time single data point - add to appropriate segment
-            const now = new Date(pingData.timestamp);
+            const nowMs = Number.isFinite(Date.parse(pingData.timestamp)) ? Date.parse(pingData.timestamp) : Date.now();
+            const now = new Date(nowMs);
             const isOnline = pingData.status === 'online' && pingData.avg_latency !== null;
             // Push do cache a orez na posledných ~2000 bodov kvôli pamäti
             lastPingHistory.push({
@@ -1944,7 +1971,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     targetDataset.data.push({
-                        x: now,
+                        x: nowMs,
                         y: pingData.avg_latency
                     });
                 } else {
@@ -2001,7 +2028,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     targetDataset.data.push({
-                        x: now,
+                        x: nowMs,
                         y: offlineHeight  // Height matches current ping peak
                     });
                 }
@@ -2022,7 +2049,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const nowTs = Date.now();
                     const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
                     chart.data.datasets.forEach(ds => {
-                        ds.data = ds.data.filter(p => p.x && p.x.getTime() >= minAllowed);
+                        ds.data = ds.data.filter(p => p.x && p.x >= minAllowed);
                     });
                 }
                 

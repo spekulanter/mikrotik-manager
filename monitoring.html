@@ -2595,11 +2595,12 @@
             // For shorter time ranges, optimize the display to reduce left-side gaps
             let requestedMin, requestedMax;
             const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
+            const hasData = dataMin !== null && dataMax !== null;
+            const latestReference = hasData ? Math.max(dataMax, now) : now; // always include aktuálny čas aj posledný bod
             
-            if (isShortRange && dataMin !== null && dataMax !== null) {
+            if (isShortRange && hasData) {
                 // For short ranges: start from data beginning, but ensure we show the full requested duration
                 const dataDuration = dataMax - dataMin;
-                const minRequiredDuration = Math.min(timeRangeMs, dataDuration);
                 
                 // If data spans less than requested range, show data-centric view with padding
                 if (dataDuration < timeRangeMs) {
@@ -2613,9 +2614,9 @@
                     requestedMax = dataMax;
                 }
             } else {
-                // For longer ranges (7d, 30d, 90d, 1y): always show full requested horizon
-                requestedMin = now - timeRangeMs;
-                requestedMax = now;
+                // For longer ranges (7d, 30d, 90d, 1y): always show full requested horizon ending na latestReference
+                requestedMax = latestReference;
+                requestedMin = requestedMax - timeRangeMs;
             }
             
             // Set axis to show the optimized range

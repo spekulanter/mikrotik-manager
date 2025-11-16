@@ -1011,9 +1011,10 @@
             color: #6b7280 !important;
         }
         
-        body.light-theme #manage2faModal .bg-gray-800 {
-            background-color: #f3f4f6 !important;
-            border: 1px solid #d1d5db !important;
+        body.light-theme #manage2faModal .bg-gray-800,
+        body.light-theme #manageAccountModal .bg-gray-800 {
+            background-color: #e3edfa !important; /* match modal background */
+            border: 1px solid var(--border-color) !important;
         }
 
         body.light-theme #logsModal .card {
@@ -1038,6 +1039,14 @@
             background-color: #f9fafb !important;
             border-color: #d1d5db !important;
             color: var(--text-color) !important;
+        }
+
+        /* Current username field clearly but softly contrasted in light mode to highlight read-only */
+        body.light-theme #currentUsernameDisplay {
+            background-color: #dce6f8 !important;
+            border-color: #b4c6e6 !important;
+            color: #475569 !important;
+            font-weight: 500;
         }
         
         /* Labels v svetlej téme */
@@ -1193,8 +1202,9 @@
         body.light-theme #cancelPasswordChangeBtn,
         body.light-theme #cancelUsernameChangeBtn,
         body.light-theme #cancelAccountManageBtn {
-            background-color: #9ca3af !important;
-            color: #ffffff !important;
+            background-color: #cdd5e1 !important;
+            color: #1f2937 !important;
+            border: 1px solid #b8c4d6 !important;
         }
         
         body.light-theme #cancelDeviceBtn:hover,
@@ -1202,7 +1212,8 @@
         body.light-theme #cancelPasswordChangeBtn:hover,
         body.light-theme #cancelUsernameChangeBtn:hover,
         body.light-theme #cancelAccountManageBtn:hover {
-            background-color: #6b7280 !important;
+            background-color: #b9c5d7 !important;
+            color: #0f172a !important;
         }
         
         /* SNMP modal obsah v svetlej téme */
@@ -1712,7 +1723,7 @@
                 </div>
 
                 <div class="flex justify-end gap-4 pt-2">
-                    <button type="button" id="cancelDeviceBtn" class="btn bg-gray-600 hover:bg-gray-700 py-2 px-4 rounded-lg">Zrušiť</button>
+                    <button type="button" id="cancelDeviceBtn" class="btn bg-[#414956] hover:bg-[#353d48] py-2 px-4 rounded-lg">Zrušiť</button>
                     <button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Uložiť</button>
                 </div>
             </form>

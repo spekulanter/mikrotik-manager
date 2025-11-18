@@ -255,7 +255,7 @@ class MainActivity : AppCompatActivity() {
                                 const theme = getCurrentTheme();
                                 if (theme === 'light') {
                                     // Light theme: light background, dark icons
-                                    Android.setStatusBarColor('#f9fafb'); // Light gray
+                                    Android.setStatusBarColor('#cddbf2'); // Match light-mode background
                                     Android.setStatusBarIcons('dark');
                                 } else {
                                     // Dark theme: dark background, light icons

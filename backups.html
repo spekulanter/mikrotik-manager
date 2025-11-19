@@ -154,10 +154,13 @@
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            padding: 18px 15px;
+            padding: 10px 16px;
             text-align: left;
             font-size: 13px;
             position: relative;
+            vertical-align: middle;
+            line-height: 1.25;
+            min-height: 46px;
         }
 
         .header-label-main {
@@ -428,7 +431,7 @@
         
         .theme-toggle {
             background: linear-gradient(135deg, #6b7280, #4b5563);
-            border: none;
+            border: 1px solid var(--border-color);
             border-radius: 6px;
             padding: 8px;
             color: white;
@@ -440,6 +443,7 @@
             justify-content: center;
             width: 36px;
             height: 36px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
         }
         
         .theme-toggle:hover {
@@ -493,6 +497,54 @@
         
         body.light-theme .table-container {
             background-color: #deeafa;
+            border: none;
+            padding: 0 8px;
+            overflow: hidden;
+        }
+
+        body.light-theme .table {
+            border-collapse: separate;
+            border-spacing: 0 4px;
+            width: 100%;
+        }
+        
+        body.light-theme .table thead th {
+            background: transparent;
+            color: #0f172a;
+            border: none;
+            padding: 10px 16px;
+            line-height: 1.25;
+            min-height: 46px;
+            vertical-align: middle;
+        }
+
+        body.light-theme .table tbody tr {
+            background: linear-gradient(145deg, #f9fbff 0%, #eaf2fd 65%, #deeafa 100%);
+            border: 1px solid #c3d4eb;
+            border-radius: 12px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+            position: relative;
+            overflow: hidden;
+        }
+
+        body.light-theme .table tbody tr:hover {
+            background: linear-gradient(145deg, #f4f8ff 0%, #e6f0fc 70%, #dce8fa 100%);
+            box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+        }
+
+        body.light-theme .table tbody td {
+            color: #0f172a;
+            border-bottom: none;
+        }
+
+        body.light-theme .table tbody tr td:first-child {
+            border-top-left-radius: 12px;
+            border-bottom-left-radius: 12px;
+        }
+
+        body.light-theme .table tbody tr td:last-child {
+            border-top-right-radius: 12px;
+            border-bottom-right-radius: 12px;
         }
         
         body.light-theme .search-box input,
@@ -500,6 +552,17 @@
         body.light-theme .pagination button {
             background-color: #e3edfa;
             border-color: #b8c9e6;
+        }
+        
+        body.light-theme .filter-btn {
+            color: #0f172a;
+        }
+
+        body.light-theme .filter-btn:hover {
+            border-color: var(--accent-color);
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.18), rgba(56, 189, 248, 0.25));
+            color: var(--accent-color);
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
         }
         
         body.light-theme .path-info {
@@ -523,12 +586,39 @@
         body.light-theme .theme-toggle {
             background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
             color: var(--text-color) !important;
+            border: 1px solid #b8c9e6 !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
         }
         
         body.light-theme .theme-toggle:hover {
             background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
             color: var(--text-color) !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }
+        
+        /* Svetlejšie akčné tlačidlá len v svetlej téme */
+        body.light-theme .btn-download {
+            background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+            color: #f8fafc;
+            border: 1px solid #b8c9e6;
+            box-shadow: 0 6px 14px rgba(14, 165, 233, 0.22);
+        }
+
+        body.light-theme .btn-download:hover {
+            background: linear-gradient(135deg, #0284c7, #0ea5e9);
+            box-shadow: 0 8px 18px rgba(14, 165, 233, 0.28);
+        }
+
+        body.light-theme .btn-delete {
+            background: linear-gradient(135deg, #f87171, #ef4444);
+            color: #fff;
+            border: 1px solid #fca5a5;
+            box-shadow: 0 6px 14px rgba(239, 68, 68, 0.22);
+        }
+
+        body.light-theme .btn-delete:hover {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 8px 18px rgba(239, 68, 68, 0.26);
         }
         
         @media (max-width: 768px) {

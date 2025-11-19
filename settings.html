@@ -83,13 +83,6 @@
             color: #5c3c12 !important;
         }
         
-        /* Header v svetlej téme */
-        body.light-theme header {
-            background-color: rgba(255, 255, 255, 0.9) !important;
-            border-color: var(--border-color) !important;
-            backdrop-filter: blur(8px);
-        }
-        
         /* Tlačidlá v headeri - svetlá téma */
         body.light-theme .btn {
             background-color: var(--accent-color) !important;
@@ -143,6 +136,15 @@
         body.light-theme [class*="bg-orange-900/30"] { background-color: #fff1e6 !important; border-color: #f7c7a3 !important; }
         body.light-theme .text-orange-200 { color: #6b2f0a !important; }
         body.light-theme .text-orange-400 { color: #a7460f !important; }
+
+        /* Presvitný header rovnako ako v tmavej téme */
+        body.light-theme header.bg-gray-800\/50 {
+            background-color: rgba(255, 255, 255, 0.45) !important;
+            border-color: rgba(184, 201, 230, 0.7) !important;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
         /* Text v headeri - svetlá téma */
         body.light-theme header h1,
         body.light-theme header a,
@@ -158,32 +160,76 @@
         .nav-link { transition: all 0.2s ease; }
         .nav-link:hover { color: var(--accent-color); }
         .nav-link.active { color: var(--accent-color); border-bottom: 2px solid var(--accent-color); }
-        
-        /* Jemnejšie orámovanie tlačidiel v headeri (inšpirácia z backups.html) */
-        header .header-action-btn {
-            background: linear-gradient(135deg, #1f2937, #111827);
-            border: 1px solid rgba(148, 163, 184, 0.35);
-            color: #e5e7eb;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+
+        /* Tlačidlá v hlavičke (zarovnané s backups.html) */
+        .btn-back {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 14px;
         }
 
-        header .header-action-btn:hover {
-            background: linear-gradient(135deg, #243047, #161f33);
-            border-color: rgba(56, 189, 248, 0.45);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        .btn-back:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+            color: white;
+            text-decoration: none;
+        }
+
+        .theme-toggle {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+        }
+
+        .theme-toggle:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+        }
+
+        /* Svetlá téma - tlačidlá ako v backups.html */
+        body.light-theme .btn-back {
+            background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
+            color: var(--text-color) !important;
+            border: 1px solid var(--border-color) !important;
         }
         
-        body.light-theme header .header-action-btn {
-            background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
-            border: 1px solid #b8c9e6 !important;
+        body.light-theme .btn-back:hover {
+            background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
             color: var(--text-color) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }
+        
+        body.light-theme .theme-toggle {
+            background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
+            color: var(--text-color) !important;
+            border: 1px solid #b8c9e6 !important;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
         }
-
-        body.light-theme header .header-action-btn:hover {
+        
+        body.light-theme .theme-toggle:hover {
             background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
-            border-color: #b8c5d7 !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+            color: var(--text-color) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }
         
         /* Animácie */
@@ -276,11 +322,11 @@
                     <h1 class="text-lg font-semibold">Nastavenia</h1>
                 </div>
                 <div class="flex items-center gap-4">
-                    <button id="themeToggle" class="btn header-action-btn p-2 rounded-lg" title="Prepnúť tému">
+                    <button id="themeToggle" class="theme-toggle" title="Prepnúť tému">
                         <i class="fas fa-sun"></i>
                     </button>
-                    <button onclick="goBack()" class="btn header-action-btn px-4 py-2 rounded-lg">
-                        <i class="fas fa-arrow-left mr-2"></i>Späť
+                    <button onclick="goBack()" class="btn-back" title="Späť">
+                        <i class="fas fa-arrow-left"></i><span>Späť</span>
                     </button>
                 </div>
             </div>

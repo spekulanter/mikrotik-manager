@@ -161,12 +161,21 @@
         .nav-link:hover { color: var(--accent-color); }
         .nav-link.active { color: var(--accent-color); border-bottom: 2px solid var(--accent-color); }
 
+        /* Zabránime zalomeniu názvu v headeri (mobile fix) */
+        header .brand-link {
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-shrink: 0;
+        }
+
         /* Tlačidlá v hlavičke (zarovnané s backups.html) */
         .btn-back {
             background: linear-gradient(135deg, #6b7280, #4b5563);
             border: none;
             border-radius: 6px;
-            padding: 8px 16px;
+            padding: 8px 14px;
             color: white;
             text-decoration: none;
             transition: all 0.3s ease;
@@ -175,6 +184,7 @@
             gap: 6px;
             font-weight: 500;
             font-size: 14px;
+            min-height: 36px;
         }
 
         .btn-back:hover {
@@ -188,7 +198,7 @@
             background: linear-gradient(135deg, #6b7280, #4b5563);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            padding: 8px;
+            padding: 7px;
             color: white;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -211,6 +221,7 @@
             background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
             color: var(--text-color) !important;
             border: 1px solid var(--border-color) !important;
+            min-height: 36px;
         }
         
         body.light-theme .btn-back:hover {
@@ -251,6 +262,14 @@
             /* Menší header */
             header .flex {
                 height: 3.5rem; /* h-14 namiesto h-16 */
+            }
+
+            /* Skryť podnadpis Nastavenia a znížiť medzeru */
+            header h1 {
+                display: none !important;
+            }
+            header .text-gray-400 {
+                display: none !important;
             }
             
             /* Menší text a ikony */
@@ -315,7 +334,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center gap-4">
-                    <a href="/" class="text-xl font-bold text-sky-400 hover:text-sky-300 transition-colors">
+                    <a href="/" class="brand-link text-xl font-bold text-sky-400 hover:text-sky-300 transition-colors">
                         <i class="fas fa-network-wired mr-2"></i>MikroTik Manager
                     </a>
                     <span class="text-gray-400">|</span>

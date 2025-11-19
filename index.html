@@ -2681,6 +2681,9 @@ window.addEventListener('resize', () => closeAllCustomSelects());
     // Funkcia na kategorizáciu logov podľa typu
     const categorizeLogMessage = (message) => {
         const msgLower = message.toLowerCase();
+        // Údržbové udalosti: čistenie záloh a zmena FTP adresára patria do systému, nie do zálohovania
+        const maintenanceKeywords = ['záložné súbory vymazané', 'ftp adresár zmenené'];
+        if (maintenanceKeywords.some(keyword => msgLower.includes(keyword))) return 'system';
         // Pushover notifikácie majú prioritu a zostávajú v kategórii notification
         if (msgLower.includes('notifikácia') || msgLower.includes('notification') || msgLower.includes('pushover')) return 'notification';
         // Všetky zálohovacie správy vrátane "spúšťam pokročilú zálohu" (okrem Pushover)

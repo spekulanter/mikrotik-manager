@@ -18,7 +18,6 @@ import secrets
 import string
 import csv
 from contextlib import contextmanager
-import socket
 # PRIDANÉ: g pre globálny kontext požiadavky
 from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for, session, g
 from flask_socketio import SocketIO, emit
@@ -55,7 +54,7 @@ BOOLEAN_SETTING_KEYS = {
     'notify_device_offline', 'notify_device_online', 'notify_temp_critical',
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
     'notify_version_change', 'quiet_hours_enabled', 'availability_monitoring_enabled',
-    'debug_terminal', 'ftp_wol_enabled'
+    'debug_terminal'
 }
 
 SETTING_LABELS = {
@@ -74,12 +73,6 @@ SETTING_LABELS = {
     'ftp_port': 'FTP Port',
     'ftp_server': 'FTP Server',
     'ftp_username': 'FTP Používateľ',
-    'ftp_wol_enabled': 'Wake-on-LAN pri zlyhaní FTP',
-    'ftp_wol_ip': 'Wake-on-LAN IP adresa',
-    'ftp_wol_mac': 'Wake-on-LAN MAC adresa',
-    'ftp_wol_port': 'Wake-on-LAN port',
-    'ftp_wol_wait_seconds': 'Čakanie po WOL (sekundy)',
-    'ftp_wol_retry_count': 'Počet pokusov po WOL',
     'log_max_entries': 'Max zobrazených logov v okne',
     'log_retention_days': 'Uchovávanie aktivity logov (dni)',
     'memory_critical_threshold': 'Pamäť (%)',
@@ -130,9 +123,7 @@ SETTING_VALUE_SUFFIXES = {
     'log_max_entries': ' záznamov',
     'cpu_critical_threshold': ' %',
     'memory_critical_threshold': ' %',
-    'temp_critical_threshold': ' °C',
-    'ftp_wol_wait_seconds': ' s',
-    'ftp_wol_retry_count': ' pokusov'
+    'temp_critical_threshold': ' °C'
 }
 
 SCHEDULE_TYPE_LABELS = {
@@ -194,13 +185,7 @@ DEFAULT_SETTING_VALUES = {
     'backup_retention_count': '10',
     'backup_delay_seconds': '30',
     'backup_detailed_logging': 'false',
-    'ftp_port': '21',
-    'ftp_wol_enabled': 'false',
-    'ftp_wol_ip': '',
-    'ftp_wol_mac': '',
-    'ftp_wol_port': '9',
-    'ftp_wol_wait_seconds': '120',
-    'ftp_wol_retry_count': '2'
+    'ftp_port': '21'
 }
 
 # --- Nastavenie aplikácie (upravené pre HTML šablóny) ---
@@ -752,7 +737,16 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
         add_log('error', f"Chyba pri porovnávaní záloh: {e}", ip)
         return True
 
-def run_backup_logic(device, is_sequential=False):
+def run_backup_logic(device, is_sequential=False, result_holder=None):
+    """Vykoná zálohu daného zariadenia s pokročilým logovaním a kontrolou."""
+    backup_performed = False  # či sme vytvorili novú zálohu a ťahali ju z routera
+    ftp_upload_success = False  # kumulatívny výsledok oboch uploadov na FTP
+
+    def update_results():
+        if result_holder is not None:
+            result_holder['backup_performed'] = backup_performed
+            result_holder['ftp_uploaded'] = ftp_upload_success
+
     # Decrypt device password before use
     device = get_device_with_decrypted_password(device)
     ip, username, password, low_memory = device['ip'], device['username'], device['password'], device['low_memory']
@@ -806,6 +800,7 @@ def run_backup_logic(device, is_sequential=False):
             else:
                 add_log('info', f"Záloha preskočená{name_suffix} (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
             socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'skipped'})
+            update_results()
             return
         _, stdout, _ = client.exec_command('/system identity print')
         identity_match = re.search(r'name:\s*(.+)', stdout.read().decode().strip())
@@ -848,6 +843,7 @@ def run_backup_logic(device, is_sequential=False):
                 add_log('info', "Súbory úspešne stiahnuté.", ip)
             
             sftp.remove(rsc_path)
+        backup_performed = True
         with get_db_connection() as conn:
             conn.execute("UPDATE devices SET last_backup = CURRENT_TIMESTAMP WHERE id = ?", (device['id'],))
             conn.commit()
@@ -870,8 +866,34 @@ def run_backup_logic(device, is_sequential=False):
             )
 
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now().isoformat()})
-        upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.backup"), detailed_logging)
-        upload_to_ftp(os.path.join(BACKUP_DIR, f"{base_filename}.rsc"), detailed_logging)
+        upload_success_backup, error_backup = upload_to_ftp(
+            os.path.join(BACKUP_DIR, f"{base_filename}.backup"),
+            detailed_logging,
+            device_ip=ip,
+            log_success_entries=not is_sequential
+        )
+        upload_success_rsc, error_rsc = upload_to_ftp(
+            os.path.join(BACKUP_DIR, f"{base_filename}.rsc"),
+            detailed_logging,
+            device_ip=ip,
+            log_success_entries=not is_sequential
+        )
+        ftp_upload_success = upload_success_backup and upload_success_rsc
+        if not ftp_upload_success:
+            # Pushover upozornenie na zlyhanie uploadu (aj pri hromadných zálohách)
+            try:
+                error_details = '; '.join([err for err in [error_backup, error_rsc] if err])
+                error_details = error_details or 'neznáma chyba'
+                if settings.get('notify_backup_failure', 'false').lower() == 'true':
+                    send_pushover_notification(
+                        f"❌ FTP upload zálohy zlyhal pre {ip}{name_suffix}: {error_details}",
+                        title="Zlyhaný FTP upload",
+                        notification_key='notify_backup_failure'
+                    )
+            except Exception as e_push:
+                add_log('error', f"Pushover notifikácia pre zlyhaný FTP upload zlyhala: {e_push}", ip)
+        if not is_sequential and ftp_upload_success:
+            add_log('info', f"Záloha{name_suffix} nahratá na FTP server.", ip)
 
         # Vyčistenie starých záloh
         cleanup_old_backups(ip, settings, detailed_logging)
@@ -894,6 +916,7 @@ def run_backup_logic(device, is_sequential=False):
         except Exception as notif_e:
             add_log('error', f"Notifikácia o zlyhaní zálohy sa nepodarila: {notif_e}", ip)
     finally:
+        update_results()
         if client: client.close()
         if ip in backup_tasks: del backup_tasks[ip]
 
@@ -1084,28 +1107,7 @@ def get_snmp_data(ip, community='public'):
         fallback['uptime_seconds'] = '0'
         return fallback
 
-def send_wol_packet(mac_address, ip_address='255.255.255.255', port=9):
-    """
-    Odošle Wake-on-LAN magic packet. MAC podporuje zápis s dvojbodkami, pomlčkami aj bez oddeľovačov.
-    """
-    try:
-        clean_mac = mac_address.replace(':', '').replace('-', '').replace('.', '').strip()
-        if len(clean_mac) != 12:
-            raise ValueError("MAC adresa musí mať 12 hex znakov")
-        payload = bytes.fromhex('FF' * 6 + clean_mac * 16)
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.settimeout(3)
-            target_ip = ip_address or '255.255.255.255'
-            target_port = int(port) if port else 9
-            sock.sendto(payload, (target_ip, target_port))
-        add_log('info', f"WOL paket odoslaný na {target_ip}:{target_port} (MAC {mac_address}).")
-        return True
-    except Exception as e:
-        add_log('error', f"Wake-on-LAN zlyhal: {e}")
-        return False
-
-def upload_to_ftp(local_path, detailed_logging=True):
+def upload_to_ftp(local_path, detailed_logging=True, device_ip=None, log_success_entries=True):
     def parse_int(value, default):
         try:
             return int(value)
@@ -1127,46 +1129,21 @@ def upload_to_ftp(local_path, detailed_logging=True):
                     ftp.cwd(settings['ftp_directory'])
                 with open(local_path, 'rb') as f:
                     ftp.storbinary(f'STOR {os.path.basename(local_path)}', f)
-                if detailed_logging:
-                    add_log('info', f"Súbor {os.path.basename(local_path)} nahraný na FTP.")
             return True, None
         except Exception as e:
             return False, str(e)
 
     with get_db_connection() as conn:
-        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE "ftp_%"')}
+        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE \"ftp_%\"')}
 
     success, error_msg = attempt_upload(settings)
     if success:
-        return
+        if log_success_entries:
+            add_log('info', f"Súbor {os.path.basename(local_path)} nahratý na FTP server.", device_ip)
+        return True, None
 
-    wol_enabled = settings.get('ftp_wol_enabled', 'false').lower() == 'true'
-    wol_mac = settings.get('ftp_wol_mac')
-    wol_ip = settings.get('ftp_wol_ip') or '255.255.255.255'
-    wol_port = parse_int(settings.get('ftp_wol_port'), 9)
-    wait_seconds = parse_int(settings.get('ftp_wol_wait_seconds'), 120)
-    retry_count = parse_int(settings.get('ftp_wol_retry_count'), 2)
-
-    if not wol_enabled or not wol_mac:
-        add_log('error', f"FTP upload zlyhal: {error_msg}")
-        return
-
-    add_log('warning', f"FTP upload zlyhal ({error_msg}). Spúšťam Wake-on-LAN a opakovania.")
-    wol_sent = send_wol_packet(wol_mac, wol_ip, wol_port)
-    if not wol_sent:
-        add_log('error', "Wake-on-LAN sa nepodarilo odoslať, upload sa neopakoval.")
-        return
-
-    attempts_total = max(retry_count, 1)
-    for attempt in range(1, attempts_total + 1):
-        time.sleep(max(wait_seconds, 1))
-        success, error_msg = attempt_upload(settings)
-        if success:
-            add_log('info', f"FTP upload úspešný po Wake-on-LAN (pokus {attempt}/{attempts_total}).")
-            return
-        add_log('warning', f"FTP upload po Wake-on-LAN zlyhal (pokus {attempt}/{attempts_total}): {error_msg}")
-
-    add_log('error', "FTP upload zlyhal aj po Wake-on-LAN a všetkých opakovaniach.")
+    add_log('error', f"FTP upload zlyhal: {error_msg}", device_ip)
+    return False, error_msg
 
 def send_pushover_notification(message, title="MikroTik Manager", notification_key=None, default_enabled=True):
     try:
@@ -1887,6 +1864,8 @@ def run_sequential_backup(devices, delay_seconds):
     sequential_backup_running = True
     sequential_backup_total = len(devices)
     sequential_backup_current = 0
+    device_results = []
+    stopped_early = False
     
     try:
         total_devices = len(devices)
@@ -1894,6 +1873,7 @@ def run_sequential_backup(devices, delay_seconds):
             # Kontrola, či má používateľ zastaviť sekvenčnú zálohu
             if not sequential_backup_running:
                 add_log('warning', "Sekvenčná záloha bola zastavená používateľom.")
+                stopped_early = True
                 break
 
             sequential_backup_current = i
@@ -1906,9 +1886,11 @@ def run_sequential_backup(devices, delay_seconds):
             backup_tasks[ip] = True
             
             # Spustíme zálohu s príznakom sekvenčnej zálohy a počkáme na jej dokončenie
-            backup_thread = threading.Thread(target=run_backup_logic, args=(device, True))  # True = is_sequential
+            result_holder = {'backup_performed': False, 'ftp_uploaded': False}
+            backup_thread = threading.Thread(target=run_backup_logic, args=(device, True, result_holder))  # True = is_sequential
             backup_thread.start()
             backup_thread.join()  # Počkáme kým sa záloha dokončí
+            device_results.append(result_holder)
             
             # Ak nie je posledné zariadenie, počkáme pred ďalšou zálohou
             if i < total_devices and sequential_backup_running:
@@ -1921,6 +1903,13 @@ def run_sequential_backup(devices, delay_seconds):
         sequential_backup_running = False
         sequential_backup_current = 0
         sequential_backup_total = 0
+        if device_results and not stopped_early:
+            performed = [res for res in device_results if res.get('backup_performed')]
+            if performed:
+                if all(res.get('ftp_uploaded') for res in performed):
+                    add_log('info', "Všetky vytvorené zálohy boli úspešne nahraté na FTP server.")
+                else:
+                    add_log('warning', "Niektoré vytvorené zálohy sa nepodarilo nahrať na FTP server. Skontrolujte logy zariadení.")
         add_log('info', "Sekvenčná záloha dokončená.")
 
 @app.route('/api/snmp/<int:device_id>', methods=['GET'])

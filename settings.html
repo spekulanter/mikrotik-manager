@@ -738,45 +738,6 @@
                         <input type="text" id="ftp_directory" name="ftp_directory" 
                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
                     </div>
-                    <div class="lg:col-span-2">
-                        <label for="ftp_wol_enabled" class="flex items-center cursor-pointer mb-3">
-                            <input type="checkbox" id="ftp_wol_enabled" name="ftp_wol_enabled" class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
-                            <span class="ml-3 font-medium">Wake-on-LAN pri zlyhaní FTP uploadu</span>
-                        </label>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div>
-                                <label for="ftp_wol_mac" class="block mb-2 font-medium">MAC adresa NAS</label>
-                                <input type="text" id="ftp_wol_mac" name="ftp_wol_mac" 
-                                       placeholder="00:11:22:33:44:55"
-                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
-                            </div>
-                            <div>
-                                <label for="ftp_wol_ip" class="block mb-2 font-medium">WOL IP adresa</label>
-                                <input type="text" id="ftp_wol_ip" name="ftp_wol_ip" 
-                                       placeholder="255.255.255.255 (broadcast) alebo LAN IP"
-                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
-                            </div>
-                            <div>
-                                <label for="ftp_wol_port" class="block mb-2 font-medium">WOL Port</label>
-                                <input type="number" id="ftp_wol_port" name="ftp_wol_port" 
-                                       placeholder="9"
-                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
-                            </div>
-                            <div>
-                                <label for="ftp_wol_wait_seconds" class="block mb-2 font-medium">Čakanie po WOL (sekundy)</label>
-                                <input type="number" id="ftp_wol_wait_seconds" name="ftp_wol_wait_seconds" 
-                                       placeholder="120"
-                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
-                            </div>
-                            <div>
-                                <label for="ftp_wol_retry_count" class="block mb-2 font-medium">Počet pokusov po WOL</label>
-                                <input type="number" id="ftp_wol_retry_count" name="ftp_wol_retry_count" 
-                                       placeholder="2"
-                                       class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
-                            </div>
-                        </div>
-                        <small class="text-gray-400 block mt-2">Postup: najprv sa skúsí FTP upload, pri chybe sa odošle WOL, počká zadaný čas a upload sa opakuje podľa počtu pokusov.</small>
-                    </div>
                 </div>
             </div>
 

@@ -347,6 +347,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun syncStatusBarWithWebTheme() {
+        if (!::webView.isInitialized) return
+        webView.post {
+            try {
+                webView.evaluateJavascript("""
+                    (function() {
+                        const isLight = document.body.classList.contains('light-theme');
+                        if (isLight) {
+                            Android.setStatusBarColor('#cddbf2');
+                            Android.setStatusBarIcons('dark');
+                        } else {
+                            Android.setStatusBarColor('#111827');
+                            Android.setStatusBarIcons('light');
+                        }
+                    })();
+                """.trimIndent(), null)
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Failed to sync status bar theme", e)
+            }
+        }
+    }
+
     // Parse color strings: rgba(r,g,b,a), #RRGGBB, #RRGGBBAA, or #00000000 for transparent
     private fun parseAnyColor(color: String): Int {
         return try {
@@ -419,6 +441,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         enableFullscreen()
+        syncStatusBarWithWebTheme()
         
         try {
             // Restore cookie settings when app resumes
@@ -437,6 +460,7 @@ class MainActivity : AppCompatActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             enableFullscreen()
+            syncStatusBarWithWebTheme()
         }
     }
 

@@ -159,6 +159,33 @@
         .nav-link:hover { color: var(--accent-color); }
         .nav-link.active { color: var(--accent-color); border-bottom: 2px solid var(--accent-color); }
         
+        /* Jemnejšie orámovanie tlačidiel v headeri (inšpirácia z backups.html) */
+        header .header-action-btn {
+            background: linear-gradient(135deg, #1f2937, #111827);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #e5e7eb;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+        }
+
+        header .header-action-btn:hover {
+            background: linear-gradient(135deg, #243047, #161f33);
+            border-color: rgba(56, 189, 248, 0.45);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+        
+        body.light-theme header .header-action-btn {
+            background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
+            border: 1px solid #b8c9e6 !important;
+            color: var(--text-color) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        body.light-theme header .header-action-btn:hover {
+            background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
+            border-color: #b8c5d7 !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+        }
+        
         /* Animácie */
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -249,10 +276,10 @@
                     <h1 class="text-lg font-semibold">Nastavenia</h1>
                 </div>
                 <div class="flex items-center gap-4">
-                    <button id="themeToggle" class="btn bg-gray-700 hover:bg-gray-600 p-2 rounded-lg" title="Prepnúť tému">
+                    <button id="themeToggle" class="btn header-action-btn p-2 rounded-lg" title="Prepnúť tému">
                         <i class="fas fa-sun"></i>
                     </button>
-                    <button onclick="goBack()" class="btn bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg">
+                    <button onclick="goBack()" class="btn header-action-btn px-4 py-2 rounded-lg">
                         <i class="fas fa-arrow-left mr-2"></i>Späť
                     </button>
                 </div>

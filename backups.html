@@ -1041,13 +1041,35 @@
             filterAndPaginate();
         }
         
+        function normalizeSearchTerm(str) {
+            return str
+                .toLowerCase()
+                .replace(/[-_.]+/g, ' ')
+                .replace(/[^a-z0-9\s]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function removeSpaces(str) {
+            return str.replace(/\s+/g, '');
+        }
+
         function filterAndPaginate() {
-            const searchValue = document.getElementById('searchInput').value.toLowerCase();
+            const searchInput = document.getElementById('searchInput').value;
             
             // Filtruj riadky podľa typu a vyhľadávania
             filteredRows = allRows.filter(row => {
                 const filename = row.querySelector('.filename').textContent.toLowerCase();
-                const matchesSearch = filename.includes(searchValue);
+                const normalizedSearch = normalizeSearchTerm(searchInput);
+                const normalizedSearchNoSpaces = removeSpaces(normalizedSearch);
+                const normalizedFilename = normalizeSearchTerm(filename);
+                const normalizedFilenameNoSpaces = removeSpaces(normalizedFilename);
+                const matchesSearch =
+                    normalizedSearch === '' ||
+                    normalizedFilename.includes(normalizedSearch) ||
+                    (normalizedSearchNoSpaces && normalizedFilename.includes(normalizedSearchNoSpaces)) ||
+                    (normalizedSearch && normalizedFilenameNoSpaces.includes(normalizedSearch)) ||
+                    (normalizedSearchNoSpaces && normalizedFilenameNoSpaces.includes(normalizedSearchNoSpaces));
                 
                 let matchesType = true;
                 if (currentFilter === 'backup') {

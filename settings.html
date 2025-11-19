@@ -102,7 +102,47 @@
             color: #ffffff !important;
             border-color: var(--accent-color-hover) !important;
         }
-        
+        body.light-theme header button {
+            background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
+            color: var(--text-color) !important;
+            border: 1px solid #b8c9e6 !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Čierny text v tlačidlách v headeri pri svetlej téme */
+        body.light-theme header .btn {
+            color: #000000 !important;
+        }
+
+        body.light-theme header button:hover {
+            background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
+            color: var(--text-color) !important;
+            border-color: #b8c5d7 !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Lepšia čitateľnosť farebných boxov a textov v svetlej téme */
+        body.light-theme .text-gray-300 { color: #374151 !important; }
+        body.light-theme .text-gray-400 { color: #4b5563 !important; }
+        body.light-theme [class*="bg-gray-800"] { background-color: #eef2f7 !important; border-color: #cdd5e1 !important; }
+        body.light-theme [class*="bg-gray-800/50"] { background-color: #f3f6fb !important; border-color: #d8e1ee !important; }
+
+        body.light-theme [class*="bg-blue-900/30"] { background-color: #e6f0ff !important; border-color: #b7cff9 !important; }
+        body.light-theme [class*="text-blue-200"], body.light-theme .text-blue-200 { color: #1b3656 !important; }
+        body.light-theme [class*="text-blue-300"], body.light-theme .text-blue-300 { color: #0f2740 !important; }
+        body.light-theme .text-blue-400 { color: #0b3b73 !important; }
+
+        body.light-theme [class*="bg-green-900/30"] { background-color: #e8f7ed !important; border-color: #b9e3c5 !important; }
+        body.light-theme [class*="text-green-200"], body.light-theme .text-green-200 { color: #1f4d30 !important; }
+        body.light-theme [class*="text-green-300"], body.light-theme .text-green-300 { color: #195b38 !important; }
+
+        body.light-theme [class*="bg-yellow-900/30"] { background-color: #fff7e5 !important; border-color: #f2d48a !important; }
+        body.light-theme [class*="text-yellow-200"], body.light-theme .text-yellow-200 { color: #5c3c12 !important; }
+        body.light-theme .text-yellow-400 { color: #8a5c0a !important; }
+
+        body.light-theme [class*="bg-orange-900/30"] { background-color: #fff1e6 !important; border-color: #f7c7a3 !important; }
+        body.light-theme .text-orange-200 { color: #6b2f0a !important; }
+        body.light-theme .text-orange-400 { color: #a7460f !important; }
         /* Text v headeri - svetlá téma */
         body.light-theme header h1,
         body.light-theme header a,

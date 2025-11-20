@@ -1859,22 +1859,14 @@
                             // Skip progressive zoom and go directly to loading larger time range
                             const nextRange = getNextLargerRange(currentTimeRange);
                             if (nextRange !== currentTimeRange) {
-                                
-                                
-                                
-                                const subtitle = chart.options.plugins.subtitle;
-                                if (subtitle) {
-                                    subtitle.text = `Načítavam dáta pre ${nextRange}...`;
-                                    subtitle.color = '#3b82f6';
-                                }
-                                chart.update('none');
-                                
-                                // Call the existing logic that handles loading larger time range
-                                // This will trigger the "No real zoom active" path which loads fresh data
                                 window._chartTimeRanges.set(chartId, nextRange);
                                 chart.options.scales.x.min = undefined;
                                 chart.options.scales.x.max = undefined;
-                                return; // Exit progressive zoom-out, let normal logic handle the larger range
+                                
+                                // Pri malom počte bodov spustiť rozšírenie okamžite (bez druhého kliku)
+                                if (startRangeExpansionLoad(chart, chartId, nextRange)) {
+                                    return; // Async načítavanie spustené, nič viac nerob
+                                }
                             }
                         }
                         
@@ -1935,321 +1927,8 @@
                 if (currentTimeRange !== '1y') {
                     const nextRange = getNextLargerRange(currentTimeRange);
                     if (nextRange !== currentTimeRange) {
-                        
-                        
-                        // Check if we need to load fresh data for this range
-                        // This is important for charts that were previously expanded but may not have all data
-                        const shouldLoadFreshData = true; // Always load fresh data to ensure we have all available data
-                        
-                        if (shouldLoadFreshData) {
-                            
-                            
-                            // Update subtitle to show loading
-                            const subtitle = chart.options.plugins.subtitle;
-                            if (subtitle) {
-                                subtitle.text = `Načítavam všetky dostupné dáta pre ${nextRange}...`;
-                                subtitle.color = '#3b82f6';
-                            }
-                            chart.update('none');
-                        
-                            // DIRECT API APPROACH: Call API directly, bypass all monitoring.js logic
-                            if (typeof window.currentDeviceId !== 'undefined') {
-                                const deviceId = window.currentDeviceId;
-                                
-                                // Map frontend range names to backend range names
-                                const apiRange = nextRange === '30m' ? 'recent' : nextRange;
-                                
-                                // Call API directly
-                                addDebugLog(`🌐 Volám API: /api/monitoring/history/${deviceId}?range=${apiRange}`);
-                                fetch(`/api/monitoring/history/${deviceId}?range=${apiRange}`)
-                                    .then(response => {
-                                        addDebugLog(`📡 API odpoveď status: ${response.status} ${response.ok ? '✅' : '❌'}`);
-                                        return response.json();
-                                    })
-                                    .then(apiResponse => {
-                                        addDebugLog(`📦 API úspešné pre ${nextRange}, objekty: ${Object.keys(apiResponse || {}).join(', ')}`);
-                                        
-                                        // Parse the new API format - different for ping vs SNMP data
-                                        let data = null;
-                                        if (apiResponse && typeof apiResponse === 'object') {
-                                            // Find which data array to use based on chart type
-                                            if (chartId === 'pingChart' && apiResponse.ping_data) {
-                                                data = apiResponse.ping_data;
-                                            } else if ((chartId === 'cpuChart' || chartId === 'temperatureChart' || chartId === 'memoryChart') && apiResponse.snmp_data) {
-                                                // For SNMP charts, filter data by measurement type
-                                                const allSnmpData = apiResponse.snmp_data;
-                                                
-                                                if (chartId === 'cpuChart') {
-                                                    // Filter for CPU data - look for items that have CPU-related fields
-                                                    data = allSnmpData.filter(item => 
-                                                        item.cpu_load !== undefined || 
-                                                        item.cpu_usage !== undefined || 
-                                                        item.cpu !== undefined || 
-                                                        (item.oid && item.oid.includes('cpu')) ||
-                                                        (item.name && item.name.toLowerCase().includes('cpu'))
-                                                    );
-                                                } else if (chartId === 'temperatureChart') {
-                                                    // Filter for temperature data
-                                                    data = allSnmpData.filter(item => 
-                                                        item.temperature !== undefined || 
-                                                        item.temp !== undefined ||
-                                                        (item.oid && item.oid.includes('temp')) ||
-                                                        (item.name && item.name.toLowerCase().includes('temp'))
-                                                    );
-                                                } else if (chartId === 'memoryChart') {
-                                                    // Filter for memory data
-                                                    data = allSnmpData.filter(item => 
-                                                        item.memory_usage !== undefined || 
-                                                        item.memory !== undefined ||
-                                                        (item.oid && item.oid.includes('memory')) ||
-                                                        (item.name && item.name.toLowerCase().includes('mem'))
-                                                    );
-                                                }
-                                                
-                                                // If no filtered data found, use all snmp_data and let field mapping handle it
-                                                if (!data || data.length === 0) {
-                                                    data = allSnmpData;
-                                                }
-                                            }
-                                        }
-                                        
-                                        if (!data || !Array.isArray(data)) {
-                                            addDebugLog(`❌ Žiadne dáta pre ${chartId} v API odpovedi! Dostupné kľúče: ${Object.keys(apiResponse || {}).join(', ')}`);
-                                            throw new Error(`No valid data array found for ${chartId}`);
-                                        }
-                                        
-                                        addDebugLog(`✅ Našiel som ${data.length} záznamov pre ${chartId}`);
-                                        
-                                        // Update chart data directly
-                                        const targetChart = Chart.getChart(chartId);
-                                        if (targetChart && data && data.length > 0) {
-                                            
-                                            // Process data - different charts use different field names
-                                            let newData = [];
-                                            if (chartId === 'pingChart') {
-                                                newData = data.map(item => ({
-                                                    x: new Date(item.timestamp).getTime(),
-                                                    y: item.avg_latency // ping data uses avg_latency
-                                                }));
-                                            } else if (chartId === 'cpuChart') {
-                                                // CPU data from SNMP - need to check field names
-                                                addDebugLog(`🔍 Kontrolujem CPU dáta - prvý záznam: ${JSON.stringify(data[0] || {}).substring(0, 200)}`);
-                                                newData = data.map(item => {
-                                                    // Use explicit checks instead of || operator to handle 0 values correctly
-                                                    let cpuValue = undefined;
-                                                    if (item.cpu_load !== undefined) cpuValue = item.cpu_load;
-                                                    else if (item.cpu_usage !== undefined) cpuValue = item.cpu_usage;
-                                                    else if (item.cpu !== undefined) cpuValue = item.cpu;
-                                                    else if (item.value !== undefined) cpuValue = item.value;
-                                                    
-                                                    return {
-                                                        x: new Date(item.timestamp).getTime(),
-                                                        y: cpuValue
-                                                    };
-                                                });
-                                                addDebugLog(`🔍 CPU hodnoty: ${newData.slice(0, 3).map(d => `${d.x}:${d.y}`).join(', ')}...`);
-                                            } else if (chartId === 'temperatureChart') {
-                                                // Temperature data from SNMP - need to check field names
-                                                newData = data.map(item => {
-                                                    // Use explicit checks instead of || operator to handle 0 values correctly
-                                                    let tempValue = undefined;
-                                                    if (item.temperature !== undefined) tempValue = item.temperature;
-                                                    else if (item.temp !== undefined) tempValue = item.temp;
-                                                    else if (item.value !== undefined) tempValue = item.value;
-                                                    
-                                                    return {
-                                                        x: new Date(item.timestamp).getTime(),
-                                                        y: tempValue
-                                                    };
-                                                });
-                                            } else if (chartId === 'memoryChart') {
-                                                // Memory data from SNMP - handle both Used and Total Memory datasets
-                                                
-                                                // Prepare arrays for both datasets
-                                                const usedMemData = [];
-                                                const totalMemData = [];
-                                                let lastTotalMem = null;
-                                                
-                                                data.forEach((item, index) => {
-                                                    const timestamp = new Date(item.timestamp).getTime();
-                                                    
-                                                    // Used Memory (dataset 0)
-                                                    if (item.used_memory !== null && item.used_memory !== undefined) {
-                                                        const usedMem = parseFloat(item.used_memory);
-                                                        if (!isNaN(usedMem)) {
-                                                            usedMemData.push({ x: timestamp, y: usedMem });
-                                                        }
-                                                    }
-                                                    
-                                                    // Total Memory (dataset 1) with forward-fill
-                                                    if (item.total_memory !== null && item.total_memory !== undefined) {
-                                                        const totalMem = parseFloat(item.total_memory);
-                                                        if (!isNaN(totalMem)) {
-                                                            lastTotalMem = totalMem;
-                                                            totalMemData.push({ x: timestamp, y: totalMem });
-                                                        }
-                                                    } else if (lastTotalMem !== null && item.used_memory !== null && item.used_memory !== undefined) {
-                                                        // Forward-fill missing total_memory
-                                                        totalMemData.push({ x: timestamp, y: lastTotalMem });
-                                                    }
-                                                });
-                                                
-                                                addDebugLog(`🔴 Used Memory: ${usedMemData.length} bodov`);
-                                                addDebugLog(`🔵 Total Memory: ${totalMemData.length} bodov`);
-                                                
-                                                // Set both datasets
-                                                if (targetChart.data.datasets[0]) {
-                                                    targetChart.data.datasets[0].data = usedMemData;
-                                                }
-                                                if (targetChart.data.datasets[1]) {
-                                                    targetChart.data.datasets[1].data = totalMemData;
-                                                }
-                                                
-                                                // Use combined data for axis calculations
-                                                newData = [...usedMemData, ...totalMemData];
-                                            }
-                                            
-                                            // Filter valid data points
-                                            newData = newData.filter(point => 
-                                                point.y !== null && point.y !== undefined && !isNaN(point.y)
-                                            );
-                                            addDebugLog(`🔍 Po filtrovaní: ${newData.length} platných bodov (odstránené null/undefined/NaN)`);
-                                            
-                                            if (newData.length === 0 && data.length > 0) {
-                                                addDebugLog(`❌ VŠETKY dáta boli odfiltrované! Vzorka surových hodnôt: ${data.slice(0, 3).map(d => Object.keys(d).map(k => `${k}:${d[k]}`).join(',')).join(' | ')}`);
-                                            }
-                                            
-                                            addDebugLog(`🔄 Spracoval som ${newData.length}/${data.length} platných bodov pre ${chartId}`);
-                                            
-                                            // For memory chart, datasets are already set above
-                                            if (chartId !== 'memoryChart' && targetChart.data.datasets[0] && newData.length > 0) {
-                                                targetChart.data.datasets[0].data = newData;
-                                            }
-                                            
-                                            // Apply time axis optimization for all charts
-                                            if (newData.length > 0) {
-                                                // Use the same logic as applyFullTimeRangeToChart for proper time axis scaling
-                                                const nextRangeMs = getTimeRangeMs(nextRange);
-                                                const now = new Date().getTime();
-                                                
-                                                // Find actual data range
-                                                let dataMin = null;
-                                                let dataMax = null;
-                                                newData.forEach(point => {
-                                                    const x = point.x || point;
-                                                    if (dataMin === null || x < dataMin) dataMin = x;
-                                                    if (dataMax === null || x > dataMax) dataMax = x;
-                                                });
-                                                
-                                                // Apply same optimization logic as applyFullTimeRangeToChart
-                                                let requestedMin, requestedMax;
-                                                const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(nextRange);
-                                                
-                                                if (isShortRange && dataMin !== null && dataMax !== null) {
-                                                    // For short ranges: optimize to show all available data without gaps
-                                                    const dataDuration = dataMax - dataMin;
-                                                    
-                                                    if (dataDuration < nextRangeMs) {
-                                                        // If we have less data than requested range, show data-centric view
-                                                        // Add small padding (5% of data duration or minimum 2 minutes)
-                                                        const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
-                                                        requestedMin = dataMin - padding;
-                                                        requestedMax = dataMax + padding;
-                                                        addDebugLog(`📏 Krátky rozsah s málo dátami - zobrazujem od dát: ${new Date(requestedMin).toLocaleTimeString()} do ${new Date(requestedMax).toLocaleTimeString()}`);
-                                                    } else {
-                                                        // If we have enough data, show full range ending at latest data
-                                                        requestedMin = dataMax - nextRangeMs;
-                                                        requestedMax = dataMax;
-                                                        addDebugLog(`📏 Krátky rozsah s dosť dátami - zobrazujem posledných ${nextRange}: ${new Date(requestedMin).toLocaleTimeString()} do ${new Date(requestedMax).toLocaleTimeString()}`);
-                                                    }
-                                                } else {
-                                                    // For longer ranges: show full requested horizon
-                                                    requestedMin = now - nextRangeMs;
-                                                    requestedMax = now;
-                                                }
-                                                
-                                                targetChart.options.scales.x.min = requestedMin;
-                                                targetChart.options.scales.x.max = requestedMax;
-                                                
-                                                addDebugLog(`🕒 Nastavená časová os: ${new Date(requestedMin).toLocaleTimeString()} - ${new Date(requestedMax).toLocaleTimeString()}`);
-                                                
-                                                // Apply correct time formatting for the new range
-                                                updateSingleChartTimeFormat(targetChart, requestedMin, requestedMax);
-                                                
-                                                // Update subtitle with proper data coverage info
-                                                let subtitle = targetChart.options.plugins.subtitle;
-                                                if (subtitle && dataMin !== null && dataMax !== null) {
-                                                    const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
-                                                    const requestedDays = Math.ceil(nextRangeMs / (1000 * 60 * 60 * 24));
-                                                    
-                                                    if (isShortRange && dataDays < requestedDays) {
-                                                        if (dataDays < 1) {
-                                                            const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
-                                                            subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
-                                                        } else {
-                                                            subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
-                                                        }
-                                                        subtitle.color = '#10b981'; // Green for optimized view
-                                                    } else {
-                                                        subtitle.text = `Načítané ${newData.length} bodov za ${nextRange}`;
-                                                        subtitle.color = '#9ca3af';
-                                                    }
-                                                } else if (subtitle) {
-                                                    subtitle.text = `Načítané ${newData.length} bodov za ${nextRange}`;
-                                                    subtitle.color = '#9ca3af';
-                                                }
-                                                
-                                                // Update visual time range indicator to reflect the new range
-                                                // Don't reset _originalActiveButton here - we're expanding to larger range
-                                                updateTimeRangeButtonsVisually(nextRange);
-                                                
-                                                // Update chart
-                                                targetChart.update('active');
-                                                
-                                                // Apply Y-axis optimization for ping chart after loading new data
-                                                if (chartId === 'pingChart' && typeof window.applyYAxisOptimization === 'function') {
-                                                    setTimeout(() => {
-                                                        window.applyYAxisOptimization(targetChart, 'ping');
-                                                    }, 100);
-                                                }
-                                                
-                                                addDebugLog(`✅ Úspešne aktualizovaný graf ${chartId} na ${nextRange} s ${newData.length} bodmi`);
-                                                
-                                                // CRITICAL: Update per-chart time range instead of global
-                                                // Each chart maintains its own independent time range state
-                                                window._chartTimeRanges.set(chartId, nextRange);
-                                                addDebugLog(`🔄 Aktualizovaný per-chart rozsah pre ${chartId}: ${nextRange}`);
-                                            } else {
-                                                addDebugLog(`⚠️ Žiadne platné dáta na aktualizáciu grafu ${chartId} (${newData.length} bodov)`);
-                                                
-                                                const subtitle = targetChart.options.plugins.subtitle;
-                                                if (subtitle) {
-                                                    subtitle.text = `Žiadne dáta pre ${nextRange}`;
-                                                    subtitle.color = '#fbbf24';
-                                                }
-                                            }
-                                        } else {
-                                            addDebugLog(`❌ Graf ${chartId} nenájdený alebo žiadne dáta`);
-                                            
-                                        }
-                                    })
-                                    .catch(error => {
-                                        addDebugLog(`💥 API volanie zlyhalo: ${error.message}`);
-                                        console.error('Direct API call failed:', error);
-                                        
-                                        const subtitle = chart.options.plugins.subtitle;
-                                        if (subtitle) {
-                                            subtitle.text = 'Chyba pri načítavaní dát - skúste znovu';
-                                            subtitle.color = '#ef4444';
-                                        }
-                                    });
-                                
-                                return; // Exit early
-                            } else {
-                                
-                            }
-                        } else {
-                            
+                        if (startRangeExpansionLoad(chart, chartId, nextRange)) {
+                            return; // Async načítavanie spustené, ukončiť handler
                         }
                     } else {
                         addDebugLog(`⚠️ Už na maximálnom rozsahu (${currentTimeRange})`);
@@ -3106,6 +2785,311 @@
                 return ranges[currentIndex + 1];
             }
             return '1y'; // Maximum range
+        }
+
+        // Trigger loading of a wider time range directly from the API
+        function startRangeExpansionLoad(chart, chartId, targetRange) {
+            if (!chart || !targetRange) return false;
+
+            const subtitle = chart.options?.plugins?.subtitle;
+            if (subtitle) {
+                subtitle.text = `Načítavam všetky dostupné dáta pre ${targetRange}...`;
+                subtitle.color = '#3b82f6';
+            }
+            chart.update('none');
+
+            if (!window.currentDeviceId) {
+                return false;
+            }
+
+            const deviceId = window.currentDeviceId;
+            const apiRange = targetRange === '30m' ? 'recent' : targetRange;
+
+            addDebugLog(`🌐 Volám API: /api/monitoring/history/${deviceId}?range=${apiRange}`);
+            fetch(`/api/monitoring/history/${deviceId}?range=${apiRange}`)
+                .then(response => {
+                    addDebugLog(`📡 API odpoveď status: ${response.status} ${response.ok ? '✅' : '❌'}`);
+                    return response.json();
+                })
+                .then(apiResponse => {
+                    addDebugLog(`📦 API úspešné pre ${targetRange}, objekty: ${Object.keys(apiResponse || {}).join(', ')}`);
+                    
+                    // Parse the new API format - different for ping vs SNMP data
+                    let data = null;
+                    if (apiResponse && typeof apiResponse === 'object') {
+                        // Find which data array to use based on chart type
+                        if (chartId === 'pingChart' && apiResponse.ping_data) {
+                            data = apiResponse.ping_data;
+                        } else if ((chartId === 'cpuChart' || chartId === 'temperatureChart' || chartId === 'memoryChart') && apiResponse.snmp_data) {
+                            // For SNMP charts, filter data by measurement type
+                            const allSnmpData = apiResponse.snmp_data;
+                            
+                            if (chartId === 'cpuChart') {
+                                // Filter for CPU data - look for items that have CPU-related fields
+                                data = allSnmpData.filter(item => 
+                                    item.cpu_load !== undefined || 
+                                    item.cpu_usage !== undefined || 
+                                    item.cpu !== undefined || 
+                                    (item.oid && item.oid.includes('cpu')) ||
+                                    (item.name && item.name.toLowerCase().includes('cpu'))
+                                );
+                            } else if (chartId === 'temperatureChart') {
+                                // Filter for temperature data
+                                data = allSnmpData.filter(item => 
+                                    item.temperature !== undefined || 
+                                    item.temp !== undefined ||
+                                    (item.oid && item.oid.includes('temp')) ||
+                                    (item.name && item.name.toLowerCase().includes('temp'))
+                                );
+                            } else if (chartId === 'memoryChart') {
+                                // Filter for memory data
+                                data = allSnmpData.filter(item => 
+                                    item.memory_usage !== undefined || 
+                                    item.memory !== undefined ||
+                                    (item.oid && item.oid.includes('memory')) ||
+                                    (item.name && item.name.toLowerCase().includes('mem'))
+                                );
+                            }
+                            
+                            // If no filtered data found, use all snmp_data and let field mapping handle it
+                            if (!data || data.length === 0) {
+                                data = allSnmpData;
+                            }
+                        }
+                    }
+                    
+                    if (!data || !Array.isArray(data)) {
+                        addDebugLog(`❌ Žiadne dáta pre ${chartId} v API odpovedi! Dostupné kľúče: ${Object.keys(apiResponse || {}).join(', ')}`);
+                        throw new Error(`No valid data array found for ${chartId}`);
+                    }
+                    
+                    addDebugLog(`✅ Našiel som ${data.length} záznamov pre ${chartId}`);
+                    
+                    // Update chart data directly
+                    const targetChart = Chart.getChart(chartId);
+                    if (targetChart && data && data.length > 0) {
+                        
+                        // Process data - different charts use different field names
+                        let newData = [];
+                        if (chartId === 'pingChart') {
+                            newData = data.map(item => ({
+                                x: new Date(item.timestamp).getTime(),
+                                y: item.avg_latency // ping data uses avg_latency
+                            }));
+                        } else if (chartId === 'cpuChart') {
+                            // CPU data from SNMP - need to check field names
+                            addDebugLog(`🔍 Kontrolujem CPU dáta - prvý záznam: ${JSON.stringify(data[0] || {}).substring(0, 200)}`);
+                            newData = data.map(item => {
+                                // Use explicit checks instead of || operator to handle 0 values correctly
+                                let cpuValue = undefined;
+                                if (item.cpu_load !== undefined) cpuValue = item.cpu_load;
+                                else if (item.cpu_usage !== undefined) cpuValue = item.cpu_usage;
+                                else if (item.cpu !== undefined) cpuValue = item.cpu;
+                                else if (item.value !== undefined) cpuValue = item.value;
+                                
+                                return {
+                                    x: new Date(item.timestamp).getTime(),
+                                    y: cpuValue
+                                };
+                            });
+                            addDebugLog(`🔍 CPU hodnoty: ${newData.slice(0, 3).map(d => `${d.x}:${d.y}`).join(', ')}...`);
+                        } else if (chartId === 'temperatureChart') {
+                            // Temperature data from SNMP - need to check field names
+                            newData = data.map(item => {
+                                // Use explicit checks instead of || operator to handle 0 values correctly
+                                let tempValue = undefined;
+                                if (item.temperature !== undefined) tempValue = item.temperature;
+                                else if (item.temp !== undefined) tempValue = item.temp;
+                                else if (item.value !== undefined) tempValue = item.value;
+                                
+                                return {
+                                    x: new Date(item.timestamp).getTime(),
+                                    y: tempValue
+                                };
+                            });
+                        } else if (chartId === 'memoryChart') {
+                            // Memory data from SNMP - handle both Used and Total Memory datasets
+                            
+                            // Prepare arrays for both datasets
+                            const usedMemData = [];
+                            const totalMemData = [];
+                            let lastTotalMem = null;
+                            
+                            data.forEach((item, index) => {
+                                const timestamp = new Date(item.timestamp).getTime();
+                                
+                                // Used Memory (dataset 0)
+                                if (item.used_memory !== null && item.used_memory !== undefined) {
+                                    const usedMem = parseFloat(item.used_memory);
+                                    if (!isNaN(usedMem)) {
+                                        usedMemData.push({ x: timestamp, y: usedMem });
+                                    }
+                                }
+                                
+                                // Total Memory (dataset 1) with forward-fill
+                                if (item.total_memory !== null && item.total_memory !== undefined) {
+                                    const totalMem = parseFloat(item.total_memory);
+                                    if (!isNaN(totalMem)) {
+                                        lastTotalMem = totalMem;
+                                        totalMemData.push({ x: timestamp, y: totalMem });
+                                    }
+                                } else if (lastTotalMem !== null && item.used_memory !== null && item.used_memory !== undefined) {
+                                    // Forward-fill missing total_memory
+                                    totalMemData.push({ x: timestamp, y: lastTotalMem });
+                                }
+                            });
+                            
+                            addDebugLog(`🔴 Used Memory: ${usedMemData.length} bodov`);
+                            addDebugLog(`🔵 Total Memory: ${totalMemData.length} bodov`);
+                            
+                            // Set both datasets
+                            if (targetChart.data.datasets[0]) {
+                                targetChart.data.datasets[0].data = usedMemData;
+                            }
+                            if (targetChart.data.datasets[1]) {
+                                targetChart.data.datasets[1].data = totalMemData;
+                            }
+                            
+                            // Use combined data for axis calculations
+                            newData = [...usedMemData, ...totalMemData];
+                        }
+                        
+                        // Filter valid data points
+                        newData = newData.filter(point => 
+                            point.y !== null && point.y !== undefined && !isNaN(point.y)
+                        );
+                        addDebugLog(`🔍 Po filtrovaní: ${newData.length} platných bodov (odstránené null/undefined/NaN)`);
+                        
+                        if (newData.length === 0 && data.length > 0) {
+                            addDebugLog(`❌ VŠETKY dáta boli odfiltrované! Vzorka surových hodnôt: ${data.slice(0, 3).map(d => Object.keys(d).map(k => `${k}:${d[k]}`).join(',')).join(' | ')}`);
+                        }
+                        
+                        addDebugLog(`🔄 Spracoval som ${newData.length}/${data.length} platných bodov pre ${chartId}`);
+                        
+                        // For memory chart, datasets are already set above
+                        if (chartId !== 'memoryChart' && targetChart.data.datasets[0] && newData.length > 0) {
+                            targetChart.data.datasets[0].data = newData;
+                        }
+                        
+                        // Apply time axis optimization for all charts
+                        if (newData.length > 0) {
+                            // Use the same logic as applyFullTimeRangeToChart for proper time axis scaling
+                            const targetRangeMs = getTimeRangeMs(targetRange);
+                            const now = new Date().getTime();
+                            
+                            // Find actual data range
+                            let dataMin = null;
+                            let dataMax = null;
+                            newData.forEach(point => {
+                                const x = point.x || point;
+                                if (dataMin === null || x < dataMin) dataMin = x;
+                                if (dataMax === null || x > dataMax) dataMax = x;
+                            });
+                            
+                            // Apply same optimization logic as applyFullTimeRangeToChart
+                            let requestedMin, requestedMax;
+                            const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(targetRange);
+                            
+                            if (isShortRange && dataMin !== null && dataMax !== null) {
+                                // For short ranges: optimize to show all available data without gaps
+                                const dataDuration = dataMax - dataMin;
+                                
+                                if (dataDuration < targetRangeMs) {
+                                    // If we have less data than requested range, show data-centric view
+                                    // Add small padding (5% of data duration or minimum 2 minutes)
+                                    const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
+                                    requestedMin = dataMin - padding;
+                                    requestedMax = dataMax + padding;
+                                    addDebugLog(`📏 Krátky rozsah s málo dátami - zobrazujem od dát: ${new Date(requestedMin).toLocaleTimeString()} do ${new Date(requestedMax).toLocaleTimeString()}`);
+                                } else {
+                                    // If we have enough data, show full range ending at latest data
+                                    requestedMin = dataMax - targetRangeMs;
+                                    requestedMax = dataMax;
+                                    addDebugLog(`📏 Krátky rozsah s dosť dátami - zobrazujem posledných ${targetRange}: ${new Date(requestedMin).toLocaleTimeString()} do ${new Date(requestedMax).toLocaleTimeString()}`);
+                                }
+                            } else {
+                                // For longer ranges: show full requested horizon
+                                requestedMin = now - targetRangeMs;
+                                requestedMax = now;
+                            }
+                            
+                            targetChart.options.scales.x.min = requestedMin;
+                            targetChart.options.scales.x.max = requestedMax;
+                            
+                            addDebugLog(`🕒 Nastavená časová os: ${new Date(requestedMin).toLocaleTimeString()} - ${new Date(requestedMax).toLocaleTimeString()}`);
+                            
+                            // Apply correct time formatting for the new range
+                            updateSingleChartTimeFormat(targetChart, requestedMin, requestedMax);
+                            
+                            // Update subtitle with proper data coverage info
+                            let subtitle = targetChart.options.plugins.subtitle;
+                            if (subtitle && dataMin !== null && dataMax !== null) {
+                                const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
+                                const requestedDays = Math.ceil(targetRangeMs / (1000 * 60 * 60 * 24));
+                                
+                                if (isShortRange && dataDays < requestedDays) {
+                                    if (dataDays < 1) {
+                                        const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
+                                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
+                                    } else {
+                                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
+                                    }
+                                    subtitle.color = '#10b981'; // Green for optimized view
+                                } else {
+                                    subtitle.text = `Načítané ${newData.length} bodov za ${targetRange}`;
+                                    subtitle.color = '#9ca3af';
+                                }
+                            } else if (subtitle) {
+                                subtitle.text = `Načítané ${newData.length} bodov za ${targetRange}`;
+                                subtitle.color = '#9ca3af';
+                            }
+                            
+                            // Update visual time range indicator to reflect the new range
+                            // Don't reset _originalActiveButton here - we're expanding to larger range
+                            updateTimeRangeButtonsVisually(targetRange);
+                            
+                            // Update chart
+                            targetChart.update('active');
+                            
+                            // Apply Y-axis optimization for ping chart after loading new data
+                            if (chartId === 'pingChart' && typeof window.applyYAxisOptimization === 'function') {
+                                setTimeout(() => {
+                                    window.applyYAxisOptimization(targetChart, 'ping');
+                                }, 100);
+                            }
+                            
+                            addDebugLog(`✅ Úspešne aktualizovaný graf ${chartId} na ${targetRange} s ${newData.length} bodmi`);
+                            
+                            // CRITICAL: Update per-chart time range instead of global
+                            // Each chart maintains its own independent time range state
+                            window._chartTimeRanges.set(chartId, targetRange);
+                            addDebugLog(`🔄 Aktualizovaný per-chart rozsah pre ${chartId}: ${targetRange}`);
+                        } else {
+                            addDebugLog(`⚠️ Žiadne platné dáta na aktualizáciu grafu ${chartId} (${newData.length} bodov)`);
+                            
+                            const subtitle = targetChart.options.plugins.subtitle;
+                            if (subtitle) {
+                                subtitle.text = `Žiadne dáta pre ${targetRange}`;
+                                subtitle.color = '#fbbf24';
+                            }
+                        }
+                    } else {
+                        addDebugLog(`❌ Graf ${chartId} nenájdený alebo žiadne dáta`);
+                        
+                    }
+                })
+                .catch(error => {
+                    addDebugLog(`💥 API volanie zlyhalo: ${error.message}`);
+                    console.error('Direct API call failed:', error);
+                    
+                    const subtitle = chart.options.plugins.subtitle;
+                    if (subtitle) {
+                        subtitle.text = 'Chyba pri načítavaní dát - skúste znovu';
+                        subtitle.color = '#ef4444';
+                    }
+                });
+
+            return true;
         }
 
         // Load additional data when zoom-out requires larger time range

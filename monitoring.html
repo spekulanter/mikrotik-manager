@@ -3048,6 +3048,11 @@
                             // Don't reset _originalActiveButton here - we're expanding to larger range
                             updateTimeRangeButtonsVisually(targetRange);
                             
+                            // Persist the expanded range so F5 reload keeps it
+                            if (typeof window.persistZoomRange === 'function') {
+                                window.persistZoomRange(targetRange);
+                            }
+                            
                             // Update chart
                             targetChart.update('active');
                             

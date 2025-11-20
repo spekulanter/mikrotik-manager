@@ -478,6 +478,14 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         localStorage.setItem('monitoring_state', JSON.stringify(state));
     };
+
+    // Persist time range change triggered by zoom-out expansions (outside standard buttons)
+    const persistZoomRange = (range) => {
+        if (!range) return;
+        currentTimeRange = range;
+        window.currentTimeRange = range;
+        saveState();
+    };
     
     const loadState = () => {
         try {
@@ -3817,4 +3825,5 @@ document.addEventListener('DOMContentLoaded', () => {
     window.loadHistoricalData = loadHistoricalData;
     window.updateChartTimeFormats = updateChartTimeFormats;
     window.setActiveTimeRange = setActiveTimeRange;
+    window.persistZoomRange = persistZoomRange;
 });

@@ -243,10 +243,11 @@
             position: relative;
             width: 100%;
             user-select: none;
+            overflow: visible;
         }
 
         .custom-select.open {
-            z-index: 1500;
+            z-index: 3000;
         }
 
         @media (min-width: 1024px) {
@@ -315,7 +316,7 @@
             display: none;
             max-height: 260px;
             overflow-y: auto;
-            z-index: 1400;
+            z-index: 3050;
         }
 
         .custom-select.open .custom-select-dropdown {
@@ -1682,7 +1683,7 @@
                     
                     <!-- Filtre pre logy -->
                     <div id="logsFilters" class="mb-3 space-y-2 hidden">
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-2 gap-2 relative z-10">
                             <select id="deviceFilter" class="p-1 rounded bg-gray-800 border border-gray-600 text-xs" data-custom-select data-placeholder="Všetky zariadenia" data-expand-dropdown="desktop">
                                 <option value="">Všetky zariadenia</option>
                             </select>
@@ -1731,7 +1732,7 @@
                 
                 <!-- Mobilné filtre pre logy -->
                 <div id="logsFiltersMobile" class="mb-3 space-y-2 hidden">
-                    <div class="grid grid-cols-1 gap-2">
+                    <div class="grid grid-cols-1 gap-2 relative z-10">
                         <select id="deviceFilterMobile" class="p-2 rounded bg-gray-800 border border-gray-600 text-sm" data-custom-select data-placeholder="Všetky zariadenia">
                             <option value="">Všetky zariadenia</option>
                         </select>
@@ -2130,13 +2131,13 @@
                 </div>
             </div>
             <div id="logsModalFilters" class="mb-4 hidden">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-            <select id="deviceFilterModal" class="p-2 rounded bg-gray-900 border border-gray-700 text-sm" data-custom-select data-placeholder="Všetky zariadenia">
-                <option value="">Všetky zariadenia</option>
-            </select>
-            <select id="typeFilterModal" class="p-2 rounded bg-gray-900 border border-gray-700 text-sm" data-custom-select data-placeholder="Všetky typy">
-                <option value="">Všetky typy</option>
-                <option value="backup">Zálohovanie</option>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3 relative z-10">
+                    <select id="deviceFilterModal" class="p-2 rounded bg-gray-900 border border-gray-700 text-sm" data-custom-select data-placeholder="Všetky zariadenia">
+                        <option value="">Všetky zariadenia</option>
+                    </select>
+                    <select id="typeFilterModal" class="p-2 rounded bg-gray-900 border border-gray-700 text-sm" data-custom-select data-placeholder="Všetky typy">
+                        <option value="">Všetky typy</option>
+                        <option value="backup">Zálohovanie</option>
                         <option value="notification">Notifikácie</option>
                         <option value="status">Online/Offline</option>
                         <option value="device">Zariadenie</option>

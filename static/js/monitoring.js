@@ -3855,6 +3855,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateChartsTheme = () => {
         if (!charts || Object.keys(charts).length === 0) return;
 
+        // First, update dataset colors (ping online/offline, CPU, temp, memory)
+        applyChartThemeToCharts();
+
+        // Then update text colors (labels, axes, subtitles)
         const textColors = getChartTextColors();
 
         Object.values(charts).forEach(chart => {

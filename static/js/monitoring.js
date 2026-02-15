@@ -990,14 +990,14 @@ document.addEventListener('DOMContentLoaded', () => {
             case '1y':
                 return {
                     displayFormats: {
-                        day: 'dd/MM',
+                        week: 'dd/MM',
                         month: 'MM/yy',
                         year: 'yyyy'
                     },
                     tooltipFormat: 'dd/MM/yyyy',
-                    unit: 'month',
-                    stepSize: 1,
-                    maxTicksLimit: 12
+                    unit: 'week',          // Changed from 'month' to 'week' to prevent alignment issues
+                    stepSize: 4,           // Show every 4 weeks (≈1 month)
+                    maxTicksLimit: 13      // ~13 months in a year
                 };
             default:
                 return {
@@ -1049,6 +1049,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 scales: {
                     x: {
                         type: 'time',
+                        offset: false,          // Prevent offset padding that shifts data position
+                        bounds: 'ticks',        // Changed from 'data' to 'ticks' for consistent grid lines
                         time: {
                             displayFormats: timeFormats.displayFormats,
                             tooltipFormat: timeFormats.tooltipFormat,
@@ -1056,11 +1058,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             stepSize: timeFormats.stepSize
                         },
                         ticks: {
+                            source: 'auto',     // Changed from 'data' to 'auto' for symmetric distribution
                             color: '#9ca3af',
-                            maxTicksLimit: timeFormats.maxTicksLimit || 8
+                            maxTicksLimit: timeFormats.maxTicksLimit || 8,
+                            maxRotation: 0,     // Prevent label rotation
+                            minRotation: 0,     // Keep labels horizontal
+                            autoSkip: true,     // Auto-skip overlapping labels
+                            autoSkipPadding: 10 // Padding between labels
                         },
                         grid: {
-                            color: '#374151'
+                            color: '#374151',
+                            drawBorder: false
                         }
                     },
                     y: {
@@ -2601,6 +2609,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ch.options.scales.x.min = minTs;
                 ch.options.scales.x.max = maxTs;
                 ch.options.scales.x.offset = false;
+                ch.options.scales.x.bounds = 'ticks';
                 // Pre istotu znovu prirad formáty (môže zaniknúť pri konfliktných updateoch)
                 const tf = getTimeFormats(range);
                 if (ch.options.scales.x.time) {
@@ -2654,6 +2663,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ch.options.scales.x.max = now;
                 // Pre istotu vypneme offset aby nezaoblil mimo rozsah
                 ch.options.scales.x.offset = false;
+                ch.options.scales.x.bounds = 'ticks';
             });
             // Aktualizácie vykonáme v jednom ďalšom frame kvôli výkonu
             requestAnimationFrame(() => {

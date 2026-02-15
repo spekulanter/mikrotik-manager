@@ -2301,8 +2301,12 @@
             // Set axis to show the optimized range
             chart.options.scales.x.min = requestedMin;
             chart.options.scales.x.max = requestedMax;
-            
-            // NOTE: Time formatting is handled by monitoring.js updateChartTimeFormats() 
+
+            // CRITICAL: Set offset and bounds to prevent data misalignment (especially for 1y range with unit:'week')
+            chart.options.scales.x.offset = false;     // Prevent offset padding that shifts data
+            chart.options.scales.x.bounds = 'ticks';   // Use 'ticks' for consistent grid lines (not 'data')
+
+            // NOTE: Time formatting is handled by monitoring.js updateChartTimeFormats()
             // during global time range changes. Only update time formats during zoom operations.
             
             // Update subtitle to show data coverage within the displayed range
@@ -2428,13 +2432,13 @@
                         maxTicksLimit: 12
                     };
                 } else {
-                    // 1y range - show monthly markers
+                    // 1y range - show weekly markers (changed from monthly to fix alignment issues)
                     timeFormats = {
                         displayFormats: { week: 'dd/MM', month: 'MM/yy', quarter: 'MM/yy' },
                         tooltipFormat: 'dd/MM/yyyy',
-                        unit: 'month',
-                        stepSize: 1,
-                        maxTicksLimit: 12
+                        unit: 'week',      // Changed from 'month' to 'week' to prevent data misalignment
+                        stepSize: 4,       // Show every 4 weeks (≈1 month)
+                        maxTicksLimit: 13  // ~13 months in a year
                     };
                 }
             } else if (diffMinutes <= 30) {

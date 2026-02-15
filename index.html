@@ -2400,7 +2400,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.querySelector(`[data-id="${id}"]`);
         if (card) {
             card.querySelector('.backup-btn i').classList.remove('spinning');
-            if (last_backup) card.querySelector('.last-backup-val').textContent = new Date(last_backup).toLocaleString('sk-SK');
+            if (last_backup) card.querySelector('.last-backup-val').textContent = formatLocalDate(last_backup);
             
             // Ak bola záloha zastavená, zobrazíme správu
             if (status === 'stopped') {
@@ -2506,7 +2506,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.last_backup) {
             const backupEl = card.querySelector('.last-backup-val');
             if (backupEl) {
-                backupEl.textContent = new Date(data.last_backup).toLocaleString('sk-SK');
+                backupEl.textContent = formatLocalDate(data.last_backup);
             }
         }
     };

@@ -9,7 +9,7 @@ import time
 import json
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import subprocess
 import re
 import platform
@@ -865,7 +865,7 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
                 notification_key='notify_backup_success'
             )
 
-        socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now().isoformat()})
+        socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now(timezone.utc).isoformat()})
         upload_success_backup, error_backup = upload_to_ftp(
             os.path.join(BACKUP_DIR, f"{base_filename}.backup"),
             detailed_logging,
@@ -1750,9 +1750,22 @@ def get_2fa_status():
 @login_required
 def handle_devices():
     with get_db_connection() as conn:
-        if request.method == 'GET': 
+        if request.method == 'GET':
             # Include all necessary fields including status and last_snmp_data
-            return jsonify([dict(row) for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY name').fetchall()])
+            devices = []
+            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY name').fetchall():
+                device = dict(row)
+                # Convert last_backup to ISO format with UTC timezone for consistent parsing across browsers
+                if device.get('last_backup'):
+                    try:
+                        # SQLite CURRENT_TIMESTAMP returns UTC time in format '2026-02-15 12:22:02'
+                        dt = datetime.fromisoformat(device['last_backup'].replace(' ', 'T'))
+                        # Mark as UTC by adding timezone info
+                        device['last_backup'] = dt.replace(tzinfo=timezone.utc).isoformat()
+                    except:
+                        pass  # Keep original value if conversion fails
+                devices.append(device)
+            return jsonify(devices)
         if request.method == 'POST':
             data = request.json
             try:

@@ -2521,6 +2521,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Flag pre potlačenie automatického skrolovania počas refresh operácie
     let suppressAutoScroll = false;
 
+    // Centralized log data store - single source of truth
+    let logsDataCache = [];
+
     // Globálne nastavenia načítané zo servera
     let globalSettings = {
         log_retention_days: 30, // default hodnota
@@ -2720,8 +2723,9 @@ window.addEventListener('resize', () => closeAllCustomSelects());
     };
 
     const syncLogsModalContent = () => {
-        if (!logsModal || logsModal.classList.contains('hidden') || !logsModalList) return;
-        logsModalList.innerHTML = logsContainer.innerHTML;
+        // DEPRECATED: Modal now manages its own content independently
+        // This function is kept for backward compatibility but does nothing
+        // Data consistency is maintained through shared logsDataCache
     };
 
     const setFilterPanelVisibility = (panel, button, visible) => {
@@ -2795,54 +2799,83 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         }
         document.body.classList.add('modal-open');
         closeAllCustomSelects();
-        syncLogsModalContent();
+
+        // NEW: Render from cache instead of HTML copy via syncLogsModalContent()
+        renderLogsFromCache('modal');
+        applyLogFilters(); // Apply current filters to modal
+
         syncFilterControls();
     };
 
-    const addLogToContainer = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
+    // Extract log element creation logic for reuse
+    const createLogElement = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
         // Offline správy budú warning
         if (message.toLowerCase().includes('offline') || message.toLowerCase().includes('nedostupné')) {
             level = 'warning';
         }
-        
+
         const logType = categorizeLogMessage(message);
         const displayMessage = sanitizeLogMessageByType(logType, message);
-        const createLogEntry = () => {
-            const logEntry = document.createElement('div');
-            logEntry.className = `log-entry p-2 border-l-4 log-${level} bg-gray-800 text-sm`;
-            logEntry.setAttribute('data-level', level);
-            logEntry.setAttribute('data-device', device_ip || '');
-            logEntry.setAttribute('data-type', logType);
-            logEntry.setAttribute('data-timestamp', timestamp);
-            
-            logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${displayMessage}</p>`;
-            return logEntry;
-        };
-        
-        // Desktop logs - pridávame na začiatok
-        const desktopLogEntry = createLogEntry();
-        logsContainer.prepend(desktopLogEntry);
-        
-        // Mobile logs - pridávame na začiatok
-        const mobileLogsContainer = document.getElementById('logsContainerMobile');
-        if (mobileLogsContainer) {
-            const mobileLogEntry = createLogEntry();
-            mobileLogsContainer.prepend(mobileLogEntry);
-            
-            // Udržujeme maximálne počet logov podľa nastavení (default 1000 ak nie je nastavené)
-            const maxLogs = globalSettings.log_retention_days ? Math.min(globalSettings.log_retention_days * 50, 5000) : 1000;
-            while (mobileLogsContainer.children.length > maxLogs) {
-                mobileLogsContainer.lastChild.remove();
-            }
+
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry p-2 border-l-4 log-${level} bg-gray-800 text-sm`;
+        logEntry.setAttribute('data-level', level);
+        logEntry.setAttribute('data-device', device_ip || '');
+        logEntry.setAttribute('data-type', logType);
+        logEntry.setAttribute('data-timestamp', timestamp);
+
+        logEntry.innerHTML = `<p><strong class="text-gray-400">${new Date(timestamp).toLocaleString('sk-SK')}</strong> ${device_ip ? `<span class="font-mono text-sky-400">${device_ip}</span>` : ''}: ${displayMessage}</p>`;
+
+        return logEntry;
+    };
+
+    const addLogToContainer = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
+        // NEW: Add to data cache first (maintain single source of truth)
+        logsDataCache.unshift({ level, message, device_ip, timestamp });
+
+        // Trim cache to reasonable size
+        const maxLogs = globalSettings.log_retention_days
+            ? Math.min(globalSettings.log_retention_days * 50, 5000)
+            : 1000;
+        if (logsDataCache.length > maxLogs) {
+            logsDataCache.pop();
         }
-        
-        // Udržujeme maximálne počet logov podľa nastavení (default 1000 ak nie je nastavené)
-        const maxLogs = globalSettings.log_retention_days ? Math.min(globalSettings.log_retention_days * 50, 5000) : 1000;
+
+        // Desktop logs - pridávame na začiatok
+        const desktopLogEntry = createLogElement(level, message, device_ip, timestamp);
+        logsContainer.prepend(desktopLogEntry);
+
         while (logsContainer.children.length > maxLogs) {
             logsContainer.lastChild.remove();
         }
 
-        syncLogsModalContent();
+        // Mobile logs - pridávame na začiatok
+        const mobileLogsContainer = document.getElementById('logsContainerMobile');
+        if (mobileLogsContainer) {
+            const mobileLogEntry = createLogElement(level, message, device_ip, timestamp);
+            mobileLogsContainer.prepend(mobileLogEntry);
+
+            while (mobileLogsContainer.children.length > maxLogs) {
+                mobileLogsContainer.lastChild.remove();
+            }
+        }
+
+        // NEW: If modal is open, add to modal too (maintains consistency)
+        if (logsModal && !logsModal.classList.contains('hidden') && logsModalList) {
+            const modalLogEntry = createLogElement(level, message, device_ip, timestamp);
+            logsModalList.prepend(modalLogEntry);
+
+            while (logsModalList.children.length > maxLogs) {
+                logsModalList.lastChild.remove();
+            }
+        }
+
+        // Auto-scroll for desktop (if not filtered and not suppressed)
+        if (!desktopLogEntry.classList.contains('filtered') && !suppressAutoScroll) {
+            desktopLogEntry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Note: syncLogsModalContent() removed - modal now manages its own content independently
     };
 
     // Globálna pamäť pre dôležité správy - ODSTRÁNENÁ (zjednodušujeme logging)
@@ -2995,44 +3028,42 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         try {
             // Potlačíme automatické skrolovanie počas načítavania logov
             suppressAutoScroll = true;
-            
+
             // Pridáme timeout pre API request
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 sekúnd timeout
-            
-            const logs = await fetch(`${API_URL}/api/logs`, { 
-                signal: controller.signal 
+
+            const logs = await fetch(`${API_URL}/api/logs`, {
+                signal: controller.signal
             }).then(res => {
                 clearTimeout(timeoutId);
                 return api._handleResponse(res);
             });
-            
+
             if (!logs || !Array.isArray(logs)) {
                 console.warn('Nepodarilo sa načítať logy alebo neplatný formát');
                 return;
             }
-            
-            // Vyčistíme existujúce logy
-            logsContainer.innerHTML = '';
-            const mobileLogsContainer = document.getElementById('logsContainerMobile');
-            if (mobileLogsContainer) {
-                mobileLogsContainer.innerHTML = '';
-            }
-            
-            // Jednoducho pridáme všetky logy chronologicky (najnovšie prvé)
-            const reversedLogs = logs.reverse();
-            
-            reversedLogs.forEach(log => {
-                // Ignorujeme len startup správy
-                if (!(log.message.includes('MikroTik Manager') && log.message.includes('úspešne načítaný!'))) {
-                    addLogToContainer(log.level, log.message, log.device_ip, log.timestamp);
-                }
-            });
-            
+
+            // NEW: Update centralized data cache
+            // Backend returns logs in DESC order (newest first), no need to reverse
+            logsDataCache = logs.filter(log =>
+                !(log.message.includes('MikroTik Manager') && log.message.includes('úspešne načítaný!'))
+            );
+
+            // NEW: Render from cache using batched operations
+            renderLogsFromCache('dashboard');
+            renderLogsFromCache('mobile');
+
             // Po načítaní logov aplikujeme aktuálne filtre
             applyLogFilters();
-            syncLogsModalContent();
-            
+
+            // NEW: Sync modal if open (render from cache, not HTML copy)
+            if (logsModal && !logsModal.classList.contains('hidden')) {
+                renderLogsFromCache('modal');
+                applyLogFilters();
+            }
+
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.warn('Načítanie logov bolo prerušené kvôli timeout');
@@ -3044,6 +3075,85 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         } finally {
             // Obnovíme automatické skrolovanie po dokončení načítavania (vrátane error stavov)
             suppressAutoScroll = false;
+        }
+    };
+
+    // NEW: Batch rendering function using DocumentFragment for performance
+    const renderLogsFromCache = (targetContext = 'dashboard') => {
+        let container;
+
+        // Determine target container
+        if (targetContext === 'dashboard') {
+            container = logsContainer;
+        } else if (targetContext === 'mobile') {
+            container = document.getElementById('logsContainerMobile');
+        } else if (targetContext === 'modal') {
+            container = logsModalList;
+        }
+
+        if (!container) return;
+
+        // Clear existing content
+        container.innerHTML = '';
+
+        // OPTIMIZATION: Use DocumentFragment for batched DOM operations
+        const fragment = document.createDocumentFragment();
+
+        // Render all logs into fragment (in memory, no reflows)
+        logsDataCache.forEach(log => {
+            const logEntry = createLogElement(log.level, log.message, log.device_ip, log.timestamp);
+            fragment.appendChild(logEntry);
+        });
+
+        // Single DOM insertion (1 reflow instead of 2000+)
+        container.appendChild(fragment);
+
+        // Trim to max logs
+        const maxLogs = globalSettings.log_retention_days
+            ? Math.min(globalSettings.log_retention_days * 50, 5000)
+            : 1000;
+
+        while (container.children.length > maxLogs) {
+            container.lastChild.remove();
+        }
+    };
+
+    // NEW: Modal-specific load function for independent refresh
+    const loadLogsForModal = async () => {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+            const logs = await fetch(`${API_URL}/api/logs`, {
+                signal: controller.signal
+            }).then(res => {
+                clearTimeout(timeoutId);
+                return api._handleResponse(res);
+            });
+
+            if (!logs || !Array.isArray(logs)) {
+                console.warn('Nepodarilo sa načítať logy pre modal');
+                return;
+            }
+
+            // Update cache
+            // Backend returns logs in DESC order (newest first), no need to reverse
+            logsDataCache = logs.filter(log =>
+                !(log.message.includes('MikroTik Manager') && log.message.includes('úspešne načítaný!'))
+            );
+
+            // Render ONLY to modal (don't touch dashboard - this is the key optimization)
+            renderLogsFromCache('modal');
+
+            // Apply filters to modal
+            applyLogFilters();
+
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.warn('Načítanie logov pre modal bolo prerušené kvôli timeout');
+            } else {
+                console.error('Chyba pri načítaní logov pre modal:', error);
+            }
         }
     };
 
@@ -3118,39 +3228,60 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         syncFilterControls();
     };
     
-    const applyLogFilters = () => {
-        const entries = document.querySelectorAll('.log-entry');
-        
-        entries.forEach(entry => {
-            const deviceFilter = entry.getAttribute('data-device');
-            const typeFilter = entry.getAttribute('data-type');
-            const levelFilter = entry.getAttribute('data-level');
-            const messageText = entry.textContent || '';
+    const applyLogFilters = (targetContext = 'all') => {
+        let containers = [];
 
-            let visible = true;
-            
-            // Filter by device - hľadáme IP aj v data-device aj v texte správy
-            if (currentFilters.device) {
-                const deviceMatches = deviceFilter === currentFilters.device || 
-                                    messageText.includes(currentFilters.device);
-                if (!deviceMatches) {
+        // Determine which containers to filter
+        if (targetContext === 'all') {
+            containers = [
+                logsContainer,
+                document.getElementById('logsContainerMobile'),
+                logsModalList
+            ];
+        } else if (targetContext === 'dashboard') {
+            containers = [logsContainer];
+        } else if (targetContext === 'mobile') {
+            containers = [document.getElementById('logsContainerMobile')];
+        } else if (targetContext === 'modal') {
+            containers = [logsModalList];
+        }
+
+        // Apply filters to each container
+        containers.forEach(container => {
+            if (!container) return;
+
+            const entries = container.querySelectorAll('.log-entry');
+
+            entries.forEach(entry => {
+                const deviceFilter = entry.getAttribute('data-device');
+                const typeFilter = entry.getAttribute('data-type');
+                const levelFilter = entry.getAttribute('data-level');
+                const messageText = entry.textContent || '';
+
+                let visible = true;
+
+                // Filter by device - hľadáme IP aj v data-device aj v texte správy
+                if (currentFilters.device) {
+                    const deviceMatches = deviceFilter === currentFilters.device ||
+                                        messageText.includes(currentFilters.device);
+                    if (!deviceMatches) visible = false;
+                }
+
+                // Filter by type
+                if (currentFilters.type && typeFilter !== currentFilters.type) {
                     visible = false;
                 }
-            }
-            
-            // Filter by type
-            if (currentFilters.type && typeFilter !== currentFilters.type) {
-                visible = false;
-            }
-            
-            // Filter by level
-            if (currentFilters.level !== 'all' && levelFilter !== currentFilters.level) {
-                visible = false;
-            }
-            
-            entry.classList.toggle('filtered', !visible);
+
+                // Filter by level
+                if (currentFilters.level !== 'all' && levelFilter !== currentFilters.level) {
+                    visible = false;
+                }
+
+                entry.classList.toggle('filtered', !visible);
+            });
         });
-        syncLogsModalContent();
+
+        // Note: syncLogsModalContent() removed - modal manages its own content independently
     };
     
     const persistFilters = () => {
@@ -3532,27 +3663,18 @@ window.addEventListener('resize', () => closeAllCustomSelects());
     logsModalRefreshBtn?.addEventListener('click', async () => {
         if (!logsModalRefreshBtn) return;
         const modalIcon = logsModalRefreshBtn.querySelector('i');
-        const mainRefreshBtn = document.getElementById('refreshLogsBtn');
-        const mainIcon = mainRefreshBtn?.querySelector('i');
 
         modalIcon?.classList.add('fa-spin');
         logsModalRefreshBtn.disabled = true;
-        if (mainRefreshBtn && mainIcon) {
-            mainIcon.classList.add('fa-spin');
-            mainRefreshBtn.disabled = true;
-        }
 
         try {
-            await loadLogs();
+            // NEW: Use modal-specific load function (doesn't touch dashboard DOM)
+            await loadLogsForModal();
         } catch (error) {
-            addLog('error', 'Chyba pri obnove logov.');
+            addLog('error', 'Chyba pri obnove logov v modale.');
         } finally {
             modalIcon?.classList.remove('fa-spin');
             logsModalRefreshBtn.disabled = false;
-            if (mainRefreshBtn && mainIcon) {
-                mainIcon.classList.remove('fa-spin');
-                mainRefreshBtn.disabled = false;
-            }
         }
     });
 

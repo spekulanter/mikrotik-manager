@@ -237,6 +237,13 @@
         }
         #logsContainer::-webkit-scrollbar-corner { background: transparent; }
 
+        /* Skryť vodorovný posuvník a zalomiť dlhé texty */
+        #logsContainer {
+            overflow-x: hidden;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
         /* Skryť scrollbar corner a resizer pre activity log card */
         .right-sidebar .card.resize-y::-webkit-scrollbar-corner { background: transparent; }
         .right-sidebar .card::-webkit-scrollbar-corner { background: transparent; }
@@ -446,8 +453,11 @@
             border-color: #38bdf8; 
             box-shadow: 0 0 5px rgba(56, 189, 248, 0.3);
         }
-        .log-entry { 
-            transition: opacity 0.2s ease; 
+        .log-entry {
+            transition: opacity 0.2s ease;
+            word-wrap: break-word;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .log-entry.filtered { 
             display: none; 

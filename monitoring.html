@@ -107,7 +107,7 @@
         
         body.light-theme .text-gray-400,
         body.light-theme .text-gray-300 {
-            color: #64748b !important;
+            color: #475569 !important; /* Slate-600 - tmavšia pre lepšiu čitateľnosť */
         }
         
         body.light-theme .text-gray-200 {
@@ -243,9 +243,13 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.15);
         }
         
-        /* Ping status v svetlej téme */
-        body.light-theme .ping-status {
-            color: var(--text-color) !important;
+        /* Ping status v svetlej téme - zachovať online/offline farby */
+        body.light-theme .ping-status.online {
+            color: #0ea5e9 !important; /* Sky blue - lepšia čitateľnosť */
+        }
+
+        body.light-theme .ping-status.offline {
+            color: #dc2626 !important; /* Výrazná červená */
         }
         
         /* Dark theme - zabezpečenie správnych farieb tlačidlí */
@@ -3656,8 +3660,10 @@
                 localStorage.setItem('mikrotik-theme', 'light');
             }
             updateThemeIcon();
-            if (window.applyChartThemeToCharts) {
-                window.applyChartThemeToCharts();
+
+            // Update chart colors to match new theme
+            if (window.updateChartsTheme) {
+                window.updateChartsTheme();
             }
         }
         

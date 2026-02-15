@@ -1014,12 +1014,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Get chart text colors based on current theme
+    const getChartTextColors = () => {
+        const isLightTheme = document.body.classList.contains('light-theme');
+
+        if (isLightTheme) {
+            return {
+                legendLabels: '#1e293b',      // Slate-800 - tmavá pre legendy
+                subtitle: '#475569',           // Slate-600 - stredná pre subtitle
+                axisTicks: '#475569',          // Slate-600 - stredná pre axis ticks
+                gridLines: '#cbd5e1',          // Slate-300 - svetlá pre mriežku
+                axisTitle: '#334155'           // Slate-700 - tmavšia pre axis title
+            };
+        } else {
+            return {
+                legendLabels: '#d1d5db',      // Gray-300 - svetlá pre dark mode
+                subtitle: '#9ca3af',           // Gray-400 - stredná
+                axisTicks: '#9ca3af',          // Gray-400 - stredná
+                gridLines: '#374151',          // Gray-700 - tmavá mriežka
+                axisTitle: '#d1d5db'           // Gray-300 - svetlá
+            };
+        }
+    };
+
     // Initialize charts
     const initializeCharts = () => {
-        
+
         const getChartOptions = (timeRange = currentTimeRange) => {
             const timeFormats = getTimeFormats(timeRange);
-            
+            const textColors = getChartTextColors();
+
             return {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -1030,13 +1054,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 plugins: {
                     legend: {
                         labels: {
-                            color: '#d1d5db'
+                            color: textColors.legendLabels
                         }
                     },
                     subtitle: {
                         display: true,
                         text: 'Kliknite a ťahajte pre zoom, reset tlačidlo pre návrat',
-                        color: '#9ca3af',
+                        color: textColors.subtitle,
                         font: {
                             size: 11,
                             style: 'italic'
@@ -1059,7 +1083,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         ticks: {
                             source: 'auto',     // Changed from 'data' to 'auto' for symmetric distribution
-                            color: '#9ca3af',
+                            color: textColors.axisTicks,
                             maxTicksLimit: timeFormats.maxTicksLimit || 8,
                             maxRotation: 0,     // Prevent label rotation
                             minRotation: 0,     // Keep labels horizontal
@@ -1067,16 +1091,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             autoSkipPadding: 10 // Padding between labels
                         },
                         grid: {
-                            color: '#374151',
+                            color: textColors.gridLines,
                             drawBorder: false
                         }
                     },
                     y: {
                         ticks: {
-                            color: '#9ca3af'
+                            color: textColors.axisTicks
                         },
                         grid: {
-                            color: '#374151'
+                            color: textColors.gridLines
                         }
                     }
                 }
@@ -1371,7 +1395,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: {
                             display: true,
                             text: 'Latencia (ms)',
-                            color: '#d1d5db'
+                            color: getChartTextColors().axisTitle
                         }
                     }
                 },
@@ -1381,9 +1405,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         ...chartOptions.plugins?.legend,
                         labels: {
                             ...chartOptions.plugins?.legend?.labels,
-                            color: '#d1d5db', // Light gray text like other charts
+                            color: getChartTextColors().legendLabels,
                             generateLabels: function(chart) {
                                 const activePingColors = getChartColorTheme().ping;
+                                const legendTextColor = getChartTextColors().legendLabels;
                                 // Generate only two fixed legend items: Online and Offline
                                 return [
                                     {
@@ -1393,7 +1418,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         lineWidth: 2,
                                         hidden: false,
                                         index: 0,
-                                        fontColor: '#d1d5db' // Light gray text
+                                        fontColor: legendTextColor
                                     },
                                     {
                                         text: 'Offline',
@@ -1402,7 +1427,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         lineWidth: 2,
                                         hidden: false,
                                         index: 1,
-                                        fontColor: '#d1d5db' // Light gray text
+                                        fontColor: legendTextColor
                                     }
                                 ];
                             }
@@ -1459,7 +1484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: {
                             display: true,
                             text: 'CPU Load (%)',
-                            color: '#d1d5db'
+                            color: getChartTextColors().axisTitle
                         }
                     }
                 }
@@ -1494,7 +1519,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: {
                             display: true,
                             text: 'Teplota (°C)',
-                            color: '#d1d5db'
+                            color: getChartTextColors().axisTitle
                         }
                     }
                 }
@@ -1585,13 +1610,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: {
                             display: true,
                             text: 'Memory (MB)',
-                            color: '#d1d5db'
+                            color: getChartTextColors().axisTitle
                         },
                         grid: {
-                            color: '#374151'
+                            color: getChartTextColors().gridLines
                         },
                         ticks: {
-                            color: '#d1d5db'
+                            color: getChartTextColors().axisTicks
                         }
                     }
                 }
@@ -3826,9 +3851,56 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // Update chart colors when theme changes
+    const updateChartsTheme = () => {
+        if (!charts || Object.keys(charts).length === 0) return;
+
+        const textColors = getChartTextColors();
+
+        Object.values(charts).forEach(chart => {
+            if (!chart || !chart.options) return;
+
+            // Update legend
+            if (chart.options.plugins?.legend?.labels) {
+                chart.options.plugins.legend.labels.color = textColors.legendLabels;
+            }
+
+            // Update subtitle
+            if (chart.options.plugins?.subtitle) {
+                chart.options.plugins.subtitle.color = textColors.subtitle;
+            }
+
+            // Update X-axis
+            if (chart.options.scales?.x) {
+                if (chart.options.scales.x.ticks) {
+                    chart.options.scales.x.ticks.color = textColors.axisTicks;
+                }
+                if (chart.options.scales.x.grid) {
+                    chart.options.scales.x.grid.color = textColors.gridLines;
+                }
+            }
+
+            // Update Y-axis
+            if (chart.options.scales?.y) {
+                if (chart.options.scales.y.ticks) {
+                    chart.options.scales.y.ticks.color = textColors.axisTicks;
+                }
+                if (chart.options.scales.y.grid) {
+                    chart.options.scales.y.grid.color = textColors.gridLines;
+                }
+                if (chart.options.scales.y.title) {
+                    chart.options.scales.y.title.color = textColors.axisTitle;
+                }
+            }
+
+            // Update chart without animation
+            chart.update('none');
+        });
+    };
+
     // Start the application
     initialize();
-    
+
     // Export global variables for zoom functionality
     window.currentDeviceId = currentDeviceId;
     window.currentTimeRange = currentTimeRange;
@@ -3836,4 +3908,5 @@ document.addEventListener('DOMContentLoaded', () => {
     window.updateChartTimeFormats = updateChartTimeFormats;
     window.setActiveTimeRange = setActiveTimeRange;
     window.persistZoomRange = persistZoomRange;
+    window.updateChartsTheme = updateChartsTheme;
 });

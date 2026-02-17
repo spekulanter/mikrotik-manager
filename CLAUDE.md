@@ -8,15 +8,15 @@
 - **Device Management**: Centralized management of multiple MikroTik RouterOS devices
 - **Automated Backups**: Scheduled backup creation with FTP upload support
 - **Real-time Monitoring**: ICMP ping and SNMP-based monitoring with historical graphs
-- **Security**: Mandatory 2FA authentication, encrypted password storage (Fernet AES-128)
+- **Security**: Mandatory 2FA authentication, hashed app-user password storage, encrypted device/settings secrets (Fernet)
 - **Mobile Support**: Native Android APK with Kotlin WebView
-- **Notifications**: Pushover notifications for device status and backup events
+- **Notifications**: Pushover notifications for availability, backup, SNMP thresholds, and auth security events
 
 ### Technology Stack
 - **Backend**: Python 3.11, Flask, Flask-SocketIO, Eventlet
 - **Frontend**: HTML, JavaScript (vanilla), Chart.js for graphs
-- **Database**: SQLite3 with encrypted password columns
-- **Authentication**: Flask-Login, PyOTP (TOTP), bcrypt
+- **Database**: SQLite3 with encrypted secret fields (device SSH password + selected settings)
+- **Authentication**: Flask-Login, PyOTP (TOTP), Werkzeug password hashing
 - **Networking**: Paramiko (SSH), PySNMP, Python FTP
 - **Encryption**: Cryptography (Fernet), Werkzeug password hashing
 - **Mobile**: Android (Kotlin), WebView-based native app
@@ -85,9 +85,9 @@ CREATE TABLE devices (
     ip TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
     username TEXT NOT NULL,
-    password TEXT NOT NULL,              -- Encrypted with Fernet
+    password TEXT NOT NULL,              -- Encrypted with Fernet (device SSH password)
     low_memory BOOLEAN DEFAULT 0,
-    snmp_community TEXT DEFAULT 'public',
+    snmp_community TEXT DEFAULT 'public', -- Encrypted with Fernet
     status TEXT DEFAULT 'unknown',
     last_backup TIMESTAMP,
     last_snmp_data TEXT,                 -- JSON blob
@@ -101,8 +101,8 @@ CREATE TABLE devices (
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,              -- bcrypt hash
-    totp_secret TEXT,
+    password TEXT NOT NULL,              -- Werkzeug password hash (generate_password_hash)
+    totp_secret TEXT,                    -- Encrypted with Fernet
     totp_enabled BOOLEAN NOT NULL DEFAULT 0
 );
 
@@ -110,7 +110,7 @@ CREATE TABLE users (
 CREATE TABLE backup_codes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    code TEXT NOT NULL,
+    code TEXT NOT NULL,                  -- Werkzeug password hash
     created_at TIMESTAMP NOT NULL,
     used BOOLEAN NOT NULL DEFAULT 0,
     used_at TIMESTAMP,
@@ -162,29 +162,43 @@ CREATE TABLE settings (
 
 ### Encryption & Hashing
 
-**Password Encryption (Fernet AES-128)**
+**Secrets Encryption (Fernet)**
 ```python
 # Encryption key: /var/lib/mikrotik-manager/data/encryption.key
-# - 44 bytes (32 bytes key + 12 bytes nonce)
+# - 44 bytes (Fernet key, urlsafe base64)
 # - chmod 600 (owner read/write only)
-# - Used for: SSH passwords, FTP passwords
+# - Used for:
+#   - devices.password (SSH password)
+#   - devices.snmp_community
+#   - users.totp_secret
+#   - settings keys in SENSITIVE_SETTINGS
+#     ('ftp_password', 'pushover_app_key', 'pushover_user_key')
 
 def encrypt_password(password):
-    cipher = Fernet(get_encryption_key())
-    return cipher.encrypt(password.encode()).decode()
+    return b64.b64encode(cipher.encrypt(password.encode())).decode()
 
 def decrypt_password(encrypted_password):
-    cipher = Fernet(get_encryption_key())
-    return cipher.decrypt(encrypted_password.encode()).decode()
+    return cipher.decrypt(b64.b64decode(encrypted_password.encode())).decode()
 ```
 
-**User Password Hashing (bcrypt)**
+**Sensitive Settings**
+```python
+SENSITIVE_SETTINGS = {'ftp_password', 'pushover_app_key', 'pushover_user_key'}
+```
+
+**User Password Hashing (Werkzeug)**
 ```python
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# Cost factor: 12 (default)
 # Stored in users.password column
 password_hash = generate_password_hash(password)
+```
+
+**Backup Code Hashing (Werkzeug)**
+```python
+# backup_codes.code is stored as hash
+backup_code_hash = generate_password_hash(backup_code)
+check_password_hash(backup_code_hash, backup_code)
 ```
 
 **Session Management**
@@ -204,7 +218,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
 **Implementation**
 - TOTP (Time-based One-Time Password) using PyOTP
 - QR code generation for authenticator apps
-- 10 single-use backup codes per user
+- 10 single-use backup codes per user (stored hashed)
 - Mandatory for all accounts (cannot be disabled once activated)
 
 **Supported Authenticator Apps**
@@ -359,6 +373,8 @@ BOOLEAN_SETTING_KEYS = {
     'notify_memory_critical',
     'notify_reboot_detected',
     'notify_version_change',
+    'notify_failed_login',
+    'notify_failed_2fa',
     'quiet_hours_enabled',
     'availability_monitoring_enabled',
     'debug_terminal'
@@ -378,6 +394,7 @@ backup_schedule_time: str = '02:00'        # HH:MM format
 snmp_check_interval_minutes: int = 10      # Global SNMP interval
 snmp_health_check_enabled: bool = True
 snmp_retention_days: int = 30
+# snmp_community is per-device in devices table (encrypted)
 
 # Ping settings
 ping_monitor_enabled: bool = True
@@ -399,8 +416,8 @@ ftp_password: str = ''                     # Encrypted
 ftp_directory: str = '/'
 
 # Pushover notifications
-pushover_app_key: str = ''
-pushover_user_key: str = ''
+pushover_app_key: str = ''                 # Encrypted (SENSITIVE_SETTINGS)
+pushover_user_key: str = ''                # Encrypted (SENSITIVE_SETTINGS)
 ```
 
 ## Monitoring System - Frontend & Charts

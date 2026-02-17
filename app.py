@@ -336,6 +336,29 @@ def is_encrypted_secret(value):
     except Exception:
         return False
 
+def is_password_hash(value):
+    """Check if value appears to be a Werkzeug password hash."""
+    if value in (None, ''):
+        return False
+    value_str = str(value)
+    return value_str.startswith('scrypt:') or value_str.startswith('pbkdf2:')
+
+def verify_backup_code(stored_code, provided_code):
+    """Verify backup code against hashed (preferred) or plaintext (legacy) storage."""
+    if stored_code in (None, '') or provided_code in (None, ''):
+        return False
+    stored_code_str = str(stored_code)
+    provided_code_str = str(provided_code)
+
+    if is_password_hash(stored_code_str):
+        try:
+            return check_password_hash(stored_code_str, provided_code_str)
+        except Exception:
+            return False
+
+    # Legacy fallback for old plaintext backup codes.
+    return secrets.compare_digest(stored_code_str, provided_code_str)
+
 def encrypt_setting_value_if_sensitive(key, value):
     """Encrypt sensitive setting values before storing in DB."""
     value_str = '' if value is None else str(value)
@@ -428,12 +451,102 @@ def migrate_sensitive_settings():
         import traceback
         logger.error(f"Sensitive settings migration traceback: {traceback.format_exc()}")
 
-# Helper functions for device password handling
+def migrate_snmp_communities():
+    """Migrate plaintext SNMP communities in devices table to encrypted format."""
+    try:
+        with get_db_connection() as conn:
+            devices = conn.execute('SELECT id, snmp_community FROM devices').fetchall()
+            migrated_count = 0
+
+            for device in devices:
+                device_id = device['id']
+                snmp_community = device['snmp_community']
+                if snmp_community in (None, '') or is_encrypted_secret(snmp_community):
+                    continue
+
+                conn.execute(
+                    'UPDATE devices SET snmp_community = ? WHERE id = ?',
+                    (encrypt_password(snmp_community), device_id)
+                )
+                migrated_count += 1
+
+            if migrated_count > 0:
+                conn.commit()
+                logger.info(f"SNMP community migration completed: {migrated_count} values encrypted")
+            else:
+                logger.info("SNMP community migration: No plaintext values found")
+    except Exception as e:
+        logger.error(f"SNMP community migration failed: {e}")
+        import traceback
+        logger.error(f"SNMP community migration traceback: {traceback.format_exc()}")
+
+def migrate_totp_secrets():
+    """Migrate plaintext TOTP secrets in users table to encrypted format."""
+    try:
+        with get_db_connection() as conn:
+            users = conn.execute('SELECT id, totp_secret FROM users').fetchall()
+            migrated_count = 0
+
+            for user in users:
+                user_id = user['id']
+                totp_secret = user['totp_secret']
+                if totp_secret in (None, '') or is_encrypted_secret(totp_secret):
+                    continue
+
+                conn.execute(
+                    'UPDATE users SET totp_secret = ? WHERE id = ?',
+                    (encrypt_password(totp_secret), user_id)
+                )
+                migrated_count += 1
+
+            if migrated_count > 0:
+                conn.commit()
+                logger.info(f"TOTP secret migration completed: {migrated_count} values encrypted")
+            else:
+                logger.info("TOTP secret migration: No plaintext values found")
+    except Exception as e:
+        logger.error(f"TOTP secret migration failed: {e}")
+        import traceback
+        logger.error(f"TOTP secret migration traceback: {traceback.format_exc()}")
+
+def migrate_backup_codes_to_hashes():
+    """Migrate plaintext backup codes to password hashes."""
+    try:
+        with get_db_connection() as conn:
+            backup_codes = conn.execute('SELECT id, code FROM backup_codes').fetchall()
+            migrated_count = 0
+
+            for backup_code in backup_codes:
+                record_id = backup_code['id']
+                code_value = backup_code['code']
+                if code_value in (None, '') or is_password_hash(code_value):
+                    continue
+
+                conn.execute(
+                    'UPDATE backup_codes SET code = ? WHERE id = ?',
+                    (generate_password_hash(code_value), record_id)
+                )
+                migrated_count += 1
+
+            if migrated_count > 0:
+                conn.commit()
+                logger.info(f"Backup code migration completed: {migrated_count} values hashed")
+            else:
+                logger.info("Backup code migration: No plaintext values found")
+    except Exception as e:
+        logger.error(f"Backup code migration failed: {e}")
+        import traceback
+        logger.error(f"Backup code migration traceback: {traceback.format_exc()}")
+
+# Helper functions for device secret handling
 def get_device_with_decrypted_password(device_dict):
-    """Take device dict and decrypt its password"""
-    if isinstance(device_dict, dict) and 'password' in device_dict:
+    """Take device dict and decrypt supported secret fields."""
+    if isinstance(device_dict, dict):
         device_dict = device_dict.copy()  # Don't modify original
-        device_dict['password'] = decrypt_password(device_dict['password'])
+        if 'password' in device_dict:
+            device_dict['password'] = decrypt_password(device_dict['password'])
+        if 'snmp_community' in device_dict and device_dict['snmp_community'] is not None:
+            device_dict['snmp_community'] = decrypt_password(device_dict['snmp_community'])
     return device_dict
 
 def prepare_devices_with_decrypted_passwords(devices):
@@ -463,7 +576,8 @@ def load_user(user_id):
     with get_db_connection() as conn:
         user_data = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
         if user_data:
-            return User(id=user_data['id'], username=user_data['username'], password=user_data['password'], totp_secret=user_data['totp_secret'], totp_enabled=user_data['totp_enabled'])
+            decrypted_totp_secret = decrypt_password(user_data['totp_secret']) if user_data['totp_secret'] else user_data['totp_secret']
+            return User(id=user_data['id'], username=user_data['username'], password=user_data['password'], totp_secret=decrypted_totp_secret, totp_enabled=user_data['totp_enabled'])
     return None
 
 def init_environment():
@@ -1320,9 +1434,10 @@ def register():
             with get_db_connection() as conn:
                 password_hash = generate_password_hash(password)
                 totp_secret = pyotp.random_base32()
+                encrypted_totp_secret = encrypt_password(totp_secret)
                 cursor = conn.cursor()
                 cursor.execute('INSERT INTO users (username, password, totp_secret, totp_enabled) VALUES (?, ?, ?, ?)',
-                             (username, password_hash, totp_secret, 0))
+                             (username, password_hash, encrypted_totp_secret, 0))
                 user_id = cursor.lastrowid
                 conn.commit()
                 user = load_user(user_id)
@@ -1368,6 +1483,9 @@ def login_2fa():
     error = None
     if request.method == 'POST':
         user = load_user(session['2fa_user_id'])
+        if not user:
+            session.pop('2fa_user_id', None)
+            return redirect(url_for('login'))
         source_ip = request.remote_addr or 'unknown'
         attempted_username = user.username if user else '(unknown user)'
         totp_code = request.form.get('totp_code', '').strip()
@@ -1393,16 +1511,21 @@ def login_2fa():
             # Overenie záložného kódu
             try:
                 with get_db_connection() as conn:
-                    backup_record = conn.execute(
-                        'SELECT id FROM backup_codes WHERE user_id = ? AND code = ? AND used = 0', 
-                        (user.id, backup_code)
-                    ).fetchone()
-                    
-                    if backup_record:
+                    backup_records = conn.execute(
+                        'SELECT id, code FROM backup_codes WHERE user_id = ? AND used = 0',
+                        (user.id,)
+                    ).fetchall()
+                    matched_record = None
+                    for record in backup_records:
+                        if verify_backup_code(record['code'], backup_code):
+                            matched_record = record
+                            break
+
+                    if matched_record:
                         # Označenie kódu ako použitého
                         conn.execute(
                             'UPDATE backup_codes SET used = 1, used_at = ? WHERE id = ?',
-                            (datetime.now(), backup_record['id'])
+                            (datetime.now(), matched_record['id'])
                         )
                         conn.commit()
                         
@@ -1794,8 +1917,9 @@ def handle_backup_codes():
                 
                 # Pridanie nových kódov
                 for code in backup_codes:
+                    code_hash = generate_password_hash(code)
                     conn.execute('INSERT INTO backup_codes (user_id, code, created_at, used) VALUES (?, ?, ?, 0)', 
-                               (current_user.id, code, datetime.now()))
+                               (current_user.id, code_hash, datetime.now()))
                 conn.commit()
             
             add_log('info', f"Používateľ '{current_user.username}' vygeneroval nové záložné kódy.")
@@ -1864,7 +1988,7 @@ def handle_devices():
             # Include all necessary fields including status and last_snmp_data
             devices = []
             for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY name').fetchall():
-                device = dict(row)
+                device = get_device_with_decrypted_password(dict(row))
                 # Convert last_backup to ISO format with UTC timezone for consistent parsing across browsers
                 if device.get('last_backup'):
                     try:
@@ -1888,6 +2012,7 @@ def handle_devices():
                     new_snmp_interval = data.get('snmp_interval_minutes', 0)
                     new_ping_interval = data.get('ping_interval_seconds', 0)
                     new_ping_retry_interval = data.get('ping_retry_interval_seconds', 0)
+                    encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
                     
                     # Pri editácii zachováme pôvodné heslo ak nie je zadané nové
                     if data.get('password'):
@@ -1895,13 +2020,13 @@ def handle_devices():
                         encrypted_password = encrypt_password(data['password'])
                         conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
                                    (data['name'], data['ip'], data['username'], encrypted_password, data.get('low_memory', False), 
-                                    data.get('snmp_community', 'public'), new_snmp_interval, 
+                                    encrypted_snmp_community, new_snmp_interval, 
                                     new_ping_interval, new_ping_retry_interval, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
                         conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
                                    (data['name'], data['ip'], data['username'], data.get('low_memory', False), 
-                                    data.get('snmp_community', 'public'), new_snmp_interval, 
+                                    encrypted_snmp_community, new_snmp_interval, 
                                     new_ping_interval, new_ping_retry_interval, data['id']))
                     conn.commit()
                     
@@ -1923,9 +2048,10 @@ def handle_devices():
                 else:
                     cursor = conn.cursor()
                     encrypted_password = encrypt_password(data['password'])
+                    encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
                     cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
                                  (data['name'], data['ip'], data['username'], encrypted_password, data.get('low_memory', False), 
-                                  data.get('snmp_community', 'public'), data.get('snmp_interval_minutes', 0), 
+                                  encrypted_snmp_community, data.get('snmp_interval_minutes', 0), 
                                   data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0)))
                     device_id = cursor.lastrowid
                     conn.commit()
@@ -2087,7 +2213,10 @@ def snmp_refresh_all_devices():
         return jsonify({'status': 'error', 'message': 'SNMP refresh všetkých zariadení už prebieha.'}), 409
     
     with get_db_connection() as conn:
-        devices = [dict(row) for row in conn.execute('SELECT id, ip, name, snmp_community FROM devices ORDER BY name').fetchall()]
+        devices = [
+            get_device_with_decrypted_password(dict(row))
+            for row in conn.execute('SELECT id, ip, name, snmp_community FROM devices ORDER BY name').fetchall()
+        ]
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     
     # Získame nastavenie oneskorenia medzi refresh-mi (predvolené 0.5 sekúnd)
@@ -2770,16 +2899,17 @@ def perform_snmp_poll(device_id, reason="scheduler"):
     """Vykoná SNMP dotaz pre zariadenie vrátane uloženia dát a notifikácií."""
     try:
         with get_db_connection() as conn:
-            device = conn.execute(
+            device_row = conn.execute(
                 'SELECT id, name, ip, snmp_community, monitoring_paused, last_snmp_data, snmp_interval_minutes FROM devices WHERE id = ?',
                 (device_id,)
             ).fetchone()
 
-        if not device:
+        if not device_row:
             logger.warning(f"SNMP poll skipped - device {device_id} not found (reason: {reason})")
             with snmp_task_lock:
                 snmp_task_state.pop(device_id, None)
             return {'status': 'missing', 'snmp_data': None, 'device': None}
+        device = get_device_with_decrypted_password(dict(device_row))
 
         if device['monitoring_paused'] and reason != "manual":
             debug_log('debug_snmp_timers', f"SNMP poll skipped - device {device['name']} monitoring paused (reason: {reason})")
@@ -3090,6 +3220,9 @@ with app.app_context():
     init_database()
     migrate_existing_passwords()  # Encrypt existing plaintext passwords
     migrate_sensitive_settings()  # Encrypt plaintext sensitive values in settings
+    migrate_snmp_communities()  # Encrypt plaintext SNMP community values in devices
+    migrate_totp_secrets()  # Encrypt plaintext TOTP secrets in users
+    migrate_backup_codes_to_hashes()  # Hash plaintext backup codes
     setup_scheduler(log_schedule_info=False)  # Pri štarte aplikácie nelogujeme info o schedule
     start_all_snmp_timers()  # Spustenie SNMP timerov pre všetky zariadenia
 

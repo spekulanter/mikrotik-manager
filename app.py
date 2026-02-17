@@ -308,15 +308,57 @@ def encrypt_password(password):
         return None
     return b64.b64encode(cipher.encrypt(password.encode())).decode()
 
+def decrypt_password_strict(encrypted_password):
+    """Decrypt password and raise on invalid ciphertext."""
+    if encrypted_password is None:
+        return None
+    return cipher.decrypt(b64.b64decode(encrypted_password.encode())).decode()
+
 def decrypt_password(encrypted_password):
     """Decrypt password for use"""
     if encrypted_password is None:
         return None
     try:
-        return cipher.decrypt(b64.b64decode(encrypted_password.encode())).decode()
+        return decrypt_password_strict(encrypted_password)
     except:
         # If decryption fails, assume it's already plaintext (for backward compatibility)
         return encrypted_password
+
+def is_encrypted_secret(value):
+    """Check if value looks like ciphertext produced by encrypt_password()."""
+    if value in (None, ''):
+        return False
+    try:
+        decrypt_password_strict(str(value))
+        return True
+    except Exception:
+        return False
+
+def encrypt_setting_value_if_sensitive(key, value):
+    """Encrypt sensitive setting values before storing in DB."""
+    value_str = '' if value is None else str(value)
+    if key not in SENSITIVE_SETTINGS or value_str == '':
+        return value_str
+    if is_encrypted_secret(value_str):
+        return value_str
+    return encrypt_password(value_str)
+
+def decrypt_setting_value_if_sensitive(key, value):
+    """Decrypt sensitive setting values when reading from DB."""
+    value_str = '' if value is None else str(value)
+    if key in SENSITIVE_SETTINGS and value_str:
+        return decrypt_password(value_str)
+    return value_str
+
+def decrypt_sensitive_settings_map(settings):
+    """Return a copy of settings dict with sensitive keys decrypted."""
+    if not settings:
+        return {}
+    decrypted = dict(settings)
+    for key in SENSITIVE_SETTINGS:
+        if key in decrypted:
+            decrypted[key] = decrypt_setting_value_if_sensitive(key, decrypted[key])
+    return decrypted
 
 def migrate_existing_passwords():
     """Migrate existing plaintext passwords to encrypted format - run once on startup"""
@@ -350,6 +392,39 @@ def migrate_existing_passwords():
         logger.error(f"Password migration failed: {e}")
         import traceback
         logger.error(f"Migration error traceback: {traceback.format_exc()}")
+
+def migrate_sensitive_settings():
+    """Migrate plaintext sensitive settings to encrypted format."""
+    try:
+        with get_db_connection() as conn:
+            placeholders = ','.join('?' for _ in SENSITIVE_SETTINGS)
+            rows = conn.execute(
+                f'SELECT key, value FROM settings WHERE key IN ({placeholders})',
+                tuple(SENSITIVE_SETTINGS)
+            ).fetchall()
+            migrated_count = 0
+
+            for row in rows:
+                key = row['key']
+                value = row['value']
+                if value in (None, '') or is_encrypted_secret(value):
+                    continue
+
+                conn.execute(
+                    'UPDATE settings SET value = ? WHERE key = ?',
+                    (encrypt_password(value), key)
+                )
+                migrated_count += 1
+
+            if migrated_count > 0:
+                conn.commit()
+                logger.info(f"Sensitive settings migration completed: {migrated_count} values encrypted")
+            else:
+                logger.info("Sensitive settings migration: No plaintext sensitive values found")
+    except Exception as e:
+        logger.error(f"Sensitive settings migration failed: {e}")
+        import traceback
+        logger.error(f"Sensitive settings migration traceback: {traceback.format_exc()}")
 
 # Helper functions for device password handling
 def get_device_with_decrypted_password(device_dict):
@@ -923,6 +998,8 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
 def cleanup_old_backups(device_ip, settings, detailed_logging=True):
     """Vyčistí staré zálohy lokálne a na FTP serveri na základe nastavenia."""
     try:
+        settings = decrypt_sensitive_settings_map(settings)
+
         # Načítame počet uchovávaných záloh z nastavení, predvolená hodnota je 10
         retention_count = int(settings.get('backup_retention_count', 10))
         if detailed_logging:
@@ -1135,6 +1212,7 @@ def upload_to_ftp(local_path, detailed_logging=True, device_ip=None, log_success
 
     with get_db_connection() as conn:
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE \"ftp_%\"')}
+    settings = decrypt_sensitive_settings_map(settings)
 
     success, error_msg = attempt_upload(settings)
     if success:
@@ -1155,6 +1233,7 @@ def send_pushover_notification(message, title="MikroTik Manager", notification_k
             placeholders = ','.join('?' for _ in queried_keys)
             settings_rows = cursor.execute(f'SELECT key, value FROM settings WHERE key IN ({placeholders})', queried_keys).fetchall()
             settings = {row['key']: row['value'] for row in settings_rows}
+            settings = decrypt_sensitive_settings_map(settings)
             
             enabled = True
             if notification_key:
@@ -1433,6 +1512,7 @@ def delete_backup(filename):
         try:
             with get_db_connection() as conn:
                 settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+            settings = decrypt_sensitive_settings_map(settings)
             
             # Kontrola FTP nastavení
             if all(k in settings and settings[k] for k in ['ftp_server', 'ftp_username', 'ftp_password']):
@@ -2123,7 +2203,9 @@ def stop_snmp_refresh_all():
 @login_required
 def handle_settings():
     with get_db_connection() as conn:
-        if request.method == 'GET': return jsonify({row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()})
+        if request.method == 'GET':
+            settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+            return jsonify(decrypt_sensitive_settings_map(settings))
         if request.method == 'POST':
             # Validácia ping_check_interval_seconds
             ping_interval = request.json.get('ping_check_interval_seconds')
@@ -2152,6 +2234,8 @@ def handle_settings():
                 if value is None:
                     return ''
                 value_str = str(value)
+                if key in SENSITIVE_SETTINGS:
+                    return decrypt_setting_value_if_sensitive(key, value_str)
                 if key in BOOLEAN_SETTING_KEYS:
                     return value_str.lower()
                 return value_str
@@ -2174,7 +2258,8 @@ def handle_settings():
                 return request_value(key) if key in request.json else old_value(key)
             
             for key, value in request.json.items():
-                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+                stored_value = encrypt_setting_value_if_sensitive(key, value)
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, stored_value))
             conn.commit()
             add_log('info', "Globálne nastavenia uložené používateľom.")
             
@@ -2974,6 +3059,7 @@ def scheduled_log_cleanup():
 with app.app_context():
     init_database()
     migrate_existing_passwords()  # Encrypt existing plaintext passwords
+    migrate_sensitive_settings()  # Encrypt plaintext sensitive values in settings
     setup_scheduler(log_schedule_info=False)  # Pri štarte aplikácie nelogujeme info o schedule
     start_all_snmp_timers()  # Spustenie SNMP timerov pre všetky zariadenia
 

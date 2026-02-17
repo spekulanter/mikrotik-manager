@@ -1148,12 +1148,12 @@
             color: #ffffff !important;
         }
         
-        /* Password Toggle Styles - ONLY for Password Tab */
-        #tabPasswordContent .password-input-container {
+        /* Password Toggle Styles */
+        .password-input-container {
             position: relative;
         }
         
-        #tabPasswordContent .password-toggle {
+        .password-toggle {
             /* Center the eye icon perfectly inside the input field height */
             position: absolute;
             top: 0;
@@ -1173,15 +1173,15 @@
             line-height: 1; /* prevent extra vertical bias */
         }
         
-        #tabPasswordContent .password-toggle:hover {
+        .password-toggle:hover {
             color: #60a5fa;
         }
         
-        body.light-theme #tabPasswordContent .password-toggle {
+        body.light-theme .password-toggle {
             color: #6b7280;
         }
         
-        body.light-theme #tabPasswordContent .password-toggle:hover {
+        body.light-theme .password-toggle:hover {
             color: #3b82f6;
         }
         
@@ -1831,11 +1831,14 @@
                             </div>
                             <div>
                                 <label for="devicePassword" class="block mb-1 font-semibold">Heslo</label>
-                                <input type="password" id="devicePassword" class="w-full p-3 rounded bg-gray-800 border border-gray-600" placeholder="Zadajte heslo pre SSH pripojenie">
+                                <input type="password" id="devicePassword" class="w-full p-3 rounded bg-gray-800 border border-gray-600" placeholder="Zadajte heslo pre SSH pripojenie" autocomplete="off">
                             </div>
                             <div>
                                 <label for="deviceSnmpCommunity" class="block mb-1 font-semibold">SNMP Community</label>
-                                <input type="text" id="deviceSnmpCommunity" class="w-full p-3 rounded bg-gray-800 border border-gray-600" placeholder="public">
+                                <div class="password-input-container">
+                                    <input type="password" id="deviceSnmpCommunity" class="w-full p-3 pr-10 rounded bg-gray-800 border border-gray-600" placeholder="public" autocomplete="off">
+                                    <i class="fas fa-eye password-toggle" data-target="deviceSnmpCommunity"></i>
+                                </div>
                             </div>
                         </div>
 
@@ -1963,7 +1966,13 @@
                             <div class="space-y-4">
                                 <div><label for="ftp_server" class="block mb-1">FTP Server IP</label><input type="text" id="ftp_server" name="ftp_server" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
                                 <div><label for="ftp_username" class="block mb-1">FTP Používateľ</label><input type="text" id="ftp_username" name="ftp_username" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
-                                <div><label for="ftp_password" class="block mb-1">FTP Heslo</label><input type="password" id="ftp_password" name="ftp_password" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
+                                <div>
+                                    <label for="ftp_password" class="block mb-1">FTP Heslo</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="ftp_password" name="ftp_password" class="w-full p-2 pr-10 rounded bg-gray-800 border border-gray-600" autocomplete="off">
+                                        <i class="fas fa-eye password-toggle" data-target="ftp_password"></i>
+                                    </div>
+                                </div>
                                 <div><label for="ftp_directory" class="block mb-1">FTP Adresár</label><input type="text" id="ftp_directory" name="ftp_directory" class="w-full p-2 rounded bg-gray-800 border border-gray-600"></div>
                             </div>
                         </div>
@@ -1978,8 +1987,20 @@
                                 </div>
                             </div>
                             <div class="space-y-4">
-                                <div><label for="pushover_app_key" class="block mb-1 font-semibold">Pushover App Key/Token</label><input type="text" id="pushover_app_key" name="pushover_app_key" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Váš App Key z Pushover"></div>
-                                <div><label for="pushover_user_key" class="block mb-1 font-semibold">Pushover User Key</label><input type="text" id="pushover_user_key" name="pushover_user_key" class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Váš User Key z Pushover"></div>
+                                <div>
+                                    <label for="pushover_app_key" class="block mb-1 font-semibold">Pushover App Key/Token</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="pushover_app_key" name="pushover_app_key" class="w-full p-2 pr-10 rounded bg-gray-800 border border-gray-600" placeholder="Váš App Key z Pushover" autocomplete="off">
+                                        <i class="fas fa-eye password-toggle" data-target="pushover_app_key"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="pushover_user_key" class="block mb-1 font-semibold">Pushover User Key</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="pushover_user_key" name="pushover_user_key" class="w-full p-2 pr-10 rounded bg-gray-800 border border-gray-600" placeholder="Váš User Key z Pushover" autocomplete="off">
+                                        <i class="fas fa-eye password-toggle" data-target="pushover_user_key"></i>
+                                    </div>
+                                </div>
                                 <h4 class="font-semibold pt-2">Typy notifikácií</h4>
                                 <div id="notificationTypes" class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2"></div>
                                 <h4 class="font-semibold pt-2">Kritické limity</h4>
@@ -3961,13 +3982,13 @@ window.addEventListener('resize', () => closeAllCustomSelects());
         });
     });
 
-    // === Password Toggle Functionality - ONLY for Password Tab ===
+    // === Password Toggle Functionality ===
     document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('password-toggle') && 
-            e.target.closest('#tabPasswordContent')) {
-            const targetId = e.target.getAttribute('data-target');
+        const toggleIcon = e.target.closest('.password-toggle');
+        if (toggleIcon) {
+            const targetId = toggleIcon.getAttribute('data-target');
             const passwordInput = document.getElementById(targetId);
-            const toggleIcon = e.target;
+            if (!passwordInput) return;
             
             if (passwordInput.type === 'password') {
                 passwordInput.type = 'text';

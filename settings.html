@@ -242,6 +242,44 @@
             color: var(--text-color) !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }
+
+        .password-input-container {
+            position: relative;
+        }
+
+        .password-toggle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: 10px;
+            margin: auto 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 100%;
+            cursor: pointer;
+            color: #9ca3af;
+            font-size: 18px;
+            z-index: 10;
+            transition: color 0.2s ease;
+            line-height: 1;
+            border: none;
+            background: transparent;
+            padding: 0;
+        }
+
+        .password-toggle:hover {
+            color: #60a5fa;
+        }
+
+        body.light-theme .password-toggle {
+            color: #6b7280;
+        }
+
+        body.light-theme .password-toggle:hover {
+            color: #3b82f6;
+        }
         
         /* Animácie */
         .fade-in { animation: fadeIn 0.3s ease-in; }
@@ -637,15 +675,25 @@
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
                             <label for="pushover_app_key" class="block mb-2 font-medium">Pushover App Key/Token</label>
-                            <input type="text" id="pushover_app_key" name="pushover_app_key" 
-                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
-                                   placeholder="Váš App Key z Pushover">
+                            <div class="password-input-container">
+                                <input type="password" id="pushover_app_key" name="pushover_app_key" 
+                                       class="w-full p-3 pr-12 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                       placeholder="Váš App Key z Pushover" autocomplete="off">
+                                <button type="button" class="password-toggle" data-target="pushover_app_key" aria-label="Zobraziť alebo skryť Pushover App Key/Token">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label for="pushover_user_key" class="block mb-2 font-medium">Pushover User Key</label>
-                            <input type="text" id="pushover_user_key" name="pushover_user_key" 
-                                   class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
-                                   placeholder="Váš User Key z Pushover">
+                            <div class="password-input-container">
+                                <input type="password" id="pushover_user_key" name="pushover_user_key" 
+                                       class="w-full p-3 pr-12 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" 
+                                       placeholder="Váš User Key z Pushover" autocomplete="off">
+                                <button type="button" class="password-toggle" data-target="pushover_user_key" aria-label="Zobraziť alebo skryť Pushover User Key">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -730,8 +778,13 @@
                     </div>
                     <div>
                         <label for="ftp_password" class="block mb-2 font-medium">FTP Heslo</label>
-                        <input type="password" id="ftp_password" name="ftp_password" 
-                               class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                        <div class="password-input-container">
+                            <input type="password" id="ftp_password" name="ftp_password" 
+                                   class="w-full p-3 pr-12 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500" autocomplete="off">
+                            <button type="button" class="password-toggle" data-target="ftp_password" aria-label="Zobraziť alebo skryť FTP heslo">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="lg:col-span-2">
                         <label for="ftp_directory" class="block mb-2 font-medium">FTP Adresár</label>
@@ -891,6 +944,24 @@
             intervalField.readOnly = isDisabled;
             intervalField.classList.toggle('opacity-50', isDisabled);
             intervalField.classList.toggle('cursor-not-allowed', isDisabled);
+        }
+
+        function handlePasswordToggleClick(event) {
+            const toggleButton = event.target.closest('.password-toggle');
+            if (!toggleButton) return;
+
+            const targetId = toggleButton.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            if (!input) return;
+
+            const icon = toggleButton.querySelector('i');
+            const isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+
+            if (icon) {
+                icon.classList.toggle('fa-eye', !isHidden);
+                icon.classList.toggle('fa-eye-slash', isHidden);
+            }
         }
         
         // API helper
@@ -1185,6 +1256,8 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            document.addEventListener('click', handlePasswordToggleClick);
+
             // Add event listener for backup schedule type change first
             const scheduleTypeElement = document.getElementById('backup_schedule_type');
             if (scheduleTypeElement) {

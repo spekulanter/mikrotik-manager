@@ -350,9 +350,29 @@
             color: #ffffff !important;
         }
         
-        /* Tlačidlá v modálnom okne - správne farby textu pre obe témy */
-        body.light-theme #deviceSettingsModal button {
+        /* Tlačidlá v modálnom okne - light téma ako v "Pridať/Upraviť zariadenie" */
+        body.light-theme #deviceSettingsModal #cancelSettings {
+            background-color: #cdd5e1 !important;
+            color: #1f2937 !important;
+            border: 1px solid #b8c4d6 !important;
+        }
+
+        body.light-theme #deviceSettingsModal #cancelSettings:hover {
+            background-color: #b9c5d7 !important;
+            color: #0f172a !important;
+        }
+
+        body.light-theme #deviceSettingsModal button[type="submit"] {
+            background: linear-gradient(135deg, #3ba8e8, #1f86d8) !important;
             color: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(31, 134, 216, 0.14);
+            border: none !important;
+        }
+
+        body.light-theme #deviceSettingsModal button[type="submit"]:hover {
+            background: linear-gradient(135deg, #1f86d8, #186fb6) !important;
+            color: #ffffff !important;
+            box-shadow: 0 6px 12px rgba(24, 111, 182, 0.18);
         }
         
         body:not(.light-theme) #deviceSettingsModal button {

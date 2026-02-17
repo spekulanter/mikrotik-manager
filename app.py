@@ -53,7 +53,7 @@ BOOLEAN_SETTING_KEYS = {
     'backup_detailed_logging', 'notify_backup_success', 'notify_backup_failure',
     'notify_device_offline', 'notify_device_online', 'notify_temp_critical',
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
-    'notify_version_change', 'quiet_hours_enabled', 'availability_monitoring_enabled',
+    'notify_version_change', 'notify_failed_login', 'notify_failed_2fa', 'quiet_hours_enabled', 'availability_monitoring_enabled',
     'debug_terminal'
 }
 
@@ -102,6 +102,8 @@ SETTING_LABELS = {
     'notify_memory_critical': 'Notifikácia: kritická pamäť (SNMP)',
     'notify_reboot_detected': 'Notifikácia: detekovaný reštart',
     'notify_version_change': 'Notifikácia: zmena verzie OS',
+    'notify_failed_login': 'Notifikácia: neúspešné prihlásenie do aplikácie',
+    'notify_failed_2fa': 'Notifikácia: neúspešné 2FA overenie',
     'viewport': 'Režim zobrazenia'
 }
 
@@ -667,6 +669,8 @@ def init_database():
             'notify_memory_critical': 'true',
             'notify_reboot_detected': 'true',
             'notify_version_change': 'true',
+            'notify_failed_login': 'true',
+            'notify_failed_2fa': 'true',
             'temp_critical_threshold': '75',
             'cpu_critical_threshold': '85',
             'memory_critical_threshold': '90',
@@ -1286,7 +1290,9 @@ def send_pushover_notification(message, title="MikroTik Manager", notification_k
         
         level_map = {
             'notify_device_offline': 'warning',
-            'notify_backup_failure': 'error'
+            'notify_backup_failure': 'error',
+            'notify_failed_login': 'warning',
+            'notify_failed_2fa': 'warning'
         }
         log_level = level_map.get(notification_key, 'info')
         add_log(log_level, f"Pushover notifikácia odoslaná: {message}")
@@ -1343,6 +1349,14 @@ def login():
                 login_user(user)
                 return redirect(url_for('setup_2fa'))
         else:
+            attempted_username = (username or '').strip() or '(prázdne meno)'
+            source_ip = request.remote_addr or 'unknown'
+            add_log('warning', f"Neúspešné prihlásenie do aplikácie. Používateľ: {attempted_username}, IP: {source_ip}")
+            send_pushover_notification(
+                f"Neúspešné prihlásenie do aplikácie. Používateľ: {attempted_username}, IP: {source_ip}",
+                title="MikroTik Manager - Security",
+                notification_key='notify_failed_login'
+            )
             error = 'Neplatné meno alebo heslo.'
             time.sleep(1)
     return render_template('login.html', error=error)
@@ -1354,6 +1368,8 @@ def login_2fa():
     error = None
     if request.method == 'POST':
         user = load_user(session['2fa_user_id'])
+        source_ip = request.remote_addr or 'unknown'
+        attempted_username = user.username if user else '(unknown user)'
         totp_code = request.form.get('totp_code', '').strip()
         backup_code = request.form.get('backup_code', '').strip()
         
@@ -1365,6 +1381,13 @@ def login_2fa():
                 session.pop('2fa_user_id', None)
                 return redirect(request.args.get('next') or url_for('index'))
             else:
+                message = f"Neúspešné 2FA overenie (TOTP). Používateľ: {attempted_username}, IP: {source_ip}"
+                add_log('warning', message)
+                send_pushover_notification(
+                    message,
+                    title="MikroTik Manager - Security",
+                    notification_key='notify_failed_2fa'
+                )
                 error = 'Neplatný overovací kód z aplikácie.'
         elif backup_code:
             # Overenie záložného kódu
@@ -1389,6 +1412,13 @@ def login_2fa():
                         add_log('info', f"Používateľ '{user.username}' sa prihlásil pomocou záložného kódu.")
                         return redirect(request.args.get('next') or url_for('index'))
                     else:
+                        message = f"Neúspešné 2FA overenie (záložný kód). Používateľ: {attempted_username}, IP: {source_ip}"
+                        add_log('warning', message)
+                        send_pushover_notification(
+                            message,
+                            title="MikroTik Manager - Security",
+                            notification_key='notify_failed_2fa'
+                        )
                         error = 'Neplatný alebo už použitý záložný kód.'
             except Exception as e:
                 logger.error(f"Chyba pri overení záložného kódu: {e}")

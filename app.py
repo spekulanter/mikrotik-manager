@@ -53,7 +53,7 @@ BOOLEAN_SETTING_KEYS = {
     'backup_detailed_logging', 'notify_backup_success', 'notify_backup_failure',
     'notify_device_offline', 'notify_device_online', 'notify_temp_critical',
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
-    'notify_version_change', 'notify_failed_login', 'notify_failed_2fa', 'quiet_hours_enabled', 'availability_monitoring_enabled',
+    'notify_version_change', 'notify_failed_login', 'notify_failed_2fa', 'notify_password_recovery_failure', 'quiet_hours_enabled', 'availability_monitoring_enabled',
     'debug_terminal'
 }
 
@@ -104,6 +104,7 @@ SETTING_LABELS = {
     'notify_version_change': 'Notifikácia: zmena verzie OS',
     'notify_failed_login': 'Notifikácia: neúspešné prihlásenie do aplikácie',
     'notify_failed_2fa': 'Notifikácia: neúspešné 2FA overenie',
+    'notify_password_recovery_failure': 'Notifikácia: neúspešná obnova hesla',
     'viewport': 'Režim zobrazenia'
 }
 
@@ -871,6 +872,7 @@ def init_database():
             'notify_version_change': 'true',
             'notify_failed_login': 'true',
             'notify_failed_2fa': 'true',
+            'notify_password_recovery_failure': 'true',
             'temp_critical_threshold': '75',
             'cpu_critical_threshold': '85',
             'memory_critical_threshold': '90',
@@ -1499,7 +1501,8 @@ def send_pushover_notification(
             'notify_device_offline': 'warning',
             'notify_backup_failure': 'error',
             'notify_failed_login': 'warning',
-            'notify_failed_2fa': 'warning'
+            'notify_failed_2fa': 'warning',
+            'notify_password_recovery_failure': 'warning'
         }
         log_level = level_map.get(notification_key, 'info')
         if log_message:
@@ -1584,10 +1587,21 @@ def password_recovery():
     if request.method == 'POST':
         action = (request.form.get('action') or '').strip()
         source_ip = request.remote_addr or 'unknown'
+        
+        def notify_recovery_failure(reason):
+            attempted_username = username if username else '(nezadané)'
+            send_pushover_notification(
+                f"Neúspešná obnova hesla: {reason}. Používateľ: {attempted_username}, IP: {source_ip}",
+                title="MikroTik Manager - Security",
+                notification_key='notify_password_recovery_failure',
+                log_message=False,
+                ignore_quiet_hours=True
+            )
 
         if action == 'send_code':
             if not username:
                 error = 'Zadajte používateľské meno.'
+                notify_recovery_failure("chýbajúce používateľské meno")
             else:
                 generic_info = f"Ak účet existuje a Pushover je nastavený, recovery kód bol odoslaný. Kód platí {PASSWORD_RECOVERY_EXPIRY_MINUTES} minút."
                 with get_db_connection() as conn:
@@ -1595,6 +1609,7 @@ def password_recovery():
 
                 if not user_data:
                     add_log('warning', f"Obnova hesla - požiadavka pre neexistujúce meno '{username}', IP: {source_ip}")
+                    notify_recovery_failure("požiadavka pre neexistujúce používateľské meno")
                     time.sleep(1)
                     info = generic_info
                 else:
@@ -1602,6 +1617,7 @@ def password_recovery():
                     if issue_status == 'cooldown':
                         info = f"Recovery kód bol odoslaný nedávno. Skúste to znova o {PASSWORD_RECOVERY_REQUEST_COOLDOWN_SECONDS} sekúnd."
                         add_log('warning', f"Obnova hesla - príliš častá požiadavka pre používateľa '{username}', IP: {source_ip}")
+                        notify_recovery_failure("príliš častá požiadavka (cooldown)")
                     elif recovery_code:
                         sent = send_pushover_notification(
                             (
@@ -1631,10 +1647,13 @@ def password_recovery():
 
             if not username or not recovery_code or not backup_code or not new_password or not new_password_confirm:
                 error = 'Všetky polia sú povinné.'
+                notify_recovery_failure("nekompletné vstupné údaje")
             elif len(new_password) < 8:
                 error = 'Nové heslo musí mať aspoň 8 znakov.'
+                notify_recovery_failure("heslo nespĺňa minimálnu dĺžku")
             elif new_password != new_password_confirm:
                 error = 'Nové heslá sa nezhodujú.'
+                notify_recovery_failure("nesúlad potvrdenia nového hesla")
             else:
                 with get_db_connection() as conn:
                     user_data = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
@@ -1642,6 +1661,7 @@ def password_recovery():
                     if not user_data:
                         error = 'Neplatné údaje pre obnovu hesla.'
                         add_log('warning', f"Obnova hesla - reset pre neexistujúce meno '{username}', IP: {source_ip}")
+                        notify_recovery_failure("reset pre neexistujúce používateľské meno")
                         time.sleep(1)
                     else:
                         user_id = user_data['id']
@@ -1656,6 +1676,7 @@ def password_recovery():
                         if not token_record or not backup_record:
                             error = 'Neplatný recovery kód alebo záložný kód.'
                             add_log('warning', f"Obnova hesla - neplatný recovery/backup kód pre používateľa '{username}', IP: {source_ip}")
+                            notify_recovery_failure("neplatný recovery alebo záložný kód")
                         else:
                             new_password_hash = generate_password_hash(new_password)
                             conn.execute('UPDATE users SET password = ? WHERE id = ?', (new_password_hash, user_id))
@@ -1679,6 +1700,7 @@ def password_recovery():
                             info = 'Heslo bolo úspešne obnovené. Teraz sa môžete prihlásiť.'
         else:
             error = 'Neplatná požiadavka.'
+            notify_recovery_failure("neplatný parameter action")
 
     return render_template(
         'password_recovery.html',

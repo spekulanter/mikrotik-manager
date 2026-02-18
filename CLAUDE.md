@@ -390,6 +390,7 @@ BOOLEAN_SETTING_KEYS = {
     'notify_version_change',
     'notify_failed_login',
     'notify_failed_2fa',
+    'notify_password_recovery_failure',
     'quiet_hours_enabled',
     'availability_monitoring_enabled',
     'debug_terminal'

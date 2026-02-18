@@ -190,6 +190,10 @@ DEFAULT_SETTING_VALUES = {
     'ftp_port': '21'
 }
 
+PASSWORD_RECOVERY_CODE_LENGTH = 8
+PASSWORD_RECOVERY_EXPIRY_MINUTES = 10
+PASSWORD_RECOVERY_REQUEST_COOLDOWN_SECONDS = 60
+
 # --- Nastavenie aplikácie (upravené pre HTML šablóny) ---
 app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
 
@@ -358,6 +362,75 @@ def verify_backup_code(stored_code, provided_code):
 
     # Legacy fallback for old plaintext backup codes.
     return secrets.compare_digest(stored_code_str, provided_code_str)
+
+def parse_db_datetime(value):
+    """Parse DB datetime string/timestamp into datetime object."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    value_str = str(value).strip()
+    if not value_str:
+        return None
+    try:
+        return datetime.fromisoformat(value_str.replace(' ', 'T'))
+    except Exception:
+        return None
+
+def find_matching_backup_code_record(conn, user_id, provided_code):
+    """Find matching active backup code record for user."""
+    backup_records = conn.execute(
+        'SELECT id, code FROM backup_codes WHERE user_id = ? AND used = 0',
+        (user_id,)
+    ).fetchall()
+    for record in backup_records:
+        if verify_backup_code(record['code'], provided_code):
+            return record
+    return None
+
+def issue_password_recovery_code(user_id, source_ip):
+    """Create one-time password recovery code and store only its hash."""
+    now = datetime.now()
+    with get_db_connection() as conn:
+        latest = conn.execute(
+            'SELECT created_at FROM password_recovery_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+            (user_id,)
+        ).fetchone()
+        if latest:
+            latest_created = parse_db_datetime(latest['created_at'])
+            if latest_created and (now - latest_created).total_seconds() < PASSWORD_RECOVERY_REQUEST_COOLDOWN_SECONDS:
+                return None, 'cooldown'
+
+        conn.execute(
+            'UPDATE password_recovery_tokens SET used = 1, used_at = ? WHERE user_id = ? AND used = 0',
+            (now, user_id)
+        )
+        recovery_code = ''.join(secrets.choice(string.digits) for _ in range(PASSWORD_RECOVERY_CODE_LENGTH))
+        recovery_code_hash = generate_password_hash(recovery_code)
+        conn.execute(
+            'INSERT INTO password_recovery_tokens (user_id, token_hash, created_at, expires_at, used, request_ip) VALUES (?, ?, ?, ?, 0, ?)',
+            (user_id, recovery_code_hash, now, now + timedelta(minutes=PASSWORD_RECOVERY_EXPIRY_MINUTES), source_ip)
+        )
+        conn.commit()
+    return recovery_code, 'ok'
+
+def find_matching_recovery_token_record(conn, user_id, provided_code):
+    """Find matching active recovery token record for user."""
+    now = datetime.now()
+    token_records = conn.execute(
+        'SELECT id, token_hash, expires_at FROM password_recovery_tokens WHERE user_id = ? AND used = 0 ORDER BY created_at DESC',
+        (user_id,)
+    ).fetchall()
+    for record in token_records:
+        expires_at = parse_db_datetime(record['expires_at'])
+        if expires_at and expires_at < now:
+            continue
+        try:
+            if check_password_hash(record['token_hash'], provided_code):
+                return record
+        except Exception:
+            continue
+    return None
 
 def encrypt_setting_value_if_sensitive(key, value):
     """Encrypt sensitive setting values before storing in DB."""
@@ -721,6 +794,19 @@ def init_database():
                 created_at TIMESTAMP NOT NULL,
                 used BOOLEAN NOT NULL DEFAULT 0,
                 used_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS password_recovery_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN NOT NULL DEFAULT 0,
+                used_at TIMESTAMP,
+                request_ip TEXT,
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
@@ -1341,7 +1427,14 @@ def upload_to_ftp(local_path, detailed_logging=True, device_ip=None, log_success
     add_log('error', f"FTP upload zlyhal: {error_msg}", device_ip)
     return False, error_msg
 
-def send_pushover_notification(message, title="MikroTik Manager", notification_key=None, default_enabled=True):
+def send_pushover_notification(
+    message,
+    title="MikroTik Manager",
+    notification_key=None,
+    default_enabled=True,
+    log_message=True,
+    ignore_quiet_hours=False
+):
     try:
         queried_keys = ['pushover_app_key', 'pushover_user_key', 'quiet_hours_enabled', 'quiet_hours_start', 'quiet_hours_end']
         if notification_key:
@@ -1381,7 +1474,7 @@ def send_pushover_notification(message, title="MikroTik Manager", notification_k
                             in_quiet_hours = start_time <= now_time < end_time
                         else:
                             in_quiet_hours = now_time >= start_time or now_time < end_time
-                        if in_quiet_hours:
+                        if in_quiet_hours and not ignore_quiet_hours:
                             debug_log('debug_notifications', f"Notification '{notification_key}' potlačená - quiet hours.")
                             return False
                     except Exception as time_e:
@@ -1409,7 +1502,10 @@ def send_pushover_notification(message, title="MikroTik Manager", notification_k
             'notify_failed_2fa': 'warning'
         }
         log_level = level_map.get(notification_key, 'info')
-        add_log(log_level, f"Pushover notifikácia odoslaná: {message}")
+        if log_message:
+            add_log(log_level, f"Pushover notifikácia odoslaná: {message}")
+        else:
+            add_log(log_level, "Pushover notifikácia odoslaná (citlivý obsah skrytý).")
         return True
     except Exception as e:
         add_log('error', f"Odoslanie Pushover notifikácie zlyhalo: {e}")
@@ -1476,6 +1572,123 @@ def login():
             time.sleep(1)
     return render_template('login.html', error=error)
 
+@app.route('/password-recovery', methods=['GET', 'POST'])
+def password_recovery():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    error = None
+    info = None
+    username = (request.form.get('username') or '').strip() if request.method == 'POST' else ''
+
+    if request.method == 'POST':
+        action = (request.form.get('action') or '').strip()
+        source_ip = request.remote_addr or 'unknown'
+
+        if action == 'send_code':
+            if not username:
+                error = 'Zadajte používateľské meno.'
+            else:
+                generic_info = f"Ak účet existuje a Pushover je nastavený, recovery kód bol odoslaný. Kód platí {PASSWORD_RECOVERY_EXPIRY_MINUTES} minút."
+                with get_db_connection() as conn:
+                    user_data = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+
+                if not user_data:
+                    add_log('warning', f"Obnova hesla - požiadavka pre neexistujúce meno '{username}', IP: {source_ip}")
+                    time.sleep(1)
+                    info = generic_info
+                else:
+                    recovery_code, issue_status = issue_password_recovery_code(user_data['id'], source_ip)
+                    if issue_status == 'cooldown':
+                        info = f"Recovery kód bol odoslaný nedávno. Skúste to znova o {PASSWORD_RECOVERY_REQUEST_COOLDOWN_SECONDS} sekúnd."
+                        add_log('warning', f"Obnova hesla - príliš častá požiadavka pre používateľa '{username}', IP: {source_ip}")
+                    elif recovery_code:
+                        sent = send_pushover_notification(
+                            (
+                                f"Recovery kód pre reset hesla: {recovery_code}\n"
+                                f"Platnosť: {PASSWORD_RECOVERY_EXPIRY_MINUTES} minút.\n"
+                                "Ak ste o reset nežiadali, ignorujte túto správu."
+                            ),
+                            title="MikroTik Manager - Recovery",
+                            log_message=False,
+                            ignore_quiet_hours=True
+                        )
+                        if sent:
+                            info = generic_info
+                            add_log('warning', f"Obnova hesla - recovery kód odoslaný pre používateľa '{username}', IP: {source_ip}")
+                        else:
+                            add_log('error', f"Obnova hesla - odoslanie recovery kódu zlyhalo pre používateľa '{username}', IP: {source_ip}")
+                            info = generic_info
+                    else:
+                        add_log('error', f"Obnova hesla - generovanie recovery kódu zlyhalo pre používateľa '{username}', IP: {source_ip}")
+                        info = generic_info
+
+        elif action == 'reset_password':
+            recovery_code = (request.form.get('recovery_code') or '').strip().replace(' ', '')
+            backup_code = (request.form.get('backup_code') or '').strip().upper()
+            new_password = request.form.get('new_password') or ''
+            new_password_confirm = request.form.get('new_password_confirm') or ''
+
+            if not username or not recovery_code or not backup_code or not new_password or not new_password_confirm:
+                error = 'Všetky polia sú povinné.'
+            elif len(new_password) < 8:
+                error = 'Nové heslo musí mať aspoň 8 znakov.'
+            elif new_password != new_password_confirm:
+                error = 'Nové heslá sa nezhodujú.'
+            else:
+                with get_db_connection() as conn:
+                    user_data = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+
+                    if not user_data:
+                        error = 'Neplatné údaje pre obnovu hesla.'
+                        add_log('warning', f"Obnova hesla - reset pre neexistujúce meno '{username}', IP: {source_ip}")
+                        time.sleep(1)
+                    else:
+                        user_id = user_data['id']
+                        now = datetime.now()
+                        conn.execute(
+                            'UPDATE password_recovery_tokens SET used = 1, used_at = ? WHERE user_id = ? AND used = 0 AND expires_at < ?',
+                            (now, user_id, now)
+                        )
+                        token_record = find_matching_recovery_token_record(conn, user_id, recovery_code)
+                        backup_record = find_matching_backup_code_record(conn, user_id, backup_code)
+
+                        if not token_record or not backup_record:
+                            error = 'Neplatný recovery kód alebo záložný kód.'
+                            add_log('warning', f"Obnova hesla - neplatný recovery/backup kód pre používateľa '{username}', IP: {source_ip}")
+                        else:
+                            new_password_hash = generate_password_hash(new_password)
+                            conn.execute('UPDATE users SET password = ? WHERE id = ?', (new_password_hash, user_id))
+                            conn.execute(
+                                'UPDATE password_recovery_tokens SET used = 1, used_at = ? WHERE user_id = ? AND used = 0',
+                                (now, user_id)
+                            )
+                            conn.execute(
+                                'UPDATE backup_codes SET used = 1, used_at = ? WHERE id = ?',
+                                (now, backup_record['id'])
+                            )
+                            conn.commit()
+
+                            send_pushover_notification(
+                                "Heslo bolo úspešne resetované cez recovery flow.",
+                                title="MikroTik Manager - Security",
+                                log_message=False,
+                                ignore_quiet_hours=True
+                            )
+                            add_log('warning', f"Obnova hesla úspešná pre používateľa '{username}'. IP: {source_ip}")
+                            info = 'Heslo bolo úspešne obnovené. Teraz sa môžete prihlásiť.'
+        else:
+            error = 'Neplatná požiadavka.'
+
+    return render_template(
+        'password_recovery.html',
+        error=error,
+        info=info,
+        username=username,
+        recovery_code_length=PASSWORD_RECOVERY_CODE_LENGTH,
+        recovery_expiry_minutes=PASSWORD_RECOVERY_EXPIRY_MINUTES
+    )
+
 @app.route('/login/2fa', methods=['GET', 'POST'])
 def login_2fa():
     if '2fa_user_id' not in session:
@@ -1511,15 +1724,7 @@ def login_2fa():
             # Overenie záložného kódu
             try:
                 with get_db_connection() as conn:
-                    backup_records = conn.execute(
-                        'SELECT id, code FROM backup_codes WHERE user_id = ? AND used = 0',
-                        (user.id,)
-                    ).fetchall()
-                    matched_record = None
-                    for record in backup_records:
-                        if verify_backup_code(record['code'], backup_code):
-                            matched_record = record
-                            break
+                    matched_record = find_matching_backup_code_record(conn, user.id, backup_code)
 
                     if matched_record:
                         # Označenie kódu ako použitého

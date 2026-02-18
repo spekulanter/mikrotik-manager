@@ -117,6 +117,19 @@ CREATE TABLE backup_codes (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+-- Password recovery tokens (one-time)
+CREATE TABLE password_recovery_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL,            -- Werkzeug password hash
+    created_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN NOT NULL DEFAULT 0,
+    used_at TIMESTAMP,
+    request_ip TEXT,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
 -- Ping monitoring history
 CREATE TABLE ping_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,6 +232,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
 - TOTP (Time-based One-Time Password) using PyOTP
 - QR code generation for authenticator apps
 - 10 single-use backup codes per user (stored hashed)
+- Password recovery via one-time Pushover code + backup code verification
 - Mandatory for all accounts (cannot be disabled once activated)
 
 **Supported Authenticator Apps**
@@ -234,6 +248,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
 ```python
 @app.route('/register', methods=['GET', 'POST'])  # User registration (single user)
 @app.route('/login', methods=['GET', 'POST'])     # Login with username/password
+@app.route('/password-recovery', methods=['GET', 'POST']) # Recovery flow (Pushover code + backup code)
 @app.route('/login/2fa', methods=['GET', 'POST']) # 2FA verification
 @app.route('/setup_2fa', methods=['GET'])         # 2FA setup page
 @app.route('/verify_2fa', methods=['POST'])       # 2FA activation

@@ -2739,7 +2739,13 @@
             if (!chart || !minX || !maxX) return;
 
             // For full time range display, use the current time range setting instead of actual data range
-            const currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
+            let currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
+
+            // Critical for single-chart zoom-out: use per-chart range if available
+            if (chart && chart.canvas && chart.canvas.id && window._chartTimeRanges && window._chartTimeRanges.has(chart.canvas.id)) {
+                currentTimeRange = window._chartTimeRanges.get(chart.canvas.id);
+            }
+
             const timeRangeMs = getTimeRangeMs(currentTimeRange);
 
             // Check if we're displaying the full requested range (not zoomed in)
@@ -2894,13 +2900,13 @@
                     maxTicksLimit: 12
                 };
             } else if (diffDays <= 365) {
-                // 90d - 1 year range - show monthly markers
+                // 90d - 1 year range - show weekly markers (changed from monthly to fix alignment issues)
                 timeFormats = {
                     displayFormats: { week: 'dd/MM', month: 'MM/yy', quarter: 'MM/yy' },
                     tooltipFormat: 'dd/MM/yyyy',
-                    unit: 'month',
-                    stepSize: 1,
-                    maxTicksLimit: 12
+                    unit: 'week',      // Changed from 'month' to 'week' to prevent data misalignment
+                    stepSize: 4,       // Show every 4 weeks (≈1 month)
+                    maxTicksLimit: 13  // ~13 months in a year
                 };
             } else {
                 // Very long range (365+ days) - show quarterly/monthly markers with year display

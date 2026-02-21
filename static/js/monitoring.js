@@ -6,17 +6,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let debugPanelEnabled = false;
     let debugLogs = [];
     let maxDebugLogs = 500; // Limit to prevent memory issues
-    
+
     const loadDebugSettings = async () => {
         try {
             const response = await fetch('/api/settings');
             const settings = await response.json();
             debugSettings = settings;
-            
+
             // Check if debug panel should be enabled
             debugPanelEnabled = settings.debug_terminal === 'true';
             updateDebugPanelVisibility();
-            
+
             // If debug is enabled and we have existing logs, update display
             if (debugPanelEnabled && debugLogs.length > 0) {
                 updateDebugPanelContent();
@@ -28,25 +28,25 @@ document.addEventListener('DOMContentLoaded', () => {
             updateDebugPanelVisibility();
         }
     };
-    
+
     const debugLog = (debugType, message, ...args) => {
         // Early exit if debug system is completely disabled - no processing at all
         if (!debugSettings || typeof debugSettings !== 'object') {
             return; // No debug settings loaded, skip entirely
         }
-        
+
         const isEnabled = debugSettings.debug_terminal === 'true';
-        
+
         if (isEnabled) {
             // Always log to console
-            
+
             // If debug panel is enabled, also add to panel
             if (debugPanelEnabled && debugSettings.debug_terminal === 'true') {
                 addLogToPanel(debugType, message, args);
             }
         }
     };
-    
+
     const addLogToPanel = (debugType, message, args) => {
         const timestamp = new Date().toLocaleTimeString();
         const logEntry = {
@@ -56,24 +56,24 @@ document.addEventListener('DOMContentLoaded', () => {
             args: args.length > 0 ? args : null,
             id: Date.now() + Math.random()
         };
-        
+
         debugLogs.push(logEntry);
-        
+
         // Keep only recent logs to prevent memory issues
         if (debugLogs.length > maxDebugLogs) {
             debugLogs = debugLogs.slice(-maxDebugLogs);
         }
-        
+
         updateDebugPanelContent();
     };
-    
+
     const updateDebugPanelContent = () => {
         const debugPanelContent = document.getElementById('debugPanelContent');
         if (!debugPanelContent) return;
-        
+
         // Show last 100 logs in reverse order (newest first)
         const recentLogs = debugLogs.slice(-100).reverse();
-        
+
         debugPanelContent.innerHTML = recentLogs.map(log => {
             const argsText = log.args ? formatArgs(log.args) : '';
             return `
@@ -85,11 +85,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
         }).join('');
-        
+
         // Auto-scroll to bottom (newest entries)
         debugPanelContent.scrollTop = 0;
     };
-    
+
     const formatArgs = (args) => {
         return args.map(arg => {
             if (typeof arg === 'object') {
@@ -102,39 +102,39 @@ document.addEventListener('DOMContentLoaded', () => {
             return escapeHtml(String(arg));
         }).join(' ');
     };
-    
+
     const escapeHtml = (text) => {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     };
-    
+
     const updateDebugPanelVisibility = () => {
         const debugPanel = document.getElementById('debugPanel');
-        
+
         if (!debugPanel) return;
-        
+
         // Debug panel sa zobrazuje priamo na základe nastavení
         debugPanelEnabled = debugSettings.debug_terminal === 'true';
-        
+
         if (debugPanelEnabled) {
             debugPanel.classList.add('visible');
         } else {
             debugPanel.classList.remove('visible');
         }
     };
-    
+
     const clearDebugLogs = () => {
         debugLogs = [];
         updateDebugPanelContent();
     };
-    
+
     const copyDebugLogs = () => {
         const logText = debugLogs.map(log => {
             const argsText = log.args ? ` ${formatArgs(log.args)}` : '';
             return `${log.timestamp} [${log.type.toUpperCase()}] ${log.message}${argsText}`;
         }).join('\n');
-        
+
         navigator.clipboard.writeText(logText).then(() => {
             // Show feedback
             const copyBtn = document.getElementById('debugCopyBtn');
@@ -147,22 +147,22 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Failed to copy debug logs:', err);
         });
     };
-    
+
     // Initialize debug panel event listeners
     const initDebugPanel = () => {
         const debugClearBtn = document.getElementById('debugClearBtn');
         const debugCopyBtn = document.getElementById('debugCopyBtn');
         const debugMinimizeBtn = document.getElementById('debugMinimizeBtn');
         const debugCloseBtn = document.getElementById('debugCloseBtn');
-        
+
         if (debugClearBtn) {
             debugClearBtn.addEventListener('click', clearDebugLogs);
         }
-        
+
         if (debugCopyBtn) {
             debugCopyBtn.addEventListener('click', copyDebugLogs);
         }
-        
+
         if (debugMinimizeBtn) {
             debugMinimizeBtn.addEventListener('click', () => {
                 const debugPanel = document.getElementById('debugPanel');
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-        
+
         if (debugCloseBtn) {
             debugCloseBtn.addEventListener('click', () => {
                 const debugPanel = document.getElementById('debugPanel');
@@ -185,18 +185,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     };
-    
+
     // Load debug settings ONLY when needed - not automatically
     // Debug system will be initialized only if debug_terminal is enabled
-    
+
     // Export functions to window for access from settings page
     window.refreshDebugSettings = () => {
         loadDebugSettings();
     };
-    
+
     // Export debugLog function for global access (e.g., from monitoring.html)
     window.debugLog = debugLog;
-    
+
     // Initialize debug system conditionally - ONLY when enabled
     const initializeDebugSystem = async () => {
         try {
@@ -209,12 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
             debugPanelEnabled = false;
         }
     };
-    
+
     // DON'T start debug system automatically - only when explicitly enabled
     // initializeDebugSystem(); // REMOVED - will be called from focus event if needed
-    
+
     // Listen for settings changes (e.g., from settings page)
-    window.addEventListener('storage', function(e) {
+    window.addEventListener('storage', function (e) {
         if (e.key === 'settingsChanged' && e.newValue === 'true') {
             setTimeout(() => {
                 loadDebugSettings();
@@ -222,9 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 500);
         }
     });
-    
+
     // Check for settings changes when user returns to the page
-    window.addEventListener('focus', function() {
+    window.addEventListener('focus', function () {
         // Only check if we haven't checked recently (debounce)
         if (!window._lastFocusCheck || Date.now() - window._lastFocusCheck > 5000) {
             // First check if debug is needed, then initialize only if enabled
@@ -239,13 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
             window._lastFocusCheck = Date.now();
         }
     });
-    
+
     // Keyboard shortcut for debug panel (Ctrl+D or Cmd+D)
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if ((e.ctrlKey || e.metaKey) && e.key === 'd' && debugSettings.debug_terminal === 'true') {
             e.preventDefault();
             const debugPanel = document.getElementById('debugPanel');
-            
+
             if (debugPanel) {
                 if (debugPanel.classList.contains('visible')) {
                     debugPanel.classList.remove('visible');
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-    
+
     // Chart.js availability will be logged only if debug is enabled
 
     const API_URL = '';
@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pingIntervalInput = document.getElementById('pingInterval');
     const snmpIntervalInput = document.getElementById('snmpInterval');
     const timeRangeContainer = document.getElementById('timeRangeContainer');
-    
+
     let currentDeviceId = null;
     let currentTimeRange = '24h'; // Predvolený časový rozsah
     let charts = {};
@@ -311,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const SNMP_GAP_DEFAULT_MS = 15 * 60 * 1000;
     const SNMP_GAP_MAX_MS = 60 * 60 * 1000;
     const SNMP_INTERVAL_MIN_GUESS_MS = 60 * 1000;
-    const SHORT_RANGES = new Set(['30m','recent','3h','6h','12h','24h']);
+    const SHORT_RANGES = new Set(['30m', 'recent', '3h', '6h', '12h', '24h']);
     const CHART_COLOR_THEMES = {
         dark: {
             ping: {
@@ -367,16 +367,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     const getChartColorTheme = () => document.body.classList.contains('light-theme') ? CHART_COLOR_THEMES.light : CHART_COLOR_THEMES.dark;
-    
+
     // Export charts to window for access from monitoring.html
     window.charts = charts;
-    
+
     // Device status cache for efficient status tracking
     let deviceStatusCache = new Map();
-    
+
     // DOM elements cache for better performance
     const domCache = {};
-    
+
     // Cache frequently used DOM elements
     const cacheDOM = () => {
         domCache.chartContainers = document.querySelectorAll('.chart-container');
@@ -389,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
         domCache.uptime24h = document.getElementById('uptime24h');
         domCache.lastPing = document.getElementById('lastPing');
     };
-    
+
     // Device status management functions
     const getStatusIndicator = (status, isPaused = false) => {
         if (isPaused) {
@@ -403,18 +403,18 @@ document.addEventListener('DOMContentLoaded', () => {
             default:
                 return '⚪'; // White dot for unknown
         }
-    };    const updateDeviceStatus = (deviceId, status) => {
+    }; const updateDeviceStatus = (deviceId, status) => {
         deviceStatusCache.set(deviceId, status);
         updateDeviceStatusInSelector(deviceId, status);
     };
-    
+
     const updateDeviceStatusInSelector = (deviceId, status, isPaused = null) => {
         // Use custom dropdown API if available
         if (window.customDeviceSelector) {
             window.customDeviceSelector.updateDeviceStatus(deviceId, status, isPaused);
             return;
         }
-        
+
         // Legacy fallback
         const options = deviceSelector.querySelectorAll('option[value]');
         options.forEach(option => {
@@ -422,10 +422,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Always use stored data attributes for reliable device text
                 const deviceName = option.getAttribute('data-name');
                 const deviceIp = option.getAttribute('data-ip');
-                
+
                 // Use provided paused status or get from data attribute
                 const pausedStatus = isPaused !== null ? isPaused : (option.getAttribute('data-paused') === 'true');
-                
+
                 let deviceText;
                 if (deviceName && deviceIp) {
                     // Use stored data attributes (most reliable)
@@ -433,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     // Fallback: try to extract from current text with more robust regex
                     const currentText = option.textContent;
-                    
+
                     // Remove any emoji/status indicators at the beginning using comprehensive patterns
                     let cleanText = currentText
                         // Remove common status emojis and pause symbol
@@ -444,9 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         .replace(/^\?+\s*/g, '')
                         // Remove any remaining non-alphanumeric chars at start (except parentheses and spaces)
                         .replace(/^[^\w\s\(\)\.]+\s*/g, '');
-                    
+
                     deviceText = cleanText.trim();
-                    
+
                     // If still no valid format, try to extract name(ip) pattern
                     if (!deviceText.includes('(') || !deviceText.includes(')')) {
                         // Last resort: assume the format and extract what we can
@@ -459,17 +459,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
-                
+
                 // Update with new status indicator (paused takes priority)
                 const statusIndicator = getStatusIndicator(status, pausedStatus);
                 option.textContent = `${statusIndicator} ${deviceText}`;
                 option.dataset.status = status;
                 option.dataset.paused = pausedStatus;
-                
+
             }
         });
     };
-    
+
     // Save/load state to localStorage
     const saveState = () => {
         const state = {
@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.currentTimeRange = range;
         saveState();
     };
-    
+
     const loadState = () => {
         try {
             const saved = localStorage.getItem('monitoring_state');
@@ -606,7 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
             y: null
         });
     };
-    
+
     // API helper
     const api = {
         _handleResponse: async (res) => {
@@ -614,7 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.location.href = '/login';
                 return {};
             }
-            
+
             try {
                 const data = await res.json();
                 if (!res.ok) {
@@ -628,14 +628,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw error;
             }
         },
-        
-        get: async function(endpoint) {
+
+        get: async function (endpoint) {
             const res = await fetch(`${API_URL}/api/${endpoint}`);
             const result = await this._handleResponse(res);
             return result;
         },
-        
-        post: async function(endpoint, data) {
+
+        post: async function (endpoint, data) {
             const res = await fetch(`${API_URL}/api/${endpoint}`, {
                 method: 'POST',
                 headers: {
@@ -647,32 +647,32 @@ document.addEventListener('DOMContentLoaded', () => {
             return result;
         }
     };
-    
+
     // Initialize Socket.IO connection
     const initializeSocket = () => {
         socket = io();
-        
+
         socket.on('connect', () => {
         });
-        
+
         socket.on('disconnect', () => {
         });
-        
+
         // Listen for ping updates
         socket.on('ping_update', (data) => {
             // Always update device status in cache and selector (lightweight operation)
             const deviceId = parseInt(data.device_id);
             const status = data.status; // Use status directly from ping result
-            
+
             updateDeviceStatus(deviceId, status);
-            
+
             // Only update charts if page is visible and this is the currently selected device
             if (document.visibilityState === 'visible' && data.device_id === currentDeviceId) {
                 updatePingStatus(data);
                 updatePingChart(data);
             }
         });
-        
+
         // Listen for SNMP updates
         socket.on('snmp_update', (data) => {
             // Only process SNMP updates if page is visible
@@ -684,32 +684,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     };
-    
+
     // Load devices into selector
     const loadDevices = async () => {
         try {
             const devices = await api.get('devices');
-            
+
             // Use custom dropdown API
             if (window.customDeviceSelector) {
                 window.customDeviceSelector.populateOptions(devices);
             } else {
                 // Fallback for legacy compatibility
                 deviceSelector.innerHTML = '<option value="">Vyberte zariadenie...</option>';
-                
+
                 devices.forEach(device => {
                     const option = document.createElement('option');
                     option.value = device.id;
-                    
+
                     // Store original device info in data attributes for safe retrieval
                     option.setAttribute('data-name', device.name);
                     option.setAttribute('data-ip', device.ip);
                     option.setAttribute('data-paused', device.monitoring_paused ? 'true' : 'false');
-                    
+
                     // Use device status from database or default to unknown
                     const status = device.status || 'unknown';
                     const isPaused = device.monitoring_paused;
-                    
+
                     // Generate status indicator
                     let statusIndicator;
                     if (isPaused) {
@@ -726,40 +726,40 @@ document.addEventListener('DOMContentLoaded', () => {
                                 statusIndicator = '⚪'; // White dot for unknown
                         }
                     }
-                    
+
                     option.textContent = `${statusIndicator} ${device.name} (${device.ip})`;
                     option.dataset.status = status;
                     option.dataset.paused = isPaused;
-                    
+
                     deviceSelector.appendChild(option);
                 });
             }
-            
+
         } catch (error) {
             console.error('Chyba pri načítaní zariadení:', error);
         }
     };
-    
+
     // Update ping status display - optimized version with uptime
     const updatePingStatus = (pingData) => {
         // Use cached DOM elements for better performance
         const pingStatus = domCache.pingStatus || document.getElementById('pingStatus');
         const uptime24h = domCache.uptime24h || document.getElementById('uptime24h');
         const lastPing = domCache.lastPing || document.getElementById('lastPing');
-        
+
         if (!pingStatus) return; // Guard clause
-        
+
         const isOnline = pingData.status === 'online';
         const indicator = pingStatus.querySelector('.ping-indicator');
         const statusText = pingStatus.querySelector('span');
-        
+
         // Batch DOM updates using requestAnimationFrame
         requestAnimationFrame(() => {
             // Update status
             pingStatus.className = `ping-status ${pingData.status}`;
             if (indicator) indicator.className = `ping-indicator ${pingData.status}`;
             if (statusText) statusText.textContent = isOnline ? 'Online' : 'Offline';
-            
+
             if (lastPing) {
                 lastPing.textContent = new Date(pingData.timestamp).toLocaleTimeString('sk-SK');
             }
@@ -782,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return !isNaN(t) && (t >= fromTs - (5 * 60 * 1000)) && t <= nowTs;
         });
         if (history.length === 0) return null;
-        history.sort((a,b)=> new Date(a.timestamp) - new Date(b.timestamp));
+        history.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
         const firstTs = new Date(history[0].timestamp).getTime();
         if (firstTs < fromTs) {
@@ -801,16 +801,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const { history, rangeMs, nowTs } = windowData;
 
         let onlineDuration = 0;
-        for (let i=0;i<history.length-1;i++) {
+        for (let i = 0; i < history.length - 1; i++) {
             const cur = history[i];
-            const next = history[i+1];
+            const next = history[i + 1];
             const curTs = new Date(cur.timestamp).getTime();
             const nextTs = new Date(next.timestamp).getTime();
             if (isNaN(curTs) || isNaN(nextTs) || nextTs <= curTs) continue;
             const segment = nextTs - curTs;
             if (cur.status === 'online') onlineDuration += segment;
         }
-        const last = history[history.length-1];
+        const last = history[history.length - 1];
         const lastTs = new Date(last.timestamp).getTime();
         if (!isNaN(lastTs) && lastTs < nowTs) {
             if (last.status === 'online') onlineDuration += (nowTs - lastTs);
@@ -862,15 +862,105 @@ document.addEventListener('DOMContentLoaded', () => {
         return weightedLatency / onlineDuration;
     };
 
+    // Compute uptime for an arbitrary absolute timestamp window (used by zoom-in mode)
+    const computeUptimeForWindow = (fromTs, toTs) => {
+        if (!Array.isArray(lastPingHistory) || lastPingHistory.length === 0) return null;
+        const totalDuration = toTs - fromTs;
+        if (totalDuration <= 0) return null;
+
+        let history = lastPingHistory.filter(p => {
+            const t = new Date(p.timestamp).getTime();
+            return !isNaN(t) && t >= fromTs - (5 * 60 * 1000) && t <= toTs;
+        });
+        if (history.length === 0) return null;
+        history = history.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        const firstTs = new Date(history[0].timestamp).getTime();
+        if (firstTs < fromTs) {
+            history[0] = { ...history[0], timestamp: new Date(fromTs).toISOString() };
+        } else if (firstTs > fromTs) {
+            history.unshift({ timestamp: new Date(fromTs).toISOString(), status: history[0].status, avg_latency: history[0].avg_latency });
+        }
+
+        let onlineDuration = 0;
+        for (let i = 0; i < history.length - 1; i++) {
+            const cur = history[i];
+            const next = history[i + 1];
+            const curTs = new Date(cur.timestamp).getTime();
+            const nextTs = Math.min(new Date(next.timestamp).getTime(), toTs);
+            if (isNaN(curTs) || isNaN(nextTs) || nextTs <= curTs) continue;
+            if (cur.status === 'online') onlineDuration += (nextTs - curTs);
+        }
+        const last = history[history.length - 1];
+        const lastTs = new Date(last.timestamp).getTime();
+        if (!isNaN(lastTs) && lastTs < toTs && last.status === 'online') {
+            onlineDuration += (toTs - lastTs);
+        }
+        return Math.min(100, Math.max(0, (onlineDuration / totalDuration) * 100));
+    };
+
+    // Compute weighted average latency for an arbitrary absolute timestamp window
+    const computeAverageLatencyForWindow = (fromTs, toTs) => {
+        if (!Array.isArray(lastPingHistory) || lastPingHistory.length === 0) return null;
+
+        let history = lastPingHistory.filter(p => {
+            const t = new Date(p.timestamp).getTime();
+            return !isNaN(t) && t >= fromTs - (5 * 60 * 1000) && t <= toTs;
+        });
+        if (history.length === 0) return null;
+        history = history.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        const firstTs = new Date(history[0].timestamp).getTime();
+        if (firstTs < fromTs) {
+            history[0] = { ...history[0], timestamp: new Date(fromTs).toISOString() };
+        } else if (firstTs > fromTs) {
+            history.unshift({ timestamp: new Date(fromTs).toISOString(), status: history[0].status, avg_latency: history[0].avg_latency });
+        }
+
+        let weightedLatency = 0, onlineDuration = 0;
+        for (let i = 0; i < history.length - 1; i++) {
+            const cur = history[i];
+            const next = history[i + 1];
+            const curTs = new Date(cur.timestamp).getTime();
+            const nextTs = Math.min(new Date(next.timestamp).getTime(), toTs);
+            if (isNaN(curTs) || isNaN(nextTs) || nextTs <= curTs) continue;
+            if (cur.status === 'online') {
+                const latency = Number(cur.avg_latency);
+                if (Number.isFinite(latency)) {
+                    const seg = nextTs - curTs;
+                    weightedLatency += latency * seg;
+                    onlineDuration += seg;
+                }
+            }
+        }
+        const last = history[history.length - 1];
+        const lastTs = new Date(last.timestamp).getTime();
+        if (!isNaN(lastTs) && lastTs < toTs && last.status === 'online') {
+            const latency = Number(last.avg_latency);
+            if (Number.isFinite(latency)) { weightedLatency += latency * (toTs - lastTs); onlineDuration += (toTs - lastTs); }
+        }
+        return onlineDuration === 0 ? null : weightedLatency / onlineDuration;
+    };
+
     const updateDynamicUptime = () => {
         const uptimeEl = document.getElementById('uptime24h');
         const labelEl = document.getElementById('uptimeLabel');
         if (!uptimeEl || !labelEl) return;
-        const range = currentTimeRange;
-        labelEl.textContent = `Uptime (${range})`;
+
+        let effectiveRange = currentTimeRange;
+        const activeBtn = document.querySelector('.time-range-btn.active');
+        if (activeBtn) {
+            effectiveRange = activeBtn.getAttribute('data-range') || currentTimeRange;
+        }
+
+        labelEl.textContent = `Uptime (${effectiveRange})`;
         // Ak čakáme na plný dataset po rýchlom (optimized) načítaní, nerefreshuj (zabránime blikaniu)
         if (pendingFullPingHistory) return;
-        const val = computeUptimeForRange(range);
+
+        // Check if there is an active zoom window
+        const zoomWindow = window._pingZoomInWindow;
+        const val = zoomWindow ? computeUptimeForWindow(zoomWindow.fromTs, zoomWindow.toTs) : computeUptimeForRange(effectiveRange);
+
         if (val === null) {
             uptimeEl.textContent = '-';
             uptimeEl.className = 'text-lg font-bold text-gray-400';
@@ -895,7 +985,16 @@ document.addEventListener('DOMContentLoaded', () => {
             avgLatencyEl.className = 'text-lg font-bold text-gray-400';
             return;
         }
-        const val = computeAverageLatencyForRange(currentTimeRange);
+
+        let effectiveRange = currentTimeRange;
+        const activeBtn = document.querySelector('.time-range-btn.active');
+        if (activeBtn) {
+            effectiveRange = activeBtn.getAttribute('data-range') || currentTimeRange;
+        }
+
+        const zoomWindow = window._pingZoomInWindow;
+        const val = zoomWindow ? computeAverageLatencyForWindow(zoomWindow.fromTs, zoomWindow.toTs) : computeAverageLatencyForRange(effectiveRange);
+
         if (val === null) {
             avgLatencyEl.textContent = '-';
             avgLatencyEl.className = 'text-lg font-bold text-gray-400';
@@ -909,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDynamicUptime();
         updateAverageLatency();
     };
-    
+
     // Get time format configuration based on time range
     const getTimeFormats = (timeRange) => {
         switch (timeRange) {
@@ -1052,6 +1151,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     mode: 'index'
                 },
                 plugins: {
+                    decimation: {
+                        enabled: true,
+                        algorithm: 'lttb',
+                        samples: 800
+                    },
                     legend: {
                         labels: {
                             color: textColors.legendLabels
@@ -1273,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let data = [];
-            
+
             // For memory chart, combine data from both datasets (used and total memory)
             if (chartType === 'memory' && chart.data.datasets.length >= 2) {
                 // Combine used and total memory values for optimization
@@ -1286,13 +1390,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const optimization = optimizeYAxisRange(data, chartType);
 
-            if (optimization && (optimization.min !== undefined || optimization.max !== undefined || 
+            if (optimization && (optimization.min !== undefined || optimization.max !== undefined ||
                 optimization.suggestedMin !== undefined || optimization.suggestedMax !== undefined)) {
-                
+
                 // Apply optimization to Y-axis
                 Object.assign(chart.options.scales.y, optimization);
-                
-                
+
+
                 // Update chart to apply new axis settings
                 chart.update('none');
             }
@@ -1318,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (yAxisOptimizationInterval) {
                 clearInterval(yAxisOptimizationInterval);
             }
-            
+
             // Only start optimization if page is visible and device is selected
             if (document.visibilityState === 'visible' && currentDeviceId) {
                 yAxisOptimizationInterval = setInterval(() => {
@@ -1343,7 +1447,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Export Y-axis optimization functions to global scope
         window.startYAxisOptimization = startYAxisOptimization;
         window.stopYAxisOptimization = stopYAxisOptimization;
-        
+
         // Page Visibility API - handle tab visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
@@ -1361,7 +1465,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const temperatureColors = chartColors.temperature;
         const memoryColors = chartColors.memory;
         const chartOptions = getChartOptions();
-        
+
         // Ping Chart - Uptime Kuma style with dynamic segments
         charts.ping = new Chart(document.getElementById('pingChart'), {
             type: 'line',
@@ -1369,6 +1473,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'Ping Latencia (ms)',
                     data: [],
+                    parsing: false,
+                    normalized: true,
                     borderColor: pingColors.onlineBorder,
                     backgroundColor: pingColors.onlineBackground,
                     tension: 0.12,
@@ -1406,7 +1512,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         labels: {
                             ...chartOptions.plugins?.legend?.labels,
                             color: getChartTextColors().legendLabels,
-                            generateLabels: function(chart) {
+                            generateLabels: function (chart) {
                                 const activePingColors = getChartColorTheme().ping;
                                 const legendTextColor = getChartTextColors().legendLabels;
                                 // Generate only two fixed legend items: Online and Offline
@@ -1432,7 +1538,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ];
                             }
                         },
-                        onClick: function(e, legendItem) {
+                        onClick: function (e, legendItem) {
                             // Disable legend click functionality since we have dynamic datasets
                             return;
                         }
@@ -1446,7 +1552,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         filter: (context) => context?.dataset?.order === 1 && context.raw?.y !== null,
                         callbacks: {
                             ...chartOptions.plugins?.tooltip?.callbacks,
-                            label: function(context) {
+                            label: function (context) {
                                 const value = context.parsed.y;
                                 return `Ping Latencia: ${value !== null && value !== undefined ? value.toFixed(1) : 'N/A'} ms`;
                             }
@@ -1455,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        
+
         // CPU Chart
         charts.cpu = new Chart(document.getElementById('cpuChart'), {
             type: 'line',
@@ -1463,6 +1569,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     label: 'CPU Load (%)',
                     data: [],
+                    parsing: false,
+                    normalized: true,
                     borderColor: cpuColors.border,
                     backgroundColor: cpuColors.background,
                     tension: 0.12,
@@ -1490,7 +1598,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        
+
         // Temperature Chart
         charts.temperature = new Chart(document.getElementById('temperatureChart'), {
             type: 'line',
@@ -1525,7 +1633,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        
+
         // Availability Chart (removed - replaced by Memory Chart)
         // charts.availability = ...
 
@@ -1579,12 +1687,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         borderColor: '#374151',
                         borderWidth: 1,
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 const datasetLabel = context.dataset.label;
                                 const value = context.parsed.y;
                                 return `${datasetLabel}: ${value.toFixed(0)} MB`;
                             },
-                            afterBody: function(context) {
+                            afterBody: function (context) {
                                 if (context.length >= 2) {
                                     const usedMemory = context[0].parsed.y;
                                     const totalMemory = context[1].parsed.y;
@@ -1622,14 +1730,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        
+
         // Add custom zoom functionality to all charts
         Object.values(charts).forEach(chart => {
             if (chart && typeof addCustomZoom === 'function') {
                 addCustomZoom(chart);
             }
         });
-        
+
 
         // Nastaviť mobilné správanie tooltipov (zabrániť "zaseknutiu")
         setupMobileTooltipDismiss();
@@ -1688,9 +1796,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const hideAllChartTooltips = () => {
         if (!charts) return;
         Object.values(charts).forEach(ch => {
-            if (ch && ch.tooltip && typeof ch.tooltip.setActiveElements === 'function') {
+            if (!ch || !ch.tooltip || typeof ch.tooltip.setActiveElements !== 'function') return;
+            // Only update if tooltip is actually visible – avoids expensive ch.update() on every tap
+            const hasActive = ch.tooltip.getActiveElements && ch.tooltip.getActiveElements().length > 0;
+            if (hasActive) {
                 ch.tooltip.setActiveElements([], { x: 0, y: 0 });
-                try { ch.update(); } catch (_) {}
+                try { ch.update('none'); } catch (_) { }
             }
         });
     };
@@ -1719,7 +1830,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let elementsAtPoint = [];
                 try {
                     elementsAtPoint = ch.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true) || [];
-                } catch (_) {}
+                } catch (_) { }
                 // Ak tooltip je aktívny a teraz ťuk nemá žiadny dátový bod -> schovať (toggle)
                 if (hasActive && elementsAtPoint.length === 0) {
                     hideAllChartTooltips();
@@ -1735,7 +1846,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 6000);
         }, { passive: true });
     };
-    
+
     // Update ping chart with new data - Uptime Kuma style with separated status segments
     const updatePingChart = (pingData) => {
         if (typeof addDebugLog === 'function') {
@@ -1745,48 +1856,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 addDebugLog(`📈 updatePingChart: real-time bod`);
             }
         }
-        
+
         if (!charts.ping) return;
-        
+
         const chart = charts.ping;
         const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
         const pingColors = getChartColorTheme().ping;
-        
+
         // Check if this is historical data (array) or real-time data (single point)
         if (pingData.history && Array.isArray(pingData.history)) {
             // Cache full history for uptime výpočty
             lastPingHistory = pingData.history.slice();
             lastPingHistoryTimestamp = Date.now();
-            
+
             // Create separate datasets for each continuous segment
             const datasets = [];
             let onlineSegments = [];
             let offlineSegments = [];
-            
+
             let currentOnlineSegment = [];
             let currentOfflineSegment = [];
             let lastStatus = null;
-            
+
             // Process data to create separate continuous segments
             const toMs = (ts) => {
                 const v = ts instanceof Date ? ts.getTime() : Date.parse(ts);
                 return Number.isFinite(v) ? v : null;
             };
-            
+
             pingData.history.forEach((point) => {
                 if (!point.timestamp) return;
-                
+
                 const timestampMs = toMs(point.timestamp);
                 if (!Number.isFinite(timestampMs)) return;
                 const isOnline = point.status === 'online' && point.avg_latency !== null;
-                
+
                 if (isOnline) {
                     // If we were offline, finish the offline segment
                     if (lastStatus === 'offline' && currentOfflineSegment.length > 0) {
                         offlineSegments.push([...currentOfflineSegment]);
                         currentOfflineSegment = [];
                     }
-                    
+
                     // Add to current online segment
                     currentOnlineSegment.push({
                         x: timestampMs,
@@ -1799,17 +1910,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         onlineSegments.push([...currentOnlineSegment]);
                         currentOnlineSegment = [];
                     }
-                    
+
                     // Add to current offline segment (we'll calculate height later)
                     currentOfflineSegment.push({
                         x: timestampMs,
                         y: null  // Will be calculated based on online data
                     });
                 }
-                
+
                 lastStatus = isOnline ? 'online' : 'offline';
             });
-            
+
             // Add final segments
             if (currentOnlineSegment.length > 0) {
                 onlineSegments.push(currentOnlineSegment);
@@ -1817,7 +1928,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentOfflineSegment.length > 0) {
                 offlineSegments.push(currentOfflineSegment);
             }
-            
+
             // Calculate appropriate offline height range based on online data
             let maxOnlineLatency = 0;
             let minOnlineLatency = Infinity;
@@ -1831,7 +1942,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             });
-            
+
             // If no online data, use reasonable defaults
             if (maxOnlineLatency === 0) {
                 maxOnlineLatency = 50; // Default 50ms
@@ -1840,7 +1951,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (minOnlineLatency === Infinity) {
                 minOnlineLatency = Math.max(1, maxOnlineLatency * 0.1); // 10% of max or 1ms minimum
             }
-            
+
             // Update offline segments with calculated range (from min to max)
             offlineSegments.forEach(segment => {
                 segment.forEach(point => {
@@ -1848,7 +1959,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     point.y = maxOnlineLatency; // Top of the area
                 });
             });
-            
+
             // Create datasets for online segments
             onlineSegments.forEach((segment, index) => {
                 datasets.push({
@@ -1865,13 +1976,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     order: 1
                 });
             });
-            
+
             // Create datasets for offline segments
             offlineSegments.forEach((segment, index) => {
                 // First create invisible bottom line at minOnlineLatency
                 datasets.push({
                     label: '',
-                    data: segment.map(point => ({x: point.x, y: minOnlineLatency})),
+                    data: segment.map(point => ({ x: point.x, y: minOnlineLatency })),
                     borderColor: 'transparent',
                     backgroundColor: 'transparent',
                     borderWidth: 0,
@@ -1882,7 +1993,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     spanGaps: false,
                     order: 3
                 });
-                
+
                 // Then create top line that fills to previous dataset (bottom line)
                 datasets.push({
                     label: '',  // No label for offline segments
@@ -1898,12 +2009,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     order: 2
                 });
             });
-            
+
             // If no data, create empty datasets
             if (datasets.length === 0) {
                 datasets.push({
                     label: 'Ping Latencia (ms)',
                     data: [],
+                    parsing: false,
+                    normalized: true,
                     borderColor: pingColors.onlineBorder,
                     backgroundColor: pingColors.onlineBackground,
                     tension: 0.12,
@@ -1915,31 +2028,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     order: 1
                 });
             }
-            
+
             // Batch update using requestAnimationFrame
             requestAnimationFrame(() => {
                 chart.data.datasets = datasets;
-                
+
                 // Apply Y-axis optimization for ping chart
                 applyYAxisOptimization(chart, 'ping');
 
-                // Pruning prebytočných bodov mimo aktuálneho krátkeho okna (stabilizácia min/max)
-                if (shortRangeActive) {
-                    const nowTs = Date.now();
-                    const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
-                    chart.data.datasets.forEach(ds => {
-                        ds.data = ds.data.filter(p => p.x && p.x >= minAllowed);
-                    });
-                }
-                
+                // Pruning prebytočných bodov mimo aktuálneho krátkeho okna bol odstránený,
+                // pretože spôsoboval miznutie čiar pri menšom počte zaznamenaných bodov (napríklad pre interval 30m).
+                // Chart.js automaticky filtruje zobrazenie mimo osi X (min/max),
+                // ale potrebuje staršie body na dokreslenie čiary "smerom dnu" do grafu.
+
                 // If no data (empty chart), apply default ping Y-axis range for better positioning
                 if (datasets.length === 0 || datasets.every(ds => ds.data.length === 0)) {
                     chart.options.scales.y.suggestedMin = 0;
                     chart.options.scales.y.suggestedMax = 200; // Even more asymmetric default range 0-200ms (pushes lines much lower)
                 }
-                
+
                 chart.update('none');
-                
+
                 // Potlač applyFullTimeRangeToAllCharts pre krátke intervaly (batched neskôr)
                 if (!shortRangeActive) {
                     if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
@@ -1951,7 +2060,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            
+
         } else {
             // Real-time single data point - add to appropriate segment
             const nowMs = Number.isFinite(Date.parse(pingData.timestamp)) ? Date.parse(pingData.timestamp) : Date.now();
@@ -1964,10 +2073,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 avg_latency: pingData.avg_latency
             });
             if (lastPingHistory.length > 2000) lastPingHistory.shift();
-            
+
             requestAnimationFrame(() => {
                 let datasets = chart.data.datasets;
-                
+
                 if (datasets.length === 0) {
                     // Initialize with first dataset
                     datasets = [{
@@ -1984,11 +2093,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         order: 1
                     }];
                 }
-                
+
                 // Find the last dataset of the current type (online/offline)
                 let targetDataset = null;
                 let lastDataset = datasets[datasets.length - 1];
-                
+
                 if (isOnline) {
                     // Look for the last online dataset or create new one
                     if (lastDataset && lastDataset.borderColor === pingColors.onlineBorder) {
@@ -2010,7 +2119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         };
                         datasets.push(targetDataset);
                     }
-                    
+
                     targetDataset.data.push({
                         x: nowMs,
                         y: pingData.avg_latency
@@ -2031,7 +2140,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             });
                         }
                     });
-                    
+
                     // If no online data, use reasonable defaults
                     if (maxOnlineLatency === 0) {
                         maxOnlineLatency = 50; // Default 50ms
@@ -2040,10 +2149,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (minOnlineLatency === Infinity) {
                         minOnlineLatency = Math.max(1, maxOnlineLatency * 0.1); // 10% of max or 1ms minimum
                     }
-                    
+
                     // Offline height should match the maximum ping value (peak) in current interval
                     const offlineHeight = maxOnlineLatency;
-                    
+
                     // Look for the last offline dataset or create new one
                     if (lastDataset && lastDataset.backgroundColor === pingColors.offlineFill) {
                         targetDataset = lastDataset;
@@ -2063,69 +2172,64 @@ document.addEventListener('DOMContentLoaded', () => {
                             order: 2
                         };
                         datasets.push(targetDataset);
-                        
+
                         // Adjust chart Y-axis minimum to minOnlineLatency for proper fill display
                         chart.options.scales.y.suggestedMin = minOnlineLatency;
                     }
-                    
+
                     targetDataset.data.push({
                         x: nowMs,
                         y: offlineHeight  // Height matches current ping peak
                     });
                 }
-                
+
                 // Keep only reasonable amount of real-time data per dataset
                 datasets.forEach(dataset => {
                     if (dataset.data.length > 500) {
                         dataset.data.shift();
                     }
                 });
-                
+
                 chart.data.datasets = datasets;
-                
+
                 // Apply Y-axis optimization for real-time data
                 applyYAxisOptimization(chart, 'ping');
 
-                if (shortRangeActive) {
-                    const nowTs = Date.now();
-                    const minAllowed = nowTs - getTimeRangeMs(currentTimeRange);
-                    chart.data.datasets.forEach(ds => {
-                        ds.data = ds.data.filter(p => p.x && p.x >= minAllowed);
-                    });
-                }
-                
+                // Rovnako tu ponechávame staršie body, aby real-time vykresľovanie malo z čoho
+                // ťahať čiaru do grafu, ak sú body tesne mimo aktuálneho zorného uhla.
+
                 // If no data (empty chart), apply default ping Y-axis range for better positioning
                 if (datasets.length === 0 || datasets.every(ds => ds.data.length === 0)) {
                     chart.options.scales.y.suggestedMin = 0;
                     chart.options.scales.y.suggestedMax = 200; // Even more asymmetric default range 0-200ms (pushes lines much lower)
                 }
-                
+
                 chart.update('none');
             });
         }
-    // Po každej aktualizácii prepočítaj metriky (nie ak čakáme na full dataset)
-    updateHeaderMetrics();
+        // Po každej aktualizácii prepočítaj metriky (nie ak čakáme na full dataset)
+        updateHeaderMetrics();
     };
 
     // Dynamic point size adjustment based on data density and time range
     const adjustPointSizes = (chart, dataLength, timeRange = currentTimeRange) => {
         if (!chart || !chart.data || !chart.data.datasets) return;
-        
+
         // Apply to all datasets - always clean line charts with no visible points
         chart.data.datasets.forEach(dataset => {
             dataset.pointRadius = 0;           // Never show points
             dataset.pointHoverRadius = 0;      // Never show hover points either
-            
+
             // Ensure lines are visible especially for Recent interval
             if (!dataset.borderWidth || dataset.borderWidth < 2) {
                 dataset.borderWidth = 2;
             }
-            
+
             // Ensure line tension for smooth curves
             if (dataset.tension === undefined) {
                 dataset.tension = 0.1;
             }
-            
+
             // Ensure lines are always shown even with few points
             dataset.showLine = true;
             if (dataset.spanGaps === undefined) {
@@ -2223,7 +2327,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const snmpGapThresholdMs = getGapThresholdFromInterval(snmpIntervalEstimate);
         const shortRangeActive = SHORT_RANGES.has(currentTimeRange);
-        
+
         // Check if this is historical data (array) or real-time data (single point)  
         if (snmpData.history && Array.isArray(snmpData.history)) {
             // Prepare data arrays for batch processing
@@ -2240,7 +2344,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let lastUsedMemTimestampMs = null;
             let lastTotalMemTimestampMs = null;
             let latestSnmpTimestamp = null;
-            
+
             // Single pass through data for all charts
             snmpData.history.forEach(point => {
                 if (!point || !point.timestamp) return;
@@ -2251,7 +2355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 let rowHadMetric = false;
-                
+
                 // CPU data
                 if (point.cpu_load !== null && point.cpu_load !== undefined) {
                     const cpuValue = parseFloat(point.cpu_load);
@@ -2268,7 +2372,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         rowHadMetric = true;
                     }
                 }
-                
+
                 // Temperature data
                 if (point.temperature !== null && point.temperature !== undefined) {
                     const tempValue = parseFloat(point.temperature);
@@ -2303,7 +2407,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         rowHadMetric = true;
                     }
                 }
-                
+
                 // Total Memory with forward-fill to prevent truncation
                 if (point.total_memory !== null && point.total_memory !== undefined) {
                     const totalMem = parseFloat(point.total_memory);
@@ -2332,14 +2436,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     lastTotalMemTimestampMs = timestampMs;
                     rowHadMetric = true;
                 }
-                
+
                 if (rowHadMetric) {
                     if (!latestSnmpTimestamp || timestampMs > latestSnmpTimestamp) {
                         latestSnmpTimestamp = timestampMs;
                     }
                 }
             });
-            
+
             // Batch update charts using requestAnimationFrame for smooth UI
             requestAnimationFrame(() => {
                 // Update CPU chart
@@ -2353,7 +2457,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     charts.cpu.data.datasets[0].data = [];
                     charts.cpu.update('none');
                 }
-                
+
                 // Update temperature chart
                 if (charts.temperature && tempData.length > 0) {
                     charts.temperature.data.datasets[0].data = tempData;
@@ -2371,12 +2475,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     charts.memory.data.datasets[0].data = usedMemData;  // Used Memory (red line)
                     charts.memory.data.datasets[1].data = totalMemData;  // Total Memory (blue line)
                     autoAlignChartTimeRange(charts.memory);
-                    
+
                     // Update lastTotalMemoryValue for real-time forward-fill
                     if (totalMemData.length > 0) {
                         lastTotalMemoryValue = totalMemData[totalMemData.length - 1].y;
                     }
-                    
+
                     adjustPointSizes(charts.memory, Math.max(usedMemData.length, totalMemData.length), currentTimeRange);
                     applyYAxisOptimization(charts.memory, 'memory');
                     charts.memory.update('none');
@@ -2385,7 +2489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     charts.memory.data.datasets[1].data = [];
                     charts.memory.update('none');
                 }
-                
+
                 if (!shortRangeActive) {
                     // Apply full time range horizon after historical data update  
                     if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
@@ -2411,7 +2515,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasTotalMemValue = Number.isFinite(totalMemValue);
             const canForwardFillTotal = !hasTotalMemValue && hasUsedMemValue && Number.isFinite(lastTotalMemoryValue);
             const realtimeGapNeeded = shouldInsertSnmpGap(lastSnmpDataTimestamp, nowTs, offlineIntervals, snmpGapThresholdMs);
-            
+
             // Update device model and RouterOS version if available
             if ((snmpData.board_name && snmpData.board_name !== 'N/A') || (snmpData.version && snmpData.version !== 'N/A')) {
                 const deviceModel = domCache.deviceModel || document.getElementById('deviceModel');
@@ -2432,10 +2536,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-            
+
             requestAnimationFrame(() => {
                 let realtimeUpdated = false;
-                
+
                 if (realtimeGapNeeded) {
                     if (hasCpuValue && charts.cpu && charts.cpu.data.datasets[0] && charts.cpu.data.datasets[0].data.length > 0) {
                         charts.cpu.data.datasets[0].data.push({
@@ -2464,35 +2568,35 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
-                
+
                 // Update CPU chart
                 if (charts.cpu && hasCpuValue) {
                     charts.cpu.data.datasets[0].data.push({
                         x: now,
                         y: cpuValue
                     });
-                    
+
                     // Keep only reasonable amount of real-time data
                     if (charts.cpu.data.datasets[0].data.length > 1000) {
                         charts.cpu.data.datasets[0].data.shift();
                     }
-                    
+
                     charts.cpu.update('none');
                     realtimeUpdated = true;
                 }
-                
+
                 // Update temperature chart
                 if (charts.temperature && hasTempValue) {
                     charts.temperature.data.datasets[0].data.push({
                         x: now,
                         y: tempValue
                     });
-                    
+
                     // Keep only reasonable amount of real-time data
                     if (charts.temperature.data.datasets[0].data.length > 1000) {
                         charts.temperature.data.datasets[0].data.shift();
                     }
-                    
+
                     charts.temperature.update('none');
                     realtimeUpdated = true;
                 }
@@ -2500,7 +2604,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update memory chart (independent datasets for real-time)
                 if (charts.memory) {
                     let memoryUpdated = false;
-                    
+
                     // Update Used Memory if available
                     if (hasUsedMemValue) {
                         charts.memory.data.datasets[0].data.push({
@@ -2509,7 +2613,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         memoryUpdated = true;
                     }
-                    
+
                     // Update Total Memory if available, or forward-fill if used memory is present
                     if (hasTotalMemValue) {
                         lastTotalMemoryValue = totalMemValue;
@@ -2525,7 +2629,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         memoryUpdated = true;
                     }
-                    
+
                     if (memoryUpdated) {
                         // Keep only reasonable amount of real-time data for both datasets
                         if (charts.memory.data.datasets[0].data.length > 1000) {
@@ -2534,19 +2638,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (charts.memory.data.datasets[1].data.length > 1000) {
                             charts.memory.data.datasets[1].data.shift();
                         }
-                        
+
                         charts.memory.update('none');
                         realtimeUpdated = true;
                     }
                 }
-                
+
                 if (realtimeUpdated) {
                     lastSnmpDataTimestamp = nowTs;
                 }
             });
         }
     };
-    
+
     // Update availability chart with new data - REMOVED (replaced by Memory Chart)
     /*
     const updateAvailabilityChart = async (deviceId) => {
@@ -2587,7 +2691,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     */
-    
+
     // Helper function to get time range in milliseconds (used for animation direction)
     const getTimeRangeMs = (timeRange) => {
         switch (timeRange) {
@@ -2649,7 +2753,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             // Batch update v ďalšom frame aby sa aplikovalo len raz
             requestAnimationFrame(() => {
-                Object.values(charts).forEach(ch => { try { ch.update('none'); } catch(_){} });
+                Object.values(charts).forEach(ch => { try { ch.update('none'); } catch (_) { } });
             });
             if (typeof addDebugLog === 'function') addDebugLog(`🧭 stabilizeShortRangeTimeAxis: konsolidované min/max pre ${range}`);
         } catch (e) {
@@ -2692,13 +2796,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             // Aktualizácie vykonáme v jednom ďalšom frame kvôli výkonu
             requestAnimationFrame(() => {
-                Object.values(charts).forEach(ch => { try { ch.update('none'); } catch(_){} });
+                Object.values(charts).forEach(ch => { try { ch.update('none'); } catch (_) { } });
             });
         } catch (e) {
             console.warn('unifyTimeAxis chyba:', e);
         }
     };
-    
+
     // Animate zoom-in effect (shrinking time range)
     const animateZoomIn = (charts) => {
         if (disableRangeAnimations) return; // no-op
@@ -2706,13 +2810,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!chart?.canvas) return;
             chart.canvas.style.transform = 'scale(1.02)';
             chart.canvas.style.transition = 'transform 0.18s ease-out';
-            requestAnimationFrame(()=>{
+            requestAnimationFrame(() => {
                 chart.canvas.style.transform = 'scale(1)';
-                setTimeout(()=>{ chart.canvas.style.transition=''; },180);
+                setTimeout(() => { chart.canvas.style.transition = ''; }, 180);
             });
         });
     };
-    
+
     // Animate zoom-out effect (expanding time range)
     const animateZoomOut = (charts) => {
         if (disableRangeAnimations) return; // no-op
@@ -2720,13 +2824,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!chart?.canvas) return;
             chart.canvas.style.transform = 'scale(0.98)';
             chart.canvas.style.transition = 'transform 0.18s ease-out';
-            requestAnimationFrame(()=>{
+            requestAnimationFrame(() => {
                 chart.canvas.style.transform = 'scale(1)';
-                setTimeout(()=>{ chart.canvas.style.transition=''; },180);
+                setTimeout(() => { chart.canvas.style.transition = ''; }, 180);
             });
         });
     };
-    
+
     // Apply smooth transition animation based on time range direction
     const applyTimeRangeTransition = async (oldTimeRange, newTimeRange) => {
         if (disableRangeAnimations) {
@@ -2736,30 +2840,30 @@ document.addEventListener('DOMContentLoaded', () => {
             disableChartAnimationsForRangeChange();
             unifyTimeAxis();
             stabilizeShortRangeTimeAxis(newTimeRange);
-            Object.values(charts).forEach(ch => { try { ch.update('none'); } catch(_){} });
+            Object.values(charts).forEach(ch => { try { ch.update('none'); } catch (_) { } });
             return;
         }
         const oldMs = getTimeRangeMs(oldTimeRange);
         const newMs = getTimeRangeMs(newTimeRange);
         if (typeof resetAllChartsZoom === 'function') resetAllChartsZoom();
-        await new Promise(r=>setTimeout(r,40));
+        await new Promise(r => setTimeout(r, 40));
         if (typeof window.applyFullTimeRangeToAllCharts === 'function') window.applyFullTimeRangeToAllCharts();
-        await new Promise(r=>setTimeout(r,40));
+        await new Promise(r => setTimeout(r, 40));
         if (newMs < oldMs) animateZoomIn(charts); else if (newMs > oldMs) animateZoomOut(charts);
     };
-    
+
     // Get time range from buttons instead of selector
     const getSelectedTimeRange = () => {
         // Ak je aktívny single chart zoom-out, použij currentTimeRange namiesto UI
         if (window._singleChartZoomOut) {
             return window.currentTimeRange;
         }
-        
+
         const activeBtn = document.querySelector('.time-range-btn.active');
         const range = activeBtn ? activeBtn.dataset.range : currentTimeRange;
         return range;
     };
-    
+
     // Set active time range button
     const setActiveTimeRange = (timeRange) => {
         // Check if global time range changes are blocked during single chart expansion
@@ -2769,33 +2873,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return;
         }
-        
+
         if (typeof addDebugLog === 'function') {
             addDebugLog(`🔧 setActiveTimeRange pokračuje - nastavujem ${timeRange}`);
         }
-        
+
         // Remove active class from all buttons
         document.querySelectorAll('.time-range-btn').forEach(btn => {
             btn.classList.remove('active');
         });
-        
+
         // Add active class to selected button
         const targetBtn = document.querySelector(`[data-range="${timeRange}"]`);
         if (targetBtn) {
             targetBtn.classList.add('active');
         }
-        
+
         if (typeof addDebugLog === 'function') {
             addDebugLog(`🎯 setActiveTimeRange: Tlačidlo nastavené na active`);
         }
-        
+
         currentTimeRange = timeRange;
         window.currentTimeRange = timeRange; // Export for zoom functionality
-        
+
         if (typeof addDebugLog === 'function') {
             addDebugLog(`📝 setActiveTimeRange: Premenné nastavené`);
         }
-        
+
         // Update time formatting for all charts
         if (typeof addDebugLog === 'function') {
             addDebugLog(`⏰ setActiveTimeRange: Volám updateChartTimeFormats`);
@@ -2808,7 +2912,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.values(charts).forEach(ch => {
                 if (!ch || !ch.options || !ch.options.scales || !ch.options.scales.x) return;
                 // Ak predošlý rozsah bol výrazne väčší (napr. 1y) a teraz ideme na krátky interval (30m, 3h, 6h, 12h, 24h), nastav nové hranice
-                const shortRanges = ['30m','recent','3h','6h','12h','24h'];
+                const shortRanges = ['30m', 'recent', '3h', '6h', '12h', '24h'];
                 if (shortRanges.includes(timeRange)) {
                     ch.options.scales.x.min = nowTs - rangeMs;
                     ch.options.scales.x.max = nowTs;
@@ -2818,7 +2922,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     delete ch.options.scales.x.max;
                 }
             });
-        } catch(e) {
+        } catch (e) {
             if (typeof addDebugLog === 'function') addDebugLog(`⚠️ Predbežný reset osi X zlyhal: ${e.message}`);
         }
         updateChartTimeFormats(timeRange);
@@ -2830,12 +2934,12 @@ document.addEventListener('DOMContentLoaded', () => {
             unifyTimeAxis();
             stabilizeShortRangeTimeAxis(timeRange);
         }
-        
+
         if (typeof addDebugLog === 'function') {
             addDebugLog(`💾 setActiveTimeRange: Volám saveState`);
         }
         saveState();
-        
+
         if (typeof addDebugLog === 'function') {
             addDebugLog(`✨ setActiveTimeRange: Dokončené pre ${timeRange}`);
         }
@@ -2846,14 +2950,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof addDebugLog === 'function') {
             addDebugLog(`📅 updateChartTimeFormats: Začínam pre ${timeRange}`);
         }
-        
+
         try {
             const timeFormats = getTimeFormats(timeRange);
-            
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`📊 updateChartTimeFormats: Získané formáty pre ${timeRange}`);
             }
-            
+
             // Update all existing charts with new time formats and point sizes
             Object.values(charts).forEach(chart => {
                 if (chart && chart.options && chart.options.scales && chart.options.scales.x) {
@@ -2878,27 +2982,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     chart.options.scales.x.time.tooltipFormat = timeFormats.tooltipFormat;
                     chart.options.scales.x.time.unit = timeFormats.unit;
                     chart.options.scales.x.time.stepSize = timeFormats.stepSize;
-                    
+
                     // Update maxTicksLimit
                     if (chart.options.scales.x.ticks) {
                         chart.options.scales.x.ticks.maxTicksLimit = timeFormats.maxTicksLimit || 8;
                     }
-                    
+
                     // Update point sizes based on new time range
                     if (chart.data && chart.data.datasets && chart.data.datasets[0] && chart.data.datasets[0].data) {
                         const dataLength = chart.data.datasets[0].data.length;
                         adjustPointSizes(chart, dataLength, timeRange);
                     }
-                    
+
                     chart.update('none');
                 }
             });
-        
-        if (typeof addDebugLog === 'function') {
-            addDebugLog(`✅ updateChartTimeFormats: Dokončené pre ${timeRange}`);
-        }
-        
-        
+
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`✅ updateChartTimeFormats: Dokončené pre ${timeRange}`);
+            }
+
+
         } catch (error) {
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`❌ updateChartTimeFormats chyba: ${error.message}`);
@@ -2931,32 +3035,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
     // Update chart titles with current time range
     const updateChartTitles = (timeRange) => {
         if (typeof addDebugLog === 'function') {
             addDebugLog(`🏷️ updateChartTitles volaná s rozsahom: ${timeRange}`);
         }
-        
+
         const timeRangeLabels = {
             'recent': 'Posledná hodina',
             '30m': 'Posledných 30 minút',
             '3h': 'Posledné 3 hodiny',
             '6h': 'Posledných 6 hodín',
-            '12h': 'Posledných 12 hodín', 
+            '12h': 'Posledných 12 hodín',
             '24h': 'Posledných 24 hodín',
             '7d': 'Posledných 7 dní',
             '30d': 'Posledných 30 dní',
             '90d': 'Posledných 90 dní',
             '1y': 'Posledný rok'
         };
-        
+
         const label = timeRangeLabels[timeRange] || 'Posledných 24 hodín';
-        
+
         if (typeof addDebugLog === 'function') {
             addDebugLog(`🏷️ updateChartTitles: rozsah=${timeRange}, label="${label}"`);
         }
-        
+
         // Update chart subtitles - find them by their position in the card
         const chartCards = document.querySelectorAll('.card');
         chartCards.forEach(card => {
@@ -2989,23 +3093,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        
+
         if (typeof addDebugLog === 'function') {
             addDebugLog(`🏷️ updateChartTitles: dokončené`);
         }
     };
-    
+
     // Add chart loading animation - optimized version
     const addChartLoadingAnimation = () => {
         // Use cached DOM elements if available, fallback to query
         const containers = domCache.chartContainers || document.querySelectorAll('.chart-container');
-        
+
         // Batch DOM operations using requestAnimationFrame
         requestAnimationFrame(() => {
             containers.forEach(container => {
                 container.classList.add('updating');
             });
-            
+
             // Remove updating class and add fade-in effect
             setTimeout(() => {
                 requestAnimationFrame(() => {
@@ -3013,7 +3117,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         container.classList.remove('updating');
                         container.classList.add('chart-fade-in');
                     });
-                    
+
                     // Clean up fade-in class
                     setTimeout(() => {
                         requestAnimationFrame(() => {
@@ -3026,34 +3130,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 300);
         });
     };
-    
+
     // Load historical data with animation
     const loadHistoricalData = async (deviceId, showLoadingAnimation = true, isRefreshOperation = false) => {
         if (typeof addDebugLog === 'function') {
             addDebugLog(`🚀 loadHistoricalData zavolané pre device: ${deviceId}, showLoadingAnimation: ${showLoadingAnimation}, isRefresh: ${isRefreshOperation}`);
         }
-        
+
         if (isLoadingData) {
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`⏸️ Načítanie preskočené - už prebieha pre iné zariadenie`);
             }
             return; // Prevent multiple simultaneous requests
         }
-        
+
         isLoadingData = true;
-        
+
         try {
             const timeRange = getSelectedTimeRange();
-            
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`📅 Aktuálny časový rozsah: ${timeRange}`);
             }
-            
+
             // Pre refresh operácie vždy použijeme plný rozsah - žiadna optimalizácia
             // Pre prvé načítanie použijeme kratší rozsah pre rýchlejšie načítanie
             // VÝNIMKA: ak je aktívny zoom-out alebo single chart expansion, načítaj všetky dáta
             let optimizedRange = timeRange;
-            
+
             // Pre single chart zoom-out VŽDY použijeme plný rozsah - bez akejkoľvek optimalizácie
             if (window._singleChartZoomOut || window._isZoomOutExpansion || isRefreshOperation) {
                 optimizedRange = timeRange;
@@ -3064,12 +3168,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     optimizedRange = 'recent';
                 }
             }
-            
+
             // Add loading animation only when requested (e.g., manual refresh, not time range changes)
             if (showLoadingAnimation) {
                 addChartLoadingAnimation();
             }
-            
+
             // Update chart titles (používame window.currentTimeRange pre správny label)
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`🏷️ Volám updateChartTitles s window.currentTimeRange: ${window.currentTimeRange}`);
@@ -3077,39 +3181,39 @@ document.addEventListener('DOMContentLoaded', () => {
             updateChartTitles(window.currentTimeRange);
             // Map frontend range names to backend range names
             const apiRange = optimizedRange === '30m' ? 'recent' : optimizedRange;
-            
+
             // Upravená URL pre nový API endpoint - bez 'monitoring/' prefix
             const apiUrl = `api/monitoring/history/${deviceId}?range=${apiRange}`;
-            
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`🌐 API volanie: /${apiUrl}`);
                 addDebugLog(`📋 Mapovanie rozsahu: ${optimizedRange} → ${apiRange}`);
             }
-            
+
             // Fetch s timeout pre rýchlejšie error handling
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-            
+
             const response = await fetch(`/${apiUrl}`, {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
-            
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`📡 API odpoveď status: ${response.status} ${response.ok ? '✅' : '❌'}`);
             }
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             const data = await response.json();
-            
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`📦 API dáta prijaté, status: ${data.status}`);
                 addDebugLog(`📊 Ping záznamov: ${data.ping_data?.length || 0}, SNMP záznamov: ${data.snmp_data?.length || 0}`);
             }
-            
+
             if (data.status === 'success') {
                 if (data.ping_data && data.ping_data.length > 0) {
                     if (typeof addDebugLog === 'function') {
@@ -3128,7 +3232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         charts.ping.update('none');
                     }
                 }
-                
+
                 if (data.snmp_data && data.snmp_data.length > 0) {
                     if (typeof addDebugLog === 'function') {
                         addDebugLog(`📈 Spracovávam SNMP dáta: ${data.snmp_data.length} bodov`);
@@ -3152,10 +3256,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     lastSnmpDataTimestamp = null;
                     lastSnmpIntervalEstimateMs = null;
                 }
-                
+
                 // Load availability data (always load, independent of time range) - REMOVED
                 // await updateAvailabilityChart(deviceId);
-                
+
                 // Ak sme používali optimized range, načítaj postupne plné dáta na pozadí
                 // VÝNIMKA: Nerobí background loading počas single chart zoom-out, zoom-out expansion alebo refresh operácií
                 if (optimizedRange !== timeRange && !window._singleChartZoomOut && !window._isZoomOutExpansion && !isRefreshOperation) {
@@ -3178,14 +3282,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                     // Teraz už máme plný dataset
                                     pendingFullPingHistory = false;
                                     updateHeaderMetrics();
-                                    
+
                                     // Apply full time range horizon after background loading
                                     if (typeof window.applyFullTimeRangeToAllCharts === 'function') {
                                         setTimeout(() => {
                                             window.applyFullTimeRangeToAllCharts();
                                         }, 100);
                                     }
-                                    
+
                                 }
                             }
                         } catch (bgError) {
@@ -3200,11 +3304,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 showError('Chyba pri načítaní dát: ' + (data.message || 'Neznáma chyba'));
             }
-            
+
             // Apply initial Y-axis optimization after all data is loaded
             setTimeout(() => {
                 optimizeAllChartsYAxes();
-                
+
                 // For refresh operations, use simplified approach like long intervals (7d+)
                 if (isRefreshOperation) {
                     // Simple update for refresh - no complex stabilization
@@ -3218,12 +3322,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateHeaderMetrics();
                 }
             }, 200);
-            
-            
+
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`✅ Načítanie historických dát dokončené pre ${deviceId}`);
             }
-            
+
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.error('Request timeout - loading took too long');
@@ -3245,7 +3349,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
     // Get current ping status (from database, no new ping)
     const getCurrentPingStatus = async (deviceId) => {
         try {
@@ -3264,7 +3368,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Chyba pri načítaní ping stavu:', error);
         }
     };
-    
+
     // Manual ping - force new ping
     const triggerManualPing = async (deviceId) => {
         try {
@@ -3276,11 +3380,11 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Chyba pri manuálnom ping:', error);
         }
     };
-    
+
     // Pause/Resume monitoring functionality
     const updatePauseResumeButton = (isPaused) => {
         if (!pauseResumeBtn || !pauseResumeIcon || !pauseResumeText) return;
-        
+
         if (isPaused) {
             pauseResumeBtn.className = 'btn bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-2';
             pauseResumeIcon.className = 'fas fa-play';
@@ -3292,32 +3396,32 @@ document.addEventListener('DOMContentLoaded', () => {
             pauseResumeText.textContent = 'Pozastaviť';
             pauseResumeBtn.title = 'Pozastaviť monitoring zariadenia';
         }
-        
+
         pauseResumeBtn.classList.remove('hidden');
     };
-    
+
     const toggleDeviceMonitoring = async (deviceId) => {
         if (!deviceId) return;
-        
+
         try {
             // Disable button during request
             pauseResumeBtn.disabled = true;
             pauseResumeBtn.classList.add('opacity-50');
-            
+
             const result = await api.post(`monitoring/device/${deviceId}/pause`, {});
-            
+
             if (result.status === 'success') {
                 const isPaused = result.monitoring_paused;
-                
+
                 // Update button appearance
                 updatePauseResumeButton(isPaused);
-                
+
                 // Update device status in selector
                 updateDeviceStatusInSelector(deviceId, deviceStatusCache.get(deviceId) || 'unknown', isPaused);
-                
+
                 // Show success message
                 const action = isPaused ? 'pozastavené' : 'spustené';
-                
+
                 // If monitoring was resumed, reload data and trigger immediate ping
                 if (!isPaused) {
                     await loadHistoricalData(deviceId);
@@ -3328,7 +3432,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.warn('Manual ping after resume failed:', pingError);
                     }
                 }
-                
+
             } else {
                 throw new Error(result.message || 'Neznáma chyba');
             }
@@ -3344,31 +3448,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Device selection handler
     const selectDevice = async (deviceId) => {
-        
+
         // Stop Y-axis optimization for previous device
         stopYAxisOptimization();
-        
+
         currentDeviceId = deviceId ? parseInt(deviceId) : null;
         window.currentDeviceId = currentDeviceId; // Export for zoom functionality
-        
+
         if (!currentDeviceId) {
             hideDeviceInfo();
             hideTimeRangeSelector();
             saveState();
             return;
         }
-        
+
         showTimeRangeSelector();
         showLoadingIndicator();
-        
+
         // Save current state
         saveState();
-        
+
         try {
             // Load device info and ping status
             const devices = await api.get('devices');
             const device = devices.find(d => d.id === currentDeviceId);
-            
+
             if (device) {
                 displayDeviceInfo(device);
                 updatePauseResumeButton(device.monitoring_paused);
@@ -3381,7 +3485,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 stabilizeShortRangeTimeAxis(currentTimeRange);
                 showCharts();
                 initializePingUpdates();
-                
+
                 // Start Y-axis optimization for real-time updates (only if page is visible)
                 if (document.visibilityState === 'visible') {
                     startYAxisOptimization();
@@ -3394,7 +3498,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hideLoadingIndicator();
         }
     };
-    
+
     // Show/hide time range selector with animation
     const showTimeRangeSelector = () => {
         timeRangeContainer.classList.remove('hidden');
@@ -3403,34 +3507,34 @@ document.addEventListener('DOMContentLoaded', () => {
             timeRangeContainer.classList.add('show');
         }, 10);
     };
-    
+
     const hideTimeRangeSelector = () => {
         timeRangeContainer.classList.remove('show');
         setTimeout(() => {
             timeRangeContainer.classList.add('hidden');
         }, 300);
     };
-    
+
     // Display device info - optimized version
     const displayDeviceInfo = (device) => {
         // Use cached DOM elements for better performance
         const deviceName = domCache.deviceName || document.getElementById('deviceName');
         const deviceIp = domCache.deviceIp || document.getElementById('deviceIp');
         const deviceModel = domCache.deviceModel || document.getElementById('deviceModel');
-        
+
         requestAnimationFrame(() => {
             if (deviceName) deviceName.textContent = device.name;
             if (deviceIp) deviceIp.textContent = device.ip; // IP sa zobrazí len na mobile cez CSS
-            
+
             // Display model and RouterOS version from last_snmp_data if available
             if (deviceModel) {
                 let modelText = '';
                 if (device.last_snmp_data) {
                     try {
-                        const snmpData = typeof device.last_snmp_data === 'string' 
-                            ? JSON.parse(device.last_snmp_data) 
+                        const snmpData = typeof device.last_snmp_data === 'string'
+                            ? JSON.parse(device.last_snmp_data)
                             : device.last_snmp_data;
-                        
+
                         if (snmpData.board_name && snmpData.board_name !== 'N/A') {
                             modelText = snmpData.board_name;
                         }
@@ -3448,18 +3552,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     };
-    
+
     // Start ping monitoring
     const startPingMonitoring = (deviceId) => {
         // Clear existing interval
         if (pingUpdateInterval) {
             clearInterval(pingUpdateInterval);
         }
-        
+
         // Nebudeme spúšťať vlastný interval - spoliehame sa na backend ping monitoring
         // Backend už pinguje zariadenia podľa nastavených intervalov
     };
-    
+
     // Show/hide sections
     const showNoDeviceSelected = () => {
         deviceInfoPanel.classList.add('hidden');
@@ -3467,14 +3571,14 @@ document.addEventListener('DOMContentLoaded', () => {
         noDeviceSelected.classList.remove('hidden');
         loadingIndicator.classList.add('hidden');
     };
-    
+
     const showDeviceInfo = () => {
         noDeviceSelected.classList.add('hidden');
         loadingIndicator.classList.add('hidden');
         deviceInfoPanel.classList.remove('hidden');
         chartsContainer.classList.remove('hidden');
     };
-    
+
     const hideDeviceInfo = () => {
         deviceInfoPanel.classList.add('hidden');
         chartsContainer.classList.add('hidden');
@@ -3483,22 +3587,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         showNoDeviceSelected();
     };
-    
+
     const showCharts = () => {
         chartsContainer.classList.remove('hidden');
     };
-    
+
     const showLoadingIndicator = () => {
         loadingIndicator.classList.remove('hidden');
         noDeviceSelected.classList.add('hidden');
         deviceInfoPanel.classList.add('hidden');
         chartsContainer.classList.add('hidden');
     };
-    
+
     const hideLoadingIndicator = () => {
         loadingIndicator.classList.add('hidden');
     };
-    
+
     // Show error message to user
     const showError = (message) => {
         console.error('Showing error to user:', message);
@@ -3515,7 +3619,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         document.body.appendChild(errorDiv);
-        
+
         // Auto remove after 5 seconds
         setTimeout(() => {
             if (errorDiv.parentElement) {
@@ -3523,12 +3627,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 5000);
     };
-    
+
     const initializePingUpdates = () => {
         // Initialize real-time ping updates for the selected device
         // This will be handled by WebSocket events
     };
-    
+
     const showLoading = (show) => {
         if (show) {
             loadingIndicator.classList.remove('hidden');
@@ -3544,121 +3648,121 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
     // Event listeners
     deviceSelector.addEventListener('change', (e) => {
         selectDevice(e.target.value);
     });
-    
-        // Time range buttons event listeners
-        document.addEventListener('click', async (e) => {
-            if (e.target.classList.contains('time-range-btn')) {
-                if (isLoadingData) return; // Prevent clicks during loading
-                
-                // Add debug log for global time range button click
+
+    // Time range buttons event listeners
+    document.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('time-range-btn')) {
+            if (isLoadingData) return; // Prevent clicks during loading
+
+            // Add debug log for global time range button click
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`🌐 Globálne časové tlačidlo kliknuté: ${e.target.dataset.range}`);
+            }
+
+            // Check if global time range changes are blocked during single chart expansion
+            if (window._blockGlobalTimeRangeChanges) {
                 if (typeof addDebugLog === 'function') {
-                    addDebugLog(`🌐 Globálne časové tlačidlo kliknuté: ${e.target.dataset.range}`);
+                    addDebugLog(`❌ Globálna zmena času blokovaná - single chart expansion aktívny`);
                 }
-                
-                // Check if global time range changes are blocked during single chart expansion
-                if (window._blockGlobalTimeRangeChanges) {
-                    if (typeof addDebugLog === 'function') {
-                        addDebugLog(`❌ Globálna zmena času blokovaná - single chart expansion aktívny`);
-                    }
-                    return;
-                }
-                
-                const newTimeRange = e.target.dataset.range;
-                
-                // Get current time range for animation direction
-                const currentTimeRange = getSelectedTimeRange();
-                
+                return;
+            }
+
+            const newTimeRange = e.target.dataset.range;
+
+            // Get current time range for animation direction
+            const currentTimeRange = getSelectedTimeRange();
+
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`🔄 Globálna zmena času: ${currentTimeRange} → ${newTimeRange}`);
+            }
+
+            // Emergency cleanup of any stuck selection boxes
+            if (typeof cleanupAllSelections === 'function') {
+                cleanupAllSelections();
+            }
+
+            // Set active time range PRED animáciou aby applyFullTimeRangeToAllCharts používal správny window.currentTimeRange
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`✅ Nastavujem aktívny časový rozsah: ${newTimeRange}`);
+                addDebugLog(`🔍 Pre-setActiveTimeRange: _blockGlobalTimeRangeChanges = ${window._blockGlobalTimeRangeChanges || false}`);
+            }
+            setActiveTimeRange(newTimeRange);
+
+            // Determine animation direction and apply smooth transition
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`� Spúšťam animáciu prechodu času: ${currentTimeRange} → ${newTimeRange}`);
+            }
+
+            try {
+                await applyTimeRangeTransition(currentTimeRange, newTimeRange);
                 if (typeof addDebugLog === 'function') {
-                    addDebugLog(`🔄 Globálna zmena času: ${currentTimeRange} → ${newTimeRange}`);
+                    addDebugLog(`🎭 Animácia prechodu dokončená: ${currentTimeRange} → ${newTimeRange}`);
                 }
-                
-                // Emergency cleanup of any stuck selection boxes
-                if (typeof cleanupAllSelections === 'function') {
-                    cleanupAllSelections();
-                }
-                
-                // Set active time range PRED animáciou aby applyFullTimeRangeToAllCharts používal správny window.currentTimeRange
+            } catch (error) {
                 if (typeof addDebugLog === 'function') {
-                    addDebugLog(`✅ Nastavujem aktívny časový rozsah: ${newTimeRange}`);
-                    addDebugLog(`🔍 Pre-setActiveTimeRange: _blockGlobalTimeRangeChanges = ${window._blockGlobalTimeRangeChanges || false}`);
-                }
-                setActiveTimeRange(newTimeRange);
-                
-                // Determine animation direction and apply smooth transition
-                if (typeof addDebugLog === 'function') {
-                    addDebugLog(`� Spúšťam animáciu prechodu času: ${currentTimeRange} → ${newTimeRange}`);
-                }
-                
-                try {
-                    await applyTimeRangeTransition(currentTimeRange, newTimeRange);
-                    if (typeof addDebugLog === 'function') {
-                        addDebugLog(`🎭 Animácia prechodu dokončená: ${currentTimeRange} → ${newTimeRange}`);
-                    }
-                } catch (error) {
-                    if (typeof addDebugLog === 'function') {
-                        addDebugLog(`❌ Chyba pri animácii prechodu: ${error.message}`);
-                    }
-                }
-                
-                // (Odstránené loading spinner na tlačidle – vizuálne rušivé)
-                if (typeof addDebugLog === 'function') {
-                    addDebugLog(`⏳ (Preskočené) loading state na tlačidlo: ${newTimeRange}`);
-                }
-                
-                if (typeof addDebugLog === 'function') {
-                    addDebugLog(`🔍 Kontrola currentDeviceId: ${currentDeviceId || 'undefined'}`);
-                }
-                
-                if (currentDeviceId) {
-                    if (typeof addDebugLog === 'function') {
-                        addDebugLog(`📊 Načítavam historické dáta pre device ${currentDeviceId}, rozsah: ${newTimeRange}`);
-                    }
-                    try {
-                        await loadHistoricalData(currentDeviceId, false); // No loading animation for time range changes
-                        if (typeof addDebugLog === 'function') {
-                            addDebugLog(`✅ Historické dáta úspešne načítané pre ${newTimeRange}`);
-                        }
-                        // Stabilizácia po zmene časového rozsahu (najmä pri prechode z dlhého na krátky)
-                        stabilizeShortRangeTimeAxis(newTimeRange);
-                    } catch (error) {
-                        if (typeof addDebugLog === 'function') {
-                            addDebugLog(`❌ Chyba pri načítaní historických dát: ${error.message}`);
-                        }
-                    } finally {
-                        // Žiadny loading state na odstránenie
-                    }
-                } else {
-                    if (typeof addDebugLog === 'function') {
-                        addDebugLog(`⚠️ Žiadny currentDeviceId - loading state nebol použitý`);
-                    }
-                    // nič
+                    addDebugLog(`❌ Chyba pri animácii prechodu: ${error.message}`);
                 }
             }
-        });    refreshBtn.addEventListener('click', async (e) => {
+
+            // (Odstránené loading spinner na tlačidle – vizuálne rušivé)
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`⏳ (Preskočené) loading state na tlačidlo: ${newTimeRange}`);
+            }
+
+            if (typeof addDebugLog === 'function') {
+                addDebugLog(`🔍 Kontrola currentDeviceId: ${currentDeviceId || 'undefined'}`);
+            }
+
+            if (currentDeviceId) {
+                if (typeof addDebugLog === 'function') {
+                    addDebugLog(`📊 Načítavam historické dáta pre device ${currentDeviceId}, rozsah: ${newTimeRange}`);
+                }
+                try {
+                    await loadHistoricalData(currentDeviceId, false); // No loading animation for time range changes
+                    if (typeof addDebugLog === 'function') {
+                        addDebugLog(`✅ Historické dáta úspešne načítané pre ${newTimeRange}`);
+                    }
+                    // Stabilizácia po zmene časového rozsahu (najmä pri prechode z dlhého na krátky)
+                    stabilizeShortRangeTimeAxis(newTimeRange);
+                } catch (error) {
+                    if (typeof addDebugLog === 'function') {
+                        addDebugLog(`❌ Chyba pri načítaní historických dát: ${error.message}`);
+                    }
+                } finally {
+                    // Žiadny loading state na odstránenie
+                }
+            } else {
+                if (typeof addDebugLog === 'function') {
+                    addDebugLog(`⚠️ Žiadny currentDeviceId - loading state nebol použitý`);
+                }
+                // nič
+            }
+        }
+    }); refreshBtn.addEventListener('click', async (e) => {
         e.preventDefault(); // Zabráni default správaniu
-        
+
         if (!currentDeviceId) return;
-        
+
         try {
             // Emergency cleanup of any stuck selection boxes
             if (typeof cleanupAllSelections === 'function') {
                 cleanupAllSelections();
             }
-            
+
             // Simplified refresh approach - use same logic as long intervals (7d+)
             // No complex zoom reset or stabilization for short ranges
-            
+
             // Simple data reload without zoom manipulation
             await Promise.all([
                 loadHistoricalData(currentDeviceId, true, true), // isRefreshOperation = true
                 getCurrentPingStatus(currentDeviceId)  // Len číta stav z databázy, nespúšťa nový ping
             ]);
-            
+
             // Simple chart update without additional stabilization
             setTimeout(() => {
                 Object.values(charts).forEach(chart => {
@@ -3667,34 +3771,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }, 50);
-            
+
         } catch (error) {
             console.error('Chyba pri obnovovaní:', error);
             // V prípade chyby stále zobrazíme notifikáciu
             showError('Chyba pri obnovovaní dát: ' + error.message);
         }
     });
-    
+
     // Pause/Resume button event listener
     pauseResumeBtn.addEventListener('click', async () => {
         if (!currentDeviceId) return;
         await toggleDeviceMonitoring(currentDeviceId);
     });
-    
+
     // Device settings modal handlers
     deviceSettingsBtn.addEventListener('click', async () => {
         if (!currentDeviceId) return;
-        
+
         try {
             const settings = await api.get(`monitoring/device/${currentDeviceId}/settings`);
-            
+
             // Populate modal
-            document.getElementById('settingsDeviceInfo').textContent = 
+            document.getElementById('settingsDeviceInfo').textContent =
                 `${settings.device.name} (${settings.device.ip})`;
             document.getElementById('pingInterval').value = settings.device.ping_interval_seconds;
             document.getElementById('retryInterval').value = settings.device.ping_retry_interval_seconds || 0;
             document.getElementById('snmpInterval').value = settings.device.snmp_interval_minutes;
-            
+
             // Show modal
             deviceSettingsModal.classList.remove('hidden');
         } catch (error) {
@@ -3702,36 +3806,36 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Chyba pri načítaní nastavení zariadenia');
         }
     });
-    
+
     const closeModal = () => {
         deviceSettingsModal.classList.add('hidden');
     };
-    
+
     closeSettingsModal.addEventListener('click', closeModal);
     cancelSettings.addEventListener('click', closeModal);
-    
+
     // Track mouse events to distinguish between clicks and text selection
     let isTextSelection = false;
     let mouseDownTarget = null;
-    
+
     deviceSettingsModal.addEventListener('mousedown', (e) => {
         mouseDownTarget = e.target;
         isTextSelection = false;
     });
-    
+
     deviceSettingsModal.addEventListener('mousemove', (e) => {
         // If mouse moves during mousedown, it's likely text selection
         if (mouseDownTarget && (e.buttons === 1)) {
             isTextSelection = true;
         }
     });
-    
+
     deviceSettingsModal.addEventListener('mouseup', (e) => {
         // Reset tracking variables
         mouseDownTarget = null;
         // Don't reset isTextSelection immediately, wait for potential click event
     });
-    
+
     // Removed automatic modal closing on backdrop click
     // Modal can only be closed using X button or Cancel button
     deviceSettingsModal.addEventListener('click', (e) => {
@@ -3740,22 +3844,22 @@ document.addEventListener('DOMContentLoaded', () => {
             isTextSelection = false;
         }, 10);
     });
-    
+
     deviceSettingsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         if (!currentDeviceId) return;
-        
+
         const formData = new FormData(e.target);
         const data = {
             ping_interval_seconds: parseInt(formData.get('ping_interval_seconds')) || 0,
             ping_retry_interval_seconds: parseInt(formData.get('ping_retry_interval_seconds')) || 0,
             snmp_interval_minutes: parseInt(formData.get('snmp_interval_minutes')) || 0
         };
-        
+
         try {
             const result = await api.post(`monitoring/device/${currentDeviceId}/settings`, data);
-            
+
             if (result.status === 'success') {
                 closeModal();
                 // Odstránené alert - len zatvorí okno
@@ -3769,28 +3873,28 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Chyba pri ukladaní nastavení');
         }
     });
-    
+
     // Initialize
     const initialize = async () => {
-        
+
         // Cache DOM elements for better performance
         cacheDOM();
-        
+
         await loadDevices();
-        
+
         initializeCharts();
-        
+
         initializeSocket();
-        
+
         // Restore saved state
         const savedState = loadState();
-        
+
         if (savedState) {
-            
+
             if (savedState.timeRange) {
                 setActiveTimeRange(savedState.timeRange);
             }
-            
+
             if (savedState.deviceId) {
                 // Set device selector value
                 if (window.customDeviceSelector) {
@@ -3806,14 +3910,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // Set default time range formatting
             setActiveTimeRange(currentTimeRange);
-            
+
             // Auto-select first device if available
-            const firstOption = window.customDeviceSelector ? 
+            const firstOption = window.customDeviceSelector ?
                 document.querySelector('#deviceSelectorDropdown .custom-select-option[data-value]:not([data-value=""])') :
                 deviceSelector.querySelector('option[value]:not([value=""])');
             if (firstOption) {
-                const firstDeviceId = window.customDeviceSelector ? 
-                    firstOption.getAttribute('data-value') : 
+                const firstDeviceId = window.customDeviceSelector ?
+                    firstOption.getAttribute('data-value') :
                     firstOption.value;
                 if (window.customDeviceSelector) {
                     window.customDeviceSelector.setValue(firstDeviceId);
@@ -3825,9 +3929,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 showNoDeviceSelected();
             }
         }
-        
+
     };
-    
+
     // Page Visibility API - pause optimization when page is not visible
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
@@ -3850,7 +3954,7 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.disconnect();
         }
     });
-    
+
     // Update chart colors when theme changes
     const updateChartsTheme = () => {
         if (!charts || Object.keys(charts).length === 0) return;
@@ -3913,4 +4017,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.setActiveTimeRange = setActiveTimeRange;
     window.persistZoomRange = persistZoomRange;
     window.updateChartsTheme = updateChartsTheme;
+    // Export for zoom-aware uptime/latency recalculation
+    window.updateHeaderMetrics = updateHeaderMetrics;
+    window.setPingHistoryForUptime = (history) => { lastPingHistory = history; };
 });

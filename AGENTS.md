@@ -71,6 +71,6 @@ This regenerates `AGENTS.md` with updated metadata and keeps both docs aligned w
 
 ## Metadata
 
-- Synced on: 2026-02-18
+- Synced on: 2026-02-21
 - Source file: `CLAUDE.md`
-- Source SHA256: `ce6e313d0164066334ab1a42c149755e17adadd833918582a1ffe86d68993abd`
+- Source SHA256: `b6911098ca2a31350b4a5fe99b5147fbd1f8dbda921815d56a2d4d618ba2eba9`

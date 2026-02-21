@@ -1,4 +1,4 @@
-# MikroTik Manager - Claude AI Guide
+# MikroTik Manager - Gemini AI Guide
 
 ## Project Overview
 

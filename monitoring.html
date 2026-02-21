@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="sk">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,73 +10,83 @@
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <!-- Font family Inter pre konzistentné vykreslenie hrúbky ako na index.html -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         /* Kompaktnejší header – jemné zmenšenie výšky a fontu */
         :root {
             --header-btn-height: 40px;
-            --header-btn-font: 13px;  /* základná veľkosť textu v akčných tlačidlách */
+            --header-btn-font: 13px;
+            /* základná veľkosť textu v akčných tlačidlách */
             --header-btn-pad-y: 6px;
             --header-btn-pad-x: 14px;
             --header-icon-font: 14px;
-            --header-btn-strong-weight: 600; /* strednú hrúbku - medzi normálnym (400) a hrubým (800) */
+            --header-btn-strong-weight: 600;
+            /* strednú hrúbku - medzi normálnym (400) a hrubým (800) */
         }
 
         /* Nastavenie globálneho fontu (ako na index.html) */
-        body { font-family: 'Inter', sans-serif; }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
 
         /* Globálne zjednotenie akčných tlačidiel v top bare (desktop aj mobile) */
-        .action-buttons > button {
+        .action-buttons>button {
             font-size: var(--header-btn-font) !important;
             font-weight: 400 !important;
             line-height: 1.1 !important;
         }
+
         /* Zvýrazni len Obnoviť, Nastavenia, Späť (nie prepínač témy) */
-        .action-buttons > #refreshBtn,
-        .action-buttons > button[onclick*="settings.html"],
-        .action-buttons > button[onclick*="window.location.href='/'"] {
-            font-weight: var(--header-btn-strong-weight) !important; /* silné tlačidlá */
+        .action-buttons>#refreshBtn,
+        .action-buttons>button[onclick*="settings.html"],
+        .action-buttons>button[onclick*="window.location.href='/'"] {
+            font-weight: var(--header-btn-strong-weight) !important;
+            /* silné tlačidlá */
         }
+
         /* Dodatočné zabezpečenie hrúbky - prebije Tailwind utility classy */
-        .action-buttons > #refreshBtn span,
-        .action-buttons > button[onclick*="settings.html"] span,
-        .action-buttons > button[onclick*="window.location.href='/'"] span {
+        .action-buttons>#refreshBtn span,
+        .action-buttons>button[onclick*="settings.html"] span,
+        .action-buttons>button[onclick*="window.location.href='/'"] span {
             font-weight: var(--header-btn-strong-weight) !important;
         }
+
         /* Dropdown button: tenké písmo ale o 1px väčšie */
         .custom-select-button {
             font-weight: 400 !important;
             font-size: calc(var(--header-btn-font) + 1px) !important;
         }
+
         .card {
             background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
             border: 1px solid #374151;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-        
+
         .ping-status {
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
-        
+
         .ping-status.online {
             color: #10b981;
         }
-        
+
         .ping-status.offline {
             color: #ef4444;
         }
-        
+
         .ping-indicator {
             width: 12px;
             height: 12px;
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
-        
+
         /* Light Theme */
         body.light-theme {
             --main-bg: #cddbf2;
@@ -86,58 +97,59 @@
             --accent-color-hover: #0284c7;
             background-color: var(--main-bg) !important;
         }
-        
+
         /* Cards v svetlej téme */
         body.light-theme .card {
             background: linear-gradient(135deg, #e4edfa 0%, #d7e5f8 100%) !important;
             border: 1px solid var(--border-color) !important;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
         }
-        
+
         /* Texty v svetlej téme - modré nadpisy */
         body.light-theme h1,
         body.light-theme h2,
         body.light-theme h3 {
             color: var(--accent-color) !important;
         }
-        
+
         body.light-theme .text-white {
             color: var(--text-color) !important;
         }
-        
+
         body.light-theme .text-gray-400,
         body.light-theme .text-gray-300 {
-            color: #475569 !important; /* Slate-600 - tmavšia pre lepšiu čitateľnosť */
+            color: #475569 !important;
+            /* Slate-600 - tmavšia pre lepšiu čitateľnosť */
         }
-        
+
         body.light-theme .text-gray-200 {
             color: var(--text-color) !important;
         }
-        
+
         body.light-theme .text-sky-400,
         body.light-theme .text-sky-500 {
             color: var(--accent-color) !important;
         }
-        
+
         /* Špecifické bg-gray tlačidlá pre monitoring */
         body.light-theme .btn.bg-gray-600 {
             background-color: #d6e4f5 !important;
             color: var(--text-color) !important;
             border: 1px solid var(--border-color) !important;
         }
-        
+
         body.light-theme .btn.bg-gray-600:hover {
             background-color: #c3d4eb !important;
             color: var(--text-color) !important;
         }
-        
+
         /* Blue buttons zostanú modré */
         body.light-theme .btn.bg-blue-600,
         body.light-theme button.btn.bg-blue-600 {
             background-color: var(--accent-color) !important;
             color: #ffffff !important;
         }
-        
+
         body.light-theme .btn.bg-blue-600:hover,
         body.light-theme button.btn.bg-blue-600:hover {
             background-color: var(--accent-color-hover) !important;
@@ -145,7 +157,7 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
-        
+
         body.light-theme .btn.bg-gray-600:hover,
         body.light-theme button.bg-gray-600:hover,
         body.light-theme #themeToggle:hover,
@@ -156,12 +168,12 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
-        
+
         /* Všeobecné tlačidlá - musí byť na konci kvôli priorite */
         body.light-theme .btn:not(.bg-blue-600):not(.bg-gray-600) {
             color: #ffffff !important;
         }
-        
+
         /* Input fields a select v svetlej téme */
         body.light-theme input,
         body.light-theme select,
@@ -170,69 +182,70 @@
             border-color: var(--border-color) !important;
             color: var(--text-color) !important;
         }
-        
+
         body.light-theme input:focus,
         body.light-theme select:focus,
         body.light-theme textarea:focus {
             border-color: var(--accent-color) !important;
             box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.1) !important;
         }
-        
+
         /* Option elements v select dropdown - pre mobile zariadenia */
         select option {
             background-color: #374151 !important;
             color: #ffffff !important;
         }
-        
+
         /* Option elements v svetlej téme */
         body.light-theme select option {
             background-color: #e3edfa !important;
             color: #334155 !important;
         }
-        
+
         /* Mobile WebView specific - force dark option styling */
         @media screen and (max-width: 768px) {
             select option {
                 background-color: #374151 !important;
                 color: #ffffff !important;
             }
-            
+
             body.light-theme select option {
                 background-color: #e3edfa !important;
                 color: #334155 !important;
             }
         }
-        
+
         /* WebKit specific option styling */
         select option:checked {
             background-color: #4b5563 !important;
             color: #ffffff !important;
         }
-        
+
         body.light-theme select option:checked {
             background-color: #e2e8f0 !important;
             color: #334155 !important;
         }
-        
+
         /* Time range buttons container */
-        body.light-theme #timeRangeContainer > div {
+        body.light-theme #timeRangeContainer>div {
             /* Variant A + späť jemný hlavný border okolo celej skupiny */
             background: transparent !important;
             border: 1px solid var(--border-color) !important;
             border-radius: 8px !important;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
         }
-        
+
         /* Time range buttons – Variant A (odľahčené) */
         body.light-theme .time-range-btn {
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            color: #64748b !important; /* neutrálna sivá */
+            color: #64748b !important;
+            /* neutrálna sivá */
         }
 
         body.light-theme .time-range-btn:hover {
-            background: rgba(3,105,161,0.08) !important;
+            background: rgba(3, 105, 161, 0.08) !important;
             color: #0369a1 !important;
         }
 
@@ -240,35 +253,37 @@
             background: #0369a1 !important;
             color: #ffffff !important;
             border: none !important;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
         }
-        
+
         /* Ping status v svetlej téme - zachovať online/offline farby */
         body.light-theme .ping-status.online {
-            color: #0ea5e9 !important; /* Sky blue - lepšia čitateľnosť */
+            color: #0ea5e9 !important;
+            /* Sky blue - lepšia čitateľnosť */
         }
 
         body.light-theme .ping-status.offline {
-            color: #dc2626 !important; /* Výrazná červená */
+            color: #dc2626 !important;
+            /* Výrazná červená */
         }
-        
+
         /* Dark theme - zabezpečenie správnych farieb tlačidlí */
         body:not(.light-theme) .btn.bg-blue-600,
         body:not(.light-theme) button.btn.bg-blue-600,
         body:not(.light-theme) .text-white {
             color: #ffffff !important;
         }
-        
+
         body:not(.light-theme) .btn.bg-gray-600,
         body:not(.light-theme) button.btn.bg-gray-600 {
             color: #ffffff !important;
         }
-        
+
         /* Zabezpečenie že všetky tlačidlá v tmavej téme majú správne farby */
         body:not(.light-theme) .btn {
             color: #ffffff !important;
         }
-        
+
         /* Oprava hover efektov pre všetky tlačidlá */
         .btn.bg-blue-600:hover,
         button.bg-blue-600:hover {
@@ -277,7 +292,7 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
-        
+
         .btn.bg-gray-600:hover,
         button.bg-gray-600:hover,
         #themeToggle:hover,
@@ -288,26 +303,26 @@
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
-        
+
         /* Mega špecifické pravidlá pre problematické tlačidlá */
         body:not(.light-theme) button[onclick*="settings.html"] {
             background-color: #4b5563 !important;
             color: #ffffff !important;
         }
-        
+
         body.light-theme button[onclick*="settings.html"] {
             background-color: #e2e8f0 !important;
             color: var(--text-color) !important;
         }
-        
-    /* Odstránená pôvodná mobilná varianta refresh tlačidla (zjednodušenie) */
-        
+
+        /* Odstránená pôvodná mobilná varianta refresh tlačidla (zjednodušenie) */
+
         /* Mobile refresh button v svetlej téme */
         body.light-theme .mobile-refresh-btn {
             background-color: var(--accent-color) !important;
             color: #ffffff !important;
         }
-        
+
         body.light-theme .mobile-refresh-btn:hover {
             background-color: var(--accent-color-hover) !important;
             color: #ffffff !important;
@@ -320,36 +335,36 @@
             .mobile-refresh-btn {
                 display: flex !important;
             }
-            
+
             body.light-theme .mobile-refresh-btn {
                 display: flex !important;
             }
         }
-        
+
         /* Modal v svetlej téme */
-        body.light-theme #deviceSettingsModal > div {
+        body.light-theme #deviceSettingsModal>div {
             background-color: #f6f8fc !important;
             color: var(--text-color) !important;
         }
-        
+
         body.light-theme #deviceSettingsModal h3 {
             color: var(--accent-color) !important;
         }
-        
+
         body.light-theme #deviceSettingsModal label {
             color: var(--text-color) !important;
         }
-        
+
         body.light-theme #deviceSettingsModal .text-gray-400 {
             color: #64748b !important;
         }
-        
+
         /* Modal v tmavej téme - zabezpečenie správnych farieb */
         body:not(.light-theme) #deviceSettingsModal h3,
         body:not(.light-theme) #deviceSettingsModal label {
             color: #ffffff !important;
         }
-        
+
         /* Tlačidlá v modálnom okne - light téma ako v "Pridať/Upraviť zariadenie" */
         body.light-theme #deviceSettingsModal #cancelSettings {
             background-color: #cdd5e1 !important;
@@ -374,50 +389,65 @@
             color: #ffffff !important;
             box-shadow: 0 6px 12px rgba(24, 111, 182, 0.18);
         }
-        
+
         body:not(.light-theme) #deviceSettingsModal button {
             color: #ffffff !important;
         }
-        
+
         .ping-indicator.online {
             background-color: #10b981;
         }
-        
+
         .ping-indicator.offline {
             background-color: #ef4444;
         }
-        
+
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
-        
+
         .chart-container {
             position: relative;
             height: 300px;
             width: 100%;
         }
+
         /* Mobile: posun grafu mierne doľava a vytvorenie prázdneho "thumb" pásu vpravo
            aby sa dalo pohodlnejšie vertikálne scrollovať bez zásahu do grafu */
         @media (max-width: 768px) {
             #chartsContainer .card .chart-container {
-                padding-right: 6px; /* pravá "thumb" zóna ostáva */
-                padding-left: 0;    /* maximum šírky */
+                padding-right: 6px;
+                /* pravá "thumb" zóna ostáva */
+                padding-left: 0;
+                /* maximum šírky */
                 box-sizing: border-box;
-                margin-left: -20px; /* ešte o 4px viac doľava */
-                width: calc(100% + 20px); /* kompenzácia posunu aby sa nič neodrezalo */
+                margin-left: -20px;
+                /* ešte o 4px viac doľava */
+                width: calc(100% + 20px);
+                /* kompenzácia posunu aby sa nič neodrezalo */
             }
+
             /* Uistíme sa že canvas sa zmenší o padding a nezalomí */
             #chartsContainer .card .chart-container canvas {
                 display: block;
                 width: 100% !important;
             }
+
             /* Posun overlay zoom tlačidiel mierne doľava aby neboli v "thumb" zóne */
             #chartsContainer .card .chart-container .chart-zoom-controls {
-                right: 14px; /* 6px buffer + 8px medzera */
+                right: 14px;
+                /* 6px buffer + 8px medzera */
             }
         }
-        
+
         .loading-spinner {
             border: 3px solid #374151;
             border-top: 3px solid #3b82f6;
@@ -426,12 +456,17 @@
             height: 40px;
             animation: spin 1s linear infinite;
         }
-        
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
-        
+
         /* Modern Time Range Buttons - Uptime Kuma style */
         .time-range-btn {
             background: transparent;
@@ -446,18 +481,18 @@
             position: relative;
             white-space: nowrap;
         }
-        
+
         .time-range-btn:hover {
             background: rgba(59, 130, 246, 0.1);
             color: #bfdbfe;
         }
-        
+
         .time-range-btn.active {
             background: #3b82f6;
             color: white;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
         }
-        
+
         .time-range-btn.loading::after {
             content: '';
             position: absolute;
@@ -471,13 +506,13 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
-        
+
         /* Chart animation classes */
         .chart-container.updating {
             position: relative;
             overflow: hidden;
         }
-        
+
         .chart-container.updating::before {
             content: '';
             position: absolute;
@@ -489,30 +524,35 @@
             animation: loading-sweep 1.5s ease-in-out infinite;
             z-index: 1;
         }
-        
+
         @keyframes loading-sweep {
-            0% { left: -100%; }
-            100% { left: 100%; }
+            0% {
+                left: -100%;
+            }
+
+            100% {
+                left: 100%;
+            }
         }
-        
+
         /* Device Info Panel Improvements */
         .device-info-header {
             transition: all 0.3s ease;
         }
-        
+
         .device-actions {
             gap: 8px;
         }
-        
+
         .device-actions .btn {
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
         .device-actions .btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
-        
+
         /* Responsive improvements */
         @media (max-width: 640px) {
             .device-info-header {
@@ -520,28 +560,28 @@
                 align-items: flex-start;
                 gap: 16px;
             }
-            
-            .device-info-header > div {
+
+            .device-info-header>div {
                 text-align: left;
                 width: 100%;
             }
-            
+
             .device-info-header h2,
             .device-info-header p {
                 text-align: left !important;
                 margin: 0;
             }
-            
+
             .device-actions {
                 align-self: stretch;
                 justify-content: space-between;
             }
-            
+
             .device-actions .btn {
                 flex: 1;
                 justify-content: center;
             }
-            
+
             /* Zobraz IP adresu len na mobile */
             #deviceIp {
                 display: block !important;
@@ -554,18 +594,18 @@
                 padding-left: 16px;
                 padding-right: 16px;
             }
-            
+
             /* Header adjustments for tablet */
-            .flex.justify-between.items-center > div:first-child {
+            .flex.justify-between.items-center>div:first-child {
                 flex-wrap: wrap;
                 gap: 12px;
             }
-            
+
             #timeRangeContainer .bg-gray-700 {
                 flex-wrap: wrap;
                 gap: 4px;
             }
-            
+
             .time-range-btn {
                 font-size: 12px;
                 padding: 4px 8px;
@@ -573,98 +613,166 @@
         }
 
         @media (max-width: 768px) {
+
             /* Jednoduchý mobilný layout pre header */
             .flex.items-center.mb-6.gap-6 {
                 flex-direction: column !important;
                 align-items: stretch !important;
                 gap: 16px !important;
             }
-            .flex.items-center.mb-6.gap-6 > h1 {
+
+            .flex.items-center.mb-6.gap-6>h1 {
                 align-self: center !important;
                 font-size: 1.25rem !important;
                 margin: 0 !important;
             }
+
             .flex.items-center.mb-6.gap-6 .custom-select,
-            .flex.items-center.mb-6.gap-6 #timeRangeContainer { width:100% !important; }
+            .flex.items-center.mb-6.gap-6 #timeRangeContainer {
+                width: 100% !important;
+            }
+
             /* Odstránenie medzery vpravo pri intervaloch */
-            #timeRangeContainer { margin-right:0 !important; }
-            #timeRangeContainer > div { width:100% !important; box-sizing:border-box !important; }
-            #timeRangeContainer .bg-gray-700 { width:100% !important; box-sizing:border-box !important; margin-right:0 !important; }
+            #timeRangeContainer {
+                margin-right: 0 !important;
+            }
+
+            #timeRangeContainer>div {
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            #timeRangeContainer .bg-gray-700 {
+                width: 100% !important;
+                box-sizing: border-box !important;
+                margin-right: 0 !important;
+            }
+
             /* Refresh ostáva viditeľné (už len jedna verzia) */
             /* Kontajner s menu zostane radový na desktop, na mobile plná šírka */
-            .flex.items-center.mb-6.gap-6 > .flex.items-center.gap-2.ml-auto { width:100% !important; flex-wrap:wrap; }
+            .flex.items-center.mb-6.gap-6>.flex.items-center.gap-2.ml-auto {
+                width: 100% !important;
+                flex-wrap: wrap;
+            }
+
             /* Action buttons wrapper - 4 tlačidlá v jednom riadku */
-            .action-buttons { width:100% !important; display:flex !important; gap:6px !important; }
-            .action-buttons > button { flex:1 1 0 !important; min-width:0 !important; padding:8px 4px !important; font-size:13px !important; justify-content:center !important; }
+            .action-buttons {
+                width: 100% !important;
+                display: flex !important;
+                gap: 6px !important;
+            }
+
+            .action-buttons>button {
+                flex: 1 1 0 !important;
+                min-width: 0 !important;
+                padding: 8px 4px !important;
+                font-size: 13px !important;
+                justify-content: center !important;
+            }
+
             /* Na veľmi úzkych displejoch skryť text okrem accessibility */
-            @media (max-width:480px){
-                .action-buttons > button span:not(.sr-only){ display:none !important; }
+            @media (max-width:480px) {
+                .action-buttons>button span:not(.sr-only) {
+                    display: none !important;
+                }
             }
         }
 
         /* === Mobilný horizontálny scroller pre time-range (variant 1) === */
         @media (max-width: 768px) {
             #timeRangeContainer .bg-gray-700 {
-                flex-wrap: nowrap !important; /* už neprelamovať do 2 riadkov */
+                flex-wrap: nowrap !important;
+                /* už neprelamovať do 2 riadkov */
                 overflow-x: auto !important;
                 overflow-y: hidden !important;
                 -webkit-overflow-scrolling: touch;
-                scrollbar-width: none; /* Firefox */
-                gap: 2px !important; /* kompaktnejšie medzery */
-                position: relative; /* pre gradientové prekrytia */
+                scrollbar-width: none;
+                /* Firefox */
+                gap: 2px !important;
+                /* kompaktnejšie medzery */
+                position: relative;
+                /* pre gradientové prekrytia */
             }
-            #timeRangeContainer .bg-gray-700::-webkit-scrollbar { display: none; }
+
+            #timeRangeContainer .bg-gray-700::-webkit-scrollbar {
+                display: none;
+            }
+
             #timeRangeContainer .time-range-btn {
-                flex: 0 0 auto !important; /* zabrániť roztiahnutiu */
+                flex: 0 0 auto !important;
+                /* zabrániť roztiahnutiu */
                 padding: 4px 10px !important;
                 font-size: 11px !important;
                 line-height: 1.1 !important;
-                        position: relative; /* nad gradientom */
-                        z-index: 2;
+                position: relative;
+                /* nad gradientom */
+                z-index: 2;
             }
+
             /* Zvýšiť tap target vertikálne zachovaním výšky kontajnera (už definované inde) */
         }
 
         /* Gradientové náznaky po bokoch (vizuálna indikácia scrollu) */
         @media (max-width: 768px) {
+
             #timeRangeContainer .bg-gray-700::before,
             #timeRangeContainer .bg-gray-700::after {
                 content: '';
                 position: absolute;
-                top: 0; bottom: 0;
+                top: 0;
+                bottom: 0;
                 width: 18px;
                 pointer-events: none;
-                z-index: 1; /* pod tlačidlami */
+                z-index: 1;
+                /* pod tlačidlami */
                 transition: opacity .25s ease;
             }
-            #timeRangeContainer .bg-gray-700::before { left: 0; }
-            #timeRangeContainer .bg-gray-700::after { right: 0; }
+
+            #timeRangeContainer .bg-gray-700::before {
+                left: 0;
+            }
+
+            #timeRangeContainer .bg-gray-700::after {
+                right: 0;
+            }
+
             /* Dark theme gradienty (pôvodná intenzita) */
             body:not(.light-theme) #timeRangeContainer .bg-gray-700::before {
-                background: linear-gradient(to right, rgba(55,65,81,0.95), rgba(55,65,81,0));
+                background: linear-gradient(to right, rgba(55, 65, 81, 0.95), rgba(55, 65, 81, 0));
             }
+
             body:not(.light-theme) #timeRangeContainer .bg-gray-700::after {
-                background: linear-gradient(to left, rgba(55,65,81,0.95), rgba(55,65,81,0));
+                background: linear-gradient(to left, rgba(55, 65, 81, 0.95), rgba(55, 65, 81, 0));
             }
+
             /* Light theme gradienty (farby pozadia kontajnera / body) */
             body.light-theme #timeRangeContainer .bg-gray-700::before {
-                background: linear-gradient(to right, rgba(205,219,242,0.95), rgba(205,219,242,0));
+                background: linear-gradient(to right, rgba(205, 219, 242, 0.95), rgba(205, 219, 242, 0));
             }
+
             body.light-theme #timeRangeContainer .bg-gray-700::after {
-                background: linear-gradient(to left, rgba(205,219,242,0.95), rgba(205,219,242,0));
+                background: linear-gradient(to left, rgba(205, 219, 242, 0.95), rgba(205, 219, 242, 0));
             }
+
             /* Skryť gradienty na krajoch pri dosiahnutí okrajov */
-            #timeRangeContainer .bg-gray-700.at-left::before { opacity:0; }
-            #timeRangeContainer .bg-gray-700.at-right::after { opacity:0; }
+            #timeRangeContainer .bg-gray-700.at-left::before {
+                opacity: 0;
+            }
+
+            #timeRangeContainer .bg-gray-700.at-right::after {
+                opacity: 0;
+            }
+
             /* Svetlá téma – odstrániť tmavé pozadie wrappera aby skryté tlačidlo nevyzeralo sivé */
             body.light-theme #timeRangeContainer .bg-gray-700 {
                 background: transparent !important;
                 border-color: var(--border-color) !important;
             }
         }
-        
+
         /* MOBILNÉ PING STATUS KARTY - 2x2 GRID LAYOUT */
         @media (max-width: 768px) {
+
             /* Zmeniť grid na 2 stĺpce na mobile (2x2 layout) - silnejší selektor */
             .container #deviceInfoPanel .grid.grid-cols-1.md\\:grid-cols-4.gap-4.mb-6 {
                 grid-template-columns: repeat(2, 1fr) !important;
@@ -672,19 +780,19 @@
                 margin-bottom: 1rem !important;
                 display: grid !important;
             }
-            
+
             /* Backup selektor pre ping karty */
             #deviceInfoPanel div[class*="grid"][class*="grid-cols-1"] {
                 grid-template-columns: repeat(2, 1fr) !important;
                 display: grid !important;
             }
-            
+
             /* Výrazne zmenšiť karty na mobile */
             #deviceInfoPanel .grid .card {
                 padding: 0.5rem !important;
                 min-height: auto !important;
             }
-            
+
             /* Zmenšiť nadpisy - ale nie tak veľmi */
             #deviceInfoPanel .grid .card p.text-sm {
                 font-size: 0.75rem !important;
@@ -692,14 +800,14 @@
                 margin-bottom: 0.25rem !important;
                 font-weight: 500 !important;
             }
-            
+
             /* Zväčšiť hodnoty pre lepšiu čitateľnosť */
             #deviceInfoPanel .grid .card .text-lg {
                 font-size: 0.875rem !important;
                 line-height: 1.2 !important;
                 font-weight: 600 !important;
             }
-            
+
             /* Zobraziť ikony ale menšie a vpravo hore */
             #deviceInfoPanel .grid .card i.text-2xl {
                 display: block !important;
@@ -710,58 +818,59 @@
                 top: 0.5rem !important;
                 right: 0.5rem !important;
             }
-            
+
             /* Zabezpečiť že karta má relative position pre absolute ikony */
             #deviceInfoPanel .grid .card {
                 padding: 0.5rem !important;
                 min-height: auto !important;
                 position: relative !important;
             }
-            
+
             /* Upraviť padding vpravo pre obsah aby sa neprekrýval s ikonou */
-            #deviceInfoPanel .grid .card > div {
+            #deviceInfoPanel .grid .card>div {
                 padding-right: 1.5rem !important;
             }
-            
+
             /* Menší ping indicator */
             #deviceInfoPanel .grid .card .ping-indicator {
                 width: 6px !important;
                 height: 6px !important;
             }
-            
+
             /* Zmenšiť gap v ping status */
             #deviceInfoPanel .grid .card .ping-status {
                 gap: 0.25rem !important;
             }
-            
+
             /* Zmenšiť celý content flex gap */
             #deviceInfoPanel .grid .card .flex {
                 gap: 0.25rem !important;
             }
         }
-        
+
         .chart-fade-in {
             animation: chartFadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        
+
         @keyframes chartFadeIn {
-            0% { 
-                opacity: 0; 
+            0% {
+                opacity: 0;
                 transform: translateY(20px);
             }
-            100% { 
-                opacity: 1; 
+
+            100% {
+                opacity: 1;
                 transform: translateY(0);
             }
         }
-        
+
         /* Time range container animation */
         #timeRangeContainer {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             opacity: 0;
             transform: translateX(-10px);
         }
-        
+
         #timeRangeContainer.show {
             opacity: 1;
             transform: translateX(0);
@@ -786,7 +895,8 @@
             height: var(--header-btn-height);
             padding: var(--header-btn-pad-y) var(--header-btn-pad-x) !important;
             font-size: var(--header-btn-font);
-            font-weight: 400; /* odstránené zvýraznenie */
+            font-weight: 400;
+            /* odstránené zvýraznenie */
             display: flex !important;
             align-items: center;
             justify-content: center;
@@ -808,42 +918,134 @@
             padding: var(--header-btn-pad-y) var(--header-btn-pad-x) !important;
             font-size: var(--header-btn-font) !important;
         }
-        #themeToggle i { line-height: 1 !important; }
-    /* Unifikácia textu v hlavných akčných tlačidlách */
-    .action-buttons > button span { font-size: inherit !important; font-weight: 400 !important; line-height: 1.1 !important; }
-    /* Ikony – jednotná veľkosť, aby text nevyzeral menší pri rôznych ikonách */
-    .action-buttons > button i { font-size: var(--header-icon-font) !important; line-height: 1 !important; }
-    /* Zabezpečiť že žiadny iný utility class (napr. text-sm/text-base) to nerozbije */
-    .action-buttons > button [class*="text-"]:not(.sr-only) { font-size: inherit !important; }
+
+        #themeToggle i {
+            line-height: 1 !important;
+        }
+
+        /* Zoom mode toggle button */
+        #zoomModeToggle {
+            min-height: var(--header-btn-height) !important;
+            height: var(--header-btn-height) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: var(--header-btn-pad-y) 8px !important;
+            /* kompaktnejší x-padding */
+            font-size: var(--header-btn-font) !important;
+            transition: background-color 0.2s ease, color 0.2s ease, transform 0.18s ease, box-shadow 0.18s ease !important;
+        }
+
+        #zoomModeToggle i {
+            line-height: 1 !important;
+        }
+
+        /* Fixed-width text label – šírka sa lockne cez JS po DOMContentLoaded */
+        #zoomModeText {
+            display: inline-block;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        /* Pevná šírka pre zoom-mode toggle – button nezmení veľkosť
+           pri prepínaní medzi "Individuálny" a "Globálny" */
+
+        @media (max-width: 480px) {
+            #zoomModeText {
+                display: none !important;
+            }
+        }
+
+        /* Override active state – remove scale() to prevent left-boundary visual artifact */
+        #zoomModeToggle:active {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+        }
+
+        /* Active state – global mode */
+        #zoomModeToggle.zoom-global-active {
+            background-color: #d97706 !important;
+            color: #ffffff !important;
+            border-color: #b45309 !important;
+        }
+
+        #zoomModeToggle.zoom-global-active:hover {
+            background-color: #b45309 !important;
+        }
+
+        /* Light theme variants */
+        body.light-theme #zoomModeToggle.zoom-global-active {
+            background-color: #f59e0b !important;
+            color: #ffffff !important;
+            border-color: #d97706 !important;
+        }
+
+        body.light-theme #zoomModeToggle.zoom-global-active:hover {
+            background-color: #d97706 !important;
+        }
+
+        /* Unifikácia textu v hlavných akčných tlačidlách */
+        .action-buttons>button span {
+            font-size: inherit !important;
+            font-weight: 400 !important;
+            line-height: 1.1 !important;
+        }
+
+        /* Ikony – jednotná veľkosť, aby text nevyzeral menší pri rôznych ikonách */
+        .action-buttons>button i {
+            font-size: var(--header-icon-font) !important;
+            line-height: 1 !important;
+        }
+
+        /* Zabezpečiť že žiadny iný utility class (napr. text-sm/text-base) to nerozbije */
+        .action-buttons>button [class*="text-"]:not(.sr-only) {
+            font-size: inherit !important;
+        }
+
         /* Mobile variant keeps same height but narrower padding already overridden */
         @media (max-width: 768px) {
-            .action-buttons > #themeToggle { height:var(--header-btn-height) !important; min-height:var(--header-btn-height) !important; }
+            .action-buttons>#themeToggle {
+                height: var(--header-btn-height) !important;
+                min-height: var(--header-btn-height) !important;
+            }
         }
-        
+
         /* ================= MOBILE UNIFIKÁCIA ŠTYROCH TLAČIDIEL ================= */
         @media (max-width: 768px) {
+
             /* Rovnaká (mierne znížená) výška pre všetky štyri */
-            .action-buttons > button { 
-                height:var(--header-btn-height) !important; 
-                min-height:var(--header-btn-height) !important; 
-                display:flex !important; 
-                align-items:center !important; 
-                justify-content:center !important; 
-                padding: var(--header-btn-pad-y) 8px !important; /* znížený vertikálny padding */
+            .action-buttons>button {
+                height: var(--header-btn-height) !important;
+                min-height: var(--header-btn-height) !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                padding: var(--header-btn-pad-y) 8px !important;
+                /* znížený vertikálny padding */
                 font-size: var(--header-btn-font) !important;
             }
+
             /* Rovnaká šírka (rozdelia sa rovnomerne) */
-            .action-buttons { gap:6px !important; }
-            .action-buttons > button { flex:1 1 25% !important; }
-            /* Skryť pretekanie a držať symetriu pri dlhších textoch */
-            .action-buttons > button span:not(.sr-only) { 
-                overflow:hidden; 
-                text-overflow:ellipsis; 
-                white-space:nowrap; 
-                max-width:100%;
+            .action-buttons {
+                gap: 6px !important;
             }
+
+            .action-buttons>button {
+                flex: 1 1 25% !important;
+            }
+
+            /* Skryť pretekanie a držať symetriu pri dlhších textoch */
+            .action-buttons>button span:not(.sr-only) {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                max-width: 100%;
+            }
+
             /* Ikony zarovnať jednotne */
-            .action-buttons > button i { line-height:1 !important; }
+            .action-buttons>button i {
+                line-height: 1 !important;
+            }
         }
 
         /* Ensure refresh button matches others */
@@ -900,46 +1102,85 @@
 
         /* Mobile: skryť overlay zoom control a zobraziť inline variantu v hlavičke */
         @media (max-width: 768px) {
-            .chart-container > .chart-zoom-controls { display: none !important; }
-            .mobile-inline-zoom { display: inline-flex !important; }
-            .mobile-inline-zoom { padding: 4px 8px; font-size: 12px; }
+            .chart-container>.chart-zoom-controls {
+                display: none !important;
+            }
+
+            .mobile-inline-zoom {
+                display: inline-flex !important;
+            }
+
+            .mobile-inline-zoom {
+                padding: 4px 8px;
+                font-size: 12px;
+            }
         }
 
         /* Mobile adjustment: prevent overlap of zoom controls with subtitle text */
         @media (max-width: 768px) {
             .chart-zoom-controls {
-                top: 26px; /* mierne zdvihnuté - už nezasahuje do mriežky grafu ale stále pod subtitle */
+                top: 26px;
+                /* mierne zdvihnuté - už nezasahuje do mriežky grafu ale stále pod subtitle */
                 right: 6px;
                 gap: 3px;
             }
+
             .zoom-btn {
-                padding: 5px 9px; /* väčší tap target */
-                font-size: 13px;  /* o trochu väčšie */
+                padding: 5px 9px;
+                /* väčší tap target */
+                font-size: 13px;
+                /* o trochu väčšie */
                 border-radius: 5px;
             }
-            .zoom-btn i { font-size:14px !important; line-height:1 !important; }
+
+            .zoom-btn i {
+                font-size: 14px !important;
+                line-height: 1 !important;
+            }
+
             /* Dvojriadkové nadpisy grafov v kompaktnej mobilnej verzii */
-            h3.chart-title { line-height:1.05 !important; display:flex; flex-wrap:wrap; align-items:flex-start; }
-            h3.chart-title .title-part { display:inline; }
-            h3.chart-title .title-break { display:inline; }
+            h3.chart-title {
+                line-height: 1.05 !important;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: flex-start;
+            }
+
+            h3.chart-title .title-part {
+                display: inline;
+            }
+
+            h3.chart-title .title-break {
+                display: inline;
+            }
+
             /* Na mobile vždy lámať po definovanom bode */
-            h3.chart-title .stack-mobile { display:block; width:100%; }
-            h3.chart-title .first-inline { margin-right:0; }
+            h3.chart-title .stack-mobile {
+                display: block;
+                width: 100%;
+            }
+
+            h3.chart-title .first-inline {
+                margin-right: 0;
+            }
+
             /* Jemné zmenšenie medzery pri viacerých riadkoch */
-            h3.chart-title .title-part + .stack-mobile { margin-top:2px; }
+            h3.chart-title .title-part+.stack-mobile {
+                margin-top: 2px;
+            }
         }
 
         /* Chart container positioning for zoom controls */
         .chart-container {
             position: relative;
         }
-        
+
         /* Custom Dropdown Styles */
         .custom-select {
             position: relative;
             display: inline-block;
         }
-        
+
         .custom-select-button {
             background-color: #374151;
             border: 1px solid #4b5563;
@@ -950,35 +1191,38 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            min-width: 280px; /* Zväčšená minimálna šírka */
-            max-width: 500px; /* Maximálna šírka pre PC */
-            width: auto; /* Automatická šírka podľa obsahu */
+            min-width: 280px;
+            /* Zväčšená minimálna šírka */
+            max-width: 500px;
+            /* Maximálna šírka pre PC */
+            width: auto;
+            /* Automatická šírka podľa obsahu */
             user-select: none;
             transition: all 0.2s;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        
+
         .custom-select-button:hover {
             background-color: #4b5563;
         }
-        
+
         .custom-select-button:focus {
             outline: none;
             box-shadow: 0 0 0 2px #f97316;
         }
-        
+
         .custom-select-arrow {
             margin-left: auto;
             transition: transform 0.2s;
             flex-shrink: 0;
         }
-        
+
         .custom-select.open .custom-select-arrow {
             transform: rotate(180deg);
         }
-        
+
         .custom-select-dropdown {
             position: absolute;
             top: 100%;
@@ -991,38 +1235,51 @@
             z-index: 1000;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             display: none;
-            min-width: 280px; /* Minimálna šírka rovnaká ako button */
-            max-width: 500px; /* Maximálna šírka pre PC */
+            min-width: 280px;
+            /* Minimálna šírka rovnaká ako button */
+            max-width: 500px;
+            /* Maximálna šírka pre PC */
         }
-        
+
         /* PC verzia - väčšia výška, aby boli viditeľné všetky zariadenia */
         @media (min-width: 769px) {
             .custom-select {
-                min-width: 320px; /* Minimálna šírka pre PC */
-                max-width: 600px; /* Maximálna šírka pre PC */
+                min-width: 320px;
+                /* Minimálna šírka pre PC */
+                max-width: 600px;
+                /* Maximálna šírka pre PC */
             }
-            
+
             .custom-select-button {
-                min-width: 320px; /* Minimálna šírka button pre PC */
-                padding: var(--header-btn-pad-y) var(--header-btn-pad-x); /* Jemne menší padding */
-                height: var(--header-btn-height); /* Zarovnané s ostatnými */
-                line-height: 1.15rem; /* Trochu kompaktnejšie */
-                font-size: var(--header-btn-font); /* Menší font */
+                min-width: 320px;
+                /* Minimálna šírka button pre PC */
+                padding: var(--header-btn-pad-y) var(--header-btn-pad-x);
+                /* Jemne menší padding */
+                height: var(--header-btn-height);
+                /* Zarovnané s ostatnými */
+                line-height: 1.15rem;
+                /* Trochu kompaktnejšie */
+                font-size: var(--header-btn-font);
+                /* Menší font */
             }
-            
+
             .custom-select-dropdown {
-                max-height: 600px; /* Zväčšená výška pre viac zariadení súčasne */
+                max-height: 600px;
+                /* Zväčšená výška pre viac zariadení súčasne */
                 overflow-y: auto;
-                min-width: 320px; /* Minimálna šírka pre PC */
-                max-width: 600px; /* Maximálna šírka pre PC */
-                padding: 0; /* Základný padding pre PC */
+                min-width: 320px;
+                /* Minimálna šírka pre PC */
+                max-width: 600px;
+                /* Maximálna šírka pre PC */
+                padding: 0;
+                /* Základný padding pre PC */
                 background-color: rgba(55, 65, 81, 0.93);
             }
-            
+
             body.light-theme .custom-select-dropdown {
                 background-color: rgba(255, 255, 255, 0.96);
             }
-            
+
 
             /* Desktop: presná unifikácia výšky všetkých header prvkov */
             .flex.items-center.mb-6.gap-6 .btn,
@@ -1039,17 +1296,20 @@
                 box-sizing: border-box !important;
                 line-height: 1.2 !important;
             }
+
             .flex.items-center.mb-6.gap-6 .custom-select-button {
                 line-height: 1.2 !important;
                 font-size: calc(var(--header-btn-font) + 1px) !important;
                 gap: 8px !important;
             }
+
             /* Time range container presná výška */
-            #timeRangeContainer > div {
+            #timeRangeContainer>div {
                 height: var(--header-btn-height) !important;
                 min-height: var(--header-btn-height) !important;
                 padding: 2px !important;
             }
+
             /* Time range buttons presná výška */
             #timeRangeContainer .time-range-btn {
                 height: calc(var(--header-btn-height) - 4px) !important;
@@ -1059,92 +1319,112 @@
                 line-height: 1.1 !important;
             }
         }
-        
+
         /* Mobile verzia - optimalizovaná šírka a priestor */
         @media (max-width: 768px) {
             .custom-select {
-                width: 100%; /* Celá šírka kontajnera */
-                max-width: calc(100vw - 16px); /* Zmenšený margin pre viac priestoru */
-                margin-left: 0; /* Zarovnanie úplne vľavo */
+                width: 100%;
+                /* Celá šírka kontajnera */
+                max-width: calc(100vw - 16px);
+                /* Zmenšený margin pre viac priestoru */
+                margin-left: 0;
+                /* Zarovnanie úplne vľavo */
                 position: relative;
             }
-            
+
             .custom-select-button {
                 width: 100%;
-                max-width: calc(100vw - 16px); /* Zmenšený margin pre viac priestoru */
+                max-width: calc(100vw - 16px);
+                /* Zmenšený margin pre viac priestoru */
                 min-width: auto;
-                padding: 6px 8px; /* Zmenšený padding pre viac priestoru */
-                margin-left: 0; /* Zarovnanie úplne vľavo */
+                padding: 6px 8px;
+                /* Zmenšený padding pre viac priestoru */
+                margin-left: 0;
+                /* Zarovnanie úplne vľavo */
             }
-            
+
             .custom-select-dropdown {
-                max-height: 80vh; /* 80% výšky displeja pre väčšie dropdown */
+                max-height: 80vh;
+                /* 80% výšky displeja pre väčšie dropdown */
                 overflow-y: auto;
                 width: 100%;
-                max-width: calc(100vw - 16px); /* Zmenšený margin pre viac priestoru */
+                max-width: calc(100vw - 16px);
+                /* Zmenšený margin pre viac priestoru */
                 left: 0;
                 right: auto;
-                padding: 0 !important; /* FORCE odstránenie všetkého paddingu */
-                margin-left: 0; /* Zarovnanie úplne vľavo */
-                border-radius: 6px; /* Menší border radius pre kompaktnosť */
-                box-sizing: border-box; /* Include border in width calculation */
+                padding: 0 !important;
+                /* FORCE odstránenie všetkého paddingu */
+                margin-left: 0;
+                /* Zarovnanie úplne vľavo */
+                border-radius: 6px;
+                /* Menší border radius pre kompaktnosť */
+                box-sizing: border-box;
+                /* Include border in width calculation */
                 background-color: rgba(55, 65, 81, 0.97);
             }
-            
+
             body.light-theme .custom-select-dropdown {
                 background-color: rgba(255, 255, 255, 0.98);
             }
-            
+
             .custom-select-option {
-                padding: 8px 4px 8px 4px; /* Malá medzierka 4px od ľavého okraja */
+                padding: 8px 4px 8px 4px;
+                /* Malá medzierka 4px od ľavého okraja */
                 font-size: 14px;
                 line-height: 1.4;
                 /* Kompaktnejší text layout pre mobile */
                 display: flex;
                 align-items: center;
-                gap: 2px; /* Zmenšená medzera medzi guličkou a textom */
-                text-align: left; /* Explicitné zarovnanie vľavo */
-                justify-content: flex-start; /* Obsah zarovnaný vľavo */
-                margin-left: 0; /* Žiadny margin */
-                border: none; /* Žiadny border */
+                gap: 2px;
+                /* Zmenšená medzera medzi guličkou a textom */
+                text-align: left;
+                /* Explicitné zarovnanie vľavo */
+                justify-content: flex-start;
+                /* Obsah zarovnaný vľavo */
+                margin-left: 0;
+                /* Žiadny margin */
+                border: none;
+                /* Žiadny border */
             }
-            
+
             /* EXTRA override pre konzistentné zarovnanie */
             .custom-select-dropdown .custom-select-option {
-                padding-left: 4px !important; /* Malá medzierka od ľavého okraja */
+                padding-left: 4px !important;
+                /* Malá medzierka od ľavého okraja */
                 margin-left: 0 !important;
                 text-indent: 0 !important;
             }
-            
+
             /* Odstránené ::before pseudo-element aby sa nezobrazovali duplikátne ikony */
         }
-        
+
         /* Custom scrollbar pre dropdown - podobne ako v activity log */
         .custom-select-dropdown::-webkit-scrollbar {
             width: 8px;
         }
-        
+
         .custom-select-dropdown::-webkit-scrollbar-track {
             background: #1f2937;
             border-radius: 4px;
         }
-        
+
         .custom-select-dropdown::-webkit-scrollbar-thumb {
             background-color: #4b5563;
             border-radius: 4px;
             border: 1px solid #374151;
         }
-        
+
         .custom-select-dropdown::-webkit-scrollbar-thumb:hover {
             background-color: #6b7280;
         }
-        
+
         .custom-select.open .custom-select-dropdown {
             display: block;
         }
-        
+
         .custom-select-option {
-            padding: 8px 16px; /* Padding 8px zhora/zdola */
+            padding: 8px 16px;
+            /* Padding 8px zhora/zdola */
             color: #ffffff;
             cursor: pointer;
             transition: background-color 0.2s;
@@ -1152,61 +1432,63 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: 14px; /* Štandardná veľkosť fontu */
-            line-height: 1.25; /* Riadkovanie (vzdialenosť medzi riadkami) */
+            font-size: 14px;
+            /* Štandardná veľkosť fontu */
+            line-height: 1.25;
+            /* Riadkovanie (vzdialenosť medzi riadkami) */
         }
-        
+
         .custom-select-option:last-child {
             border-bottom: none;
         }
-        
+
         .custom-select-option:hover {
             background-color: #4b5563;
         }
-        
+
         .custom-select-option.selected {
             background-color: #f97316;
         }
-        
+
         /* Light theme custom select */
         body.light-theme .custom-select-button {
             background-color: #e3edfa;
             border-color: #b8c9e6;
             color: #334155;
         }
-        
+
         body.light-theme .custom-select-button:hover {
             background-color: #d7e5f8;
         }
-        
+
         body.light-theme .custom-select-dropdown {
             background-color: rgba(228, 237, 250, 0.9);
             border-color: #b8c9e6;
         }
-        
+
         /* Light theme scrollbar */
         body.light-theme .custom-select-dropdown::-webkit-scrollbar-track {
             background: #cddbf2;
         }
-        
+
         body.light-theme .custom-select-dropdown::-webkit-scrollbar-thumb {
             background-color: #b8c9e6;
             border: 1px solid #cddbf2;
         }
-        
+
         body.light-theme .custom-select-dropdown::-webkit-scrollbar-thumb:hover {
             background-color: #94a3b8;
         }
-        
+
         body.light-theme .custom-select-option {
             color: #334155;
             border-bottom-color: #e2e8f0;
         }
-        
+
         body.light-theme .custom-select-option:hover {
             background-color: #f1f5f9;
         }
-        
+
         body.light-theme .custom-select-option.selected {
             background-color: #0369a1;
             color: #ffffff;
@@ -1223,44 +1505,44 @@
         }
 
         /* === Unified Interactive Button Hover Effects (match index.html) === */
-    .action-buttons > button,
-    #timeRangeContainer .time-range-btn,
-    .zoom-btn,
-    .device-actions .btn {
+        .action-buttons>button,
+        #timeRangeContainer .time-range-btn,
+        .zoom-btn,
+        .device-actions .btn {
             transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
             will-change: transform;
         }
 
-        .action-buttons > button:hover:not(:disabled),
-    #timeRangeContainer .time-range-btn:hover,
-    .zoom-btn:hover,
+        .action-buttons>button:hover:not(:disabled),
+        #timeRangeContainer .time-range-btn:hover,
+        .zoom-btn:hover,
         .device-actions .btn:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
         }
 
         /* Active / pressed feedback */
-        .action-buttons > button:active,
+        .action-buttons>button:active,
         #timeRangeContainer .time-range-btn:active,
         .zoom-btn:active,
         .device-actions .btn:active {
             transform: translateY(-1px) scale(0.985);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         }
 
         /* Light theme softer shadow */
-        body.light-theme .action-buttons > button:hover:not(:disabled),
+        body.light-theme .action-buttons>button:hover:not(:disabled),
         body.light-theme #timeRangeContainer .time-range-btn:hover,
         body.light-theme .zoom-btn:hover,
         body.light-theme .device-actions .btn:hover:not(:disabled) {
-            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
         }
 
-        body.light-theme .action-buttons > button:active,
+        body.light-theme .action-buttons>button:active,
         body.light-theme #timeRangeContainer .time-range-btn:active,
         body.light-theme .zoom-btn:active,
         body.light-theme .device-actions .btn:active {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
         }
 
         /* Explicitly neutralize elevation for dropdown button */
@@ -1271,7 +1553,7 @@
         }
 
         /* Disable elevation when explicitly disabled */
-        .action-buttons > button:disabled,
+        .action-buttons>button:disabled,
         .device-actions .btn:disabled {
             transform: none !important;
             box-shadow: none !important;
@@ -1283,20 +1565,24 @@
         #timeRangeContainer .time-range-btn:hover {
             /* Override unified stronger elevation */
             transform: translateY(-1px) !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.25) !important;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25) !important;
         }
+
         body.light-theme #timeRangeContainer .time-range-btn:hover {
-            box-shadow: 0 4px 10px rgba(0,0,0,0.10) !important;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.10) !important;
         }
+
         #timeRangeContainer .time-range-btn:active {
             transform: translateY(-0.5px) scale(0.99) !important;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
         }
+
         body.light-theme #timeRangeContainer .time-range-btn:active {
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08) !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
         }
     </style>
 </head>
+
 <body class="bg-gray-900 text-white min-h-screen">
     <div class="container mx-auto px-4 py-6">
         <!-- Header -->
@@ -1306,7 +1592,7 @@
                 <i class="fas fa-chart-line text-orange-500 mr-4 text-lg"></i>
                 <span class="text-lg">MikroTik Monitoring</span>
             </h1>
-            
+
             <!-- Všetky menu prvky v jednej skupine -->
             <div class="flex items-center gap-2 ml-auto">
                 <!-- Custom Device Selector -->
@@ -1334,16 +1620,30 @@
                     </div>
                 </div>
                 <div class="action-buttons flex items-center gap-2">
-                    <button id="refreshBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Obnoviť">
+                    <button id="zoomModeToggle"
+                        class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                        title="Prepnúť režim zoom-out (Individuálny / Globálny)" onclick="toggleZoomMode()">
+                        <i class="fas fa-fw fa-compress-arrows-alt text-base" id="zoomModeIcon"></i>
+                        <span id="zoomModeText">Individuálny</span>
+                    </button>
+                    <button id="refreshBtn"
+                        class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                        title="Obnoviť">
                         <i class="fas fa-sync text-base"></i> <span>Obnoviť</span>
                     </button>
-                    <button onclick="window.location.href='/settings.html'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Nastavenia">
+                    <button onclick="window.location.href='/settings.html'"
+                        class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                        title="Nastavenia">
                         <i class="fas fa-cog text-base"></i> <span>Nastavenia</span>
                     </button>
-                    <button id="themeToggle" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Prepnúť tému">
+                    <button id="themeToggle"
+                        class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                        title="Prepnúť tému">
                         <i class="fas fa-moon text-base" id="themeIcon"></i> <span class="sr-only">Téma</span>
                     </button>
-                    <button onclick="window.location.href='/'" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2" title="Späť">
+                    <button onclick="window.location.href='/'"
+                        class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                        title="Späť">
                         <i class="fas fa-arrow-left text-base"></i> <span>Späť</span>
                     </button>
                 </div>
@@ -1359,17 +1659,19 @@
                     <p class="text-sm text-gray-400 block md:hidden" id="deviceIp" style="display: none;">N/A</p>
                 </div>
                 <div class="device-actions flex items-center">
-                    <button id="pauseResumeBtn" class="btn bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 hidden transition-all duration-200">
+                    <button id="pauseResumeBtn"
+                        class="btn bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 hidden transition-all duration-200">
                         <i class="fas fa-pause" id="pauseResumeIcon"></i>
                         <span id="pauseResumeText">Pozastaviť</span>
                     </button>
-                    <button id="deviceSettingsBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition-all duration-200">
+                    <button id="deviceSettingsBtn"
+                        class="btn bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition-all duration-200">
                         <i class="fas fa-clock"></i>
                         <span class="hidden sm:inline">Intervaly</span>
                     </button>
                 </div>
             </div>
-            
+
             <!-- Ping Status Cards - responzívne pre desktop a mobile -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <div class="card p-3 rounded-lg">
@@ -1384,7 +1686,7 @@
                         <i class="fas fa-wifi text-2xl text-gray-500"></i>
                     </div>
                 </div>
-                
+
                 <div class="card p-3 rounded-lg">
                     <div class="flex items-center justify-between">
                         <div>
@@ -1394,7 +1696,7 @@
                         <i class="fas fa-stopwatch text-2xl text-gray-500"></i>
                     </div>
                 </div>
-                
+
                 <div class="card p-3 rounded-lg">
                     <div class="flex items-center justify-between">
                         <div>
@@ -1404,7 +1706,7 @@
                         <i class="fas fa-clock text-2xl text-gray-500"></i>
                     </div>
                 </div>
-                
+
                 <div class="card p-3 rounded-lg">
                     <div class="flex items-center justify-between">
                         <div>
@@ -1429,14 +1731,16 @@
                     </h3>
                     <div class="flex items-center gap-2">
                         <div class="text-sm text-gray-400">Posledných 24 hodín</div>
-                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('pingChart')" title="Zoom out">
+                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('pingChart')"
+                            title="Zoom out">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
                 </div>
                 <div class="chart-container">
                     <div class="chart-zoom-controls">
-                        <button class="zoom-btn" onclick="resetZoomButton('pingChart')" title="Zoom out (alebo dvojité kliknutie)">
+                        <button class="zoom-btn" onclick="resetZoomButton('pingChart')"
+                            title="Zoom out (alebo dvojité kliknutie)">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
@@ -1454,14 +1758,16 @@
                     </h3>
                     <div class="flex items-center gap-2">
                         <div class="text-sm text-gray-400">Posledných 24 hodín</div>
-                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('cpuChart')" title="Zoom out">
+                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('cpuChart')"
+                            title="Zoom out">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
                 </div>
                 <div class="chart-container">
                     <div class="chart-zoom-controls">
-                        <button class="zoom-btn" onclick="resetZoomButton('cpuChart')" title="Zoom out (alebo dvojité kliknutie)">
+                        <button class="zoom-btn" onclick="resetZoomButton('cpuChart')"
+                            title="Zoom out (alebo dvojité kliknutie)">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
@@ -1479,14 +1785,16 @@
                     </h3>
                     <div class="flex items-center gap-2">
                         <div class="text-sm text-gray-400">Posledných 24 hodín</div>
-                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('temperatureChart')" title="Zoom out">
+                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('temperatureChart')"
+                            title="Zoom out">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
                 </div>
                 <div class="chart-container">
                     <div class="chart-zoom-controls">
-                        <button class="zoom-btn" onclick="resetZoomButton('temperatureChart')" title="Zoom out (alebo dvojité kliknutie)">
+                        <button class="zoom-btn" onclick="resetZoomButton('temperatureChart')"
+                            title="Zoom out (alebo dvojité kliknutie)">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
@@ -1504,14 +1812,16 @@
                     </h3>
                     <div class="flex items-center gap-2">
                         <div class="text-sm text-gray-400">Posledných 24 hodín</div>
-                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('memoryChart')" title="Zoom out">
+                        <button class="zoom-btn mobile-inline-zoom hidden" onclick="resetZoomButton('memoryChart')"
+                            title="Zoom out">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
                 </div>
                 <div class="chart-container">
                     <div class="chart-zoom-controls">
-                        <button class="zoom-btn" onclick="resetZoomButton('memoryChart')" title="Zoom out (alebo dvojité kliknutie)">
+                        <button class="zoom-btn" onclick="resetZoomButton('memoryChart')"
+                            title="Zoom out (alebo dvojité kliknutie)">
                             <i class="fas fa-search-minus"></i>
                         </button>
                     </div>
@@ -1524,7 +1834,8 @@
         <div id="noDeviceSelected" class="text-center py-12">
             <i class="fas fa-chart-line text-6xl text-gray-600 mb-4"></i>
             <h2 class="text-2xl font-bold text-gray-400 mb-2">Vyberte zariadenie</h2>
-            <p class="text-gray-500">Vyberte zariadenie z rozbaľovacieho menu pre zobrazenie grafov a ping štatistík.</p>
+            <p class="text-gray-500">Vyberte zariadenie z rozbaľovacieho menu pre zobrazenie grafov a ping štatistík.
+            </p>
         </div>
 
         <!-- Loading -->
@@ -1536,7 +1847,8 @@
     </div>
 
     <!-- Device Settings Modal -->
-    <div id="deviceSettingsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div id="deviceSettingsModal"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-bold">Nastavenia monitoringu</h3>
@@ -1544,21 +1856,20 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            
+
             <form id="deviceSettingsForm">
                 <div class="mb-4">
                     <label class="block text-sm font-medium mb-2">Zariadenie:</label>
                     <div id="settingsDeviceInfo" class="text-gray-400 text-sm"></div>
                 </div>
-                
+
                 <div class="mb-4">
                     <label for="pingInterval" class="block text-sm font-medium mb-2">
                         Ping interval (sekundy)
                     </label>
-                    <input type="number" id="pingInterval" name="ping_interval_seconds" 
-                           min="0" max="86400" 
-                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                           oninput="validatePingInterval(this)">
+                    <input type="number" id="pingInterval" name="ping_interval_seconds" min="0" max="86400"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        oninput="validatePingInterval(this)">
                     <div class="text-xs text-gray-400 mt-1 italic">
                         Ovplyvňuje graf: Ping Latencia
                     </div>
@@ -1566,15 +1877,14 @@
                         0 = použiť globálne nastavenie, 20-86400 sekúnd (minimálne 20s, max 24 hodín).
                     </div>
                 </div>
-                
+
                 <div class="mb-4">
                     <label for="retryInterval" class="block text-sm font-medium mb-2">
                         Retry interval pri výpadku (sekundy)
                     </label>
-                    <input type="number" id="retryInterval" name="ping_retry_interval_seconds" 
-                           min="0" max="120" 
-                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                           oninput="validateRetryInterval(this)">
+                    <input type="number" id="retryInterval" name="ping_retry_interval_seconds" min="0" max="120"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        oninput="validateRetryInterval(this)">
                     <div class="text-xs text-gray-400 mt-1 italic">
                         Počas výpadku sa zariadenie pingá týmto intervalom, kým sa nepotvrdí návrat online.
                     </div>
@@ -1582,14 +1892,13 @@
                         0 = globálne nastavenie zo sekcie Nastavenia, 5-120 sekúnd.
                     </div>
                 </div>
-                
+
                 <div class="mb-6">
                     <label for="snmpInterval" class="block text-sm font-medium mb-2">
                         SNMP interval (minúty)
                     </label>
-                    <input type="number" id="snmpInterval" name="snmp_interval_minutes" 
-                           min="0" max="1440" 
-                           class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                    <input type="number" id="snmpInterval" name="snmp_interval_minutes" min="0" max="1440"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none">
                     <div class="text-xs text-gray-400 mt-1 italic">
                         Ovplyvňuje grafy: CPU, Teplota, Memory
                     </div>
@@ -1597,9 +1906,10 @@
                         0 = použiť globálne nastavenie, 1-1440 minút (max 24 hodín)
                     </div>
                 </div>
-                
+
                 <div class="flex justify-end gap-2">
-                    <button type="button" id="cancelSettings" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg">
+                    <button type="button" id="cancelSettings"
+                        class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg">
                         Zrušiť
                     </button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
@@ -1611,16 +1921,22 @@
     </div>
 
     <!-- Debug Terminal Panel -->
-    <div id="debugTerminal" style="position: fixed; bottom: 20px; right: 20px; width: 450px; max-height: 300px; background: rgba(0, 0, 0, 0.9); color: #00ff00; font-family: 'Courier New', monospace; font-size: 11px; border: 1px solid #333; border-radius: 5px; padding: 10px; z-index: 9999; display: none; overflow-y: auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 5px;">
+    <div id="debugTerminal"
+        style="position: fixed; bottom: 20px; right: 20px; width: 450px; max-height: 300px; background: rgba(0, 0, 0, 0.9); color: #00ff00; font-family: 'Courier New', monospace; font-size: 11px; border: 1px solid #333; border-radius: 5px; padding: 10px; z-index: 9999; display: none; overflow-y: auto;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 5px;">
             <span style="color: #ffff00; font-weight: bold;">DEBUG TERMINAL</span>
             <div>
-                <button onclick="clearDebugLog()" style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; margin-right: 3px; cursor: pointer; font-size: 10px;">Clear</button>
-                <button onclick="copyDebugLog()" style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; margin-right: 3px; cursor: pointer; font-size: 10px;">Copy</button>
-                <button onclick="toggleDebugTerminal()" style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; cursor: pointer; font-size: 10px;">X</button>
+                <button onclick="clearDebugLog()"
+                    style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; margin-right: 3px; cursor: pointer; font-size: 10px;">Clear</button>
+                <button onclick="copyDebugLog()"
+                    style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; margin-right: 3px; cursor: pointer; font-size: 10px;">Copy</button>
+                <button onclick="toggleDebugTerminal()"
+                    style="background: none; border: 1px solid #666; color: #fff; padding: 2px 6px; cursor: pointer; font-size: 10px;">X</button>
             </div>
         </div>
-        <div id="debugContent" style="white-space: pre-wrap; word-wrap: break-word; max-height: 240px; overflow-y: auto;"></div>
+        <div id="debugContent"
+            style="white-space: pre-wrap; word-wrap: break-word; max-height: 240px; overflow-y: auto;"></div>
     </div>
 
     <script src="/static/js/monitoring.js"></script>
@@ -1637,7 +1953,7 @@
             if (debugLogs.length > 100) debugLogs.shift();
             updateDebugDisplay();
         }
-        
+
         function updateDebugDisplay() {
             const content = document.getElementById('debugContent');
             if (content) {
@@ -1645,19 +1961,19 @@
                 content.scrollTop = content.scrollHeight;
             }
         }
-        
+
         function clearDebugLog() {
             debugLogs = [];
             updateDebugDisplay();
         }
-        
+
         function copyDebugLog() {
             const text = debugLogs.join('\n');
             navigator.clipboard.writeText(text).then(() => {
                 addDebugLog('✓ Logy skopírované do schránky');
             });
         }
-        
+
         function toggleDebugTerminal() {
             const terminal = document.getElementById('debugTerminal');
             if (debugSettings && debugSettings['debug_terminal'] === 'true') {
@@ -1667,7 +1983,7 @@
                 // Gated info log (only when debug master switch enabled)
             }
         }
-        
+
         function initializeDebugTerminal() {
             const terminal = document.getElementById('debugTerminal');
             DEBUG_TERMINAL_ENABLED = !!(debugSettings && debugSettings['debug_terminal'] === 'true');
@@ -1680,7 +1996,7 @@
                 debugLogs = [];
             }
         }
-        
+
         // Keyboard shortcut Ctrl+D to toggle
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'd') {
@@ -1696,7 +2012,7 @@
                 '30m': 'Posledných 30 minút',
                 '3h': 'Posledné 3 hodiny',
                 '6h': 'Posledných 6 hodín',
-                '12h': 'Posledných 12 hodín', 
+                '12h': 'Posledných 12 hodín',
                 '24h': 'Posledných 24 hodín',
                 '7d': 'Posledných 7 dní',
                 '30d': 'Posledných 30 dní',
@@ -1711,74 +2027,74 @@
 
         function resetZoom(chartId) {
             // debug: removed (only active terminal lifecycle logs remain)
-            
+
             // Check if this chart is permanently expanded and should not be reset
             if (window._expandedCharts && window._expandedCharts.has(chartId)) {
-                
+
                 return;
             }
-            
+
             // Simple debouncing - prevent too frequent calls
             const now = Date.now();
             if (!window._lastResetZoomTimes) {
                 window._lastResetZoomTimes = {};
             }
-            
+
             const lastResetTime = window._lastResetZoomTimes[chartId] || 0;
             const timeSinceLastReset = now - lastResetTime;
-            
+
             if (timeSinceLastReset < 400) {
                 return;
             }
-            
+
             window._lastResetZoomTimes[chartId] = now;
-            
+
             // Get the chart
             const chart = Chart.getChart(chartId);
             if (!chart) {
                 return;
             }
-            
+
             // Check if we have active zoom
             const hasActiveZoom = chart.options.scales.x.min !== undefined && chart.options.scales.x.max !== undefined;
-            
+
             // Initialize per-chart time range tracking
             if (!window._chartTimeRanges) {
                 window._chartTimeRanges = new Map();
             }
-            
+
             // Check if this is a real zoom (user selected range) vs full time range display
             // If we just loaded a larger time range, the chart will have min/max set but it's not a "zoom"
             let currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
-            
+
             // CRITICAL: For individual chart zoom-out, use per-chart time range instead of global
             // Each chart has its own independent time range progression
             if (window._chartTimeRanges.has(chartId)) {
                 currentTimeRange = window._chartTimeRanges.get(chartId);
-                
+
             } else {
                 // First time this chart is being zoomed - use the CURRENT GLOBAL range as starting point
                 // (Previously forced to '30m', which caused zoom-out to always progress from 30m regardless of user selection)
                 window._chartTimeRanges.set(chartId, currentTimeRange);
-                
+
             }
-            
+
             // CRITICAL: For individual chart zoom-out, we must detect the ACTUAL current range of THIS specific chart
             // Do not use the global currentTimeRange as it may have been changed by other charts
             if (hasActiveZoom) {
                 const currentMin = chart.options.scales.x.min;
                 const currentMax = chart.options.scales.x.max;
-                
-                if (typeof currentMin === 'number' && typeof currentMax === 'number' && 
+
+                if (typeof currentMin === 'number' && typeof currentMax === 'number' &&
                     !isNaN(currentMin) && !isNaN(currentMax) && currentMin < currentMax) {
                     // Get the range that was explicitly set for this chart
                     const perChartRange = window._chartTimeRanges.get(chartId);
-                    
+
                     if (perChartRange) {
                         // Use the explicitly set per-chart range instead of detecting from data
                         // This prevents loops when data range is smaller than requested range
                         currentTimeRange = perChartRange;
-                        
+
                     } else {
                         // Fallback: detect range from data only if no explicit range is set
                         const actualRange = currentMax - currentMin;
@@ -1786,17 +2102,17 @@
                         currentTimeRange = detectedRange;
                         // Update per-chart tracking with detected range
                         window._chartTimeRanges.set(chartId, detectedRange);
-                        
+
                     }
                 } else {
-                    
+
                 }
             } else {
-                
+
             }
-            
+
             // For permanently expanded charts, use their actual range instead of global range
-            if ((window._expandedCharts && window._expandedCharts.has(chartId)) || 
+            if ((window._expandedCharts && window._expandedCharts.has(chartId)) ||
                 (window._wasExpanded && window._wasExpanded.has(chartId))) {
                 if (!hasActiveZoom) {
                     // Clear expanded state if there's no active zoom
@@ -1808,188 +2124,52 @@
                     }
                 }
             }
-            
+
             const timeRangeMs = getTimeRangeMs(currentTimeRange);
             const currentTime = new Date().getTime();
-            
+
             let isRealZoom = false;
             if (hasActiveZoom) {
                 const currentMin = chart.options.scales.x.min;
                 const currentMax = chart.options.scales.x.max;
                 const currentRange = currentMax - currentMin;
-                
+
                 // Consider it a real zoom if the range is significantly smaller than the requested time range
                 // Allow 20% tolerance to account for gap elimination and optimization
                 isRealZoom = currentRange < (timeRangeMs * 0.8);
-                
-                
+
+
             }
-            
+
             // Additional check for valid zoom values
             let hasValidZoom = false;
             if (hasActiveZoom && isRealZoom) {
                 const currentMin = chart.options.scales.x.min;
                 const currentMax = chart.options.scales.x.max;
-                hasValidZoom = typeof currentMin === 'number' && typeof currentMax === 'number' && 
-                              !isNaN(currentMin) && !isNaN(currentMax) && currentMin < currentMax;
-                
-                
-                
+                hasValidZoom = typeof currentMin === 'number' && typeof currentMax === 'number' &&
+                    !isNaN(currentMin) && !isNaN(currentMax) && currentMin < currentMax;
+
+
+
                 if (!hasValidZoom) {
                     // Clear invalid zoom
                     chart.options.scales.x.min = undefined;
                     chart.options.scales.x.max = undefined;
                 }
             }
-            
+
             if (hasActiveZoom && hasValidZoom && isRealZoom) {
-                
+
                 // Progressive zoom out - instead of jumping to full range, expand zoom by steps
                 const currentMin = chart.options.scales.x.min;
                 const currentMax = chart.options.scales.x.max;
                 const currentRange = currentMax - currentMin;
-                
-                    // Get the full data range available in the chart
-                    let dataMin = null;
-                    let dataMax = null;
-                    
-                    // Find min/max from all datasets
-                    chart.data.datasets.forEach(dataset => {
-                        if (dataset.data && dataset.data.length > 0) {
-                            dataset.data.forEach(point => {
-                                const x = point.x || point;
-                                if (dataMin === null || x < dataMin) dataMin = x;
-                                if (dataMax === null || x > dataMax) dataMax = x;
-                            });
-                        }
-                    });
-                    
-                    
-                    
-                    if (dataMin !== null && dataMax !== null) {
-                        const fullDataRange = dataMax - dataMin;
-                        
-                        const currentCenter = (currentMin + currentMax) / 2;
-                        
-                        // Expand by 2.5x each time for faster zoom-out, but keep centered
-                        const newRange = Math.min(currentRange * 2.5, fullDataRange);
-                        
-                        
-                        // If we can't expand within current data (newRange <= currentRange), 
-                        // we need to load a larger time range
-                        if (newRange <= currentRange) {
-                            
-                            
-                            // Skip progressive zoom and go directly to loading larger time range
-                            const nextRange = getNextLargerRange(currentTimeRange);
-                            if (nextRange !== currentTimeRange) {
-                                window._chartTimeRanges.set(chartId, nextRange);
-                                chart.options.scales.x.min = undefined;
-                                chart.options.scales.x.max = undefined;
-                                
-                                // Pri malom počte bodov spustiť rozšírenie okamžite (bez druhého kliku)
-                                if (startRangeExpansionLoad(chart, chartId, nextRange)) {
-                                    return; // Async načítavanie spustené, nič viac nerob
-                                }
-                            }
-                        }
-                        
-                        const newMin = Math.max(dataMin, currentCenter - newRange / 2);
-                        const newMax = Math.min(dataMax, currentCenter + newRange / 2);
-                        
-                        // Check if we've reached the full range (within 5% tolerance)
-                        const tolerance = fullDataRange * 0.05;
-                        const isNearFullRange = (newMax - newMin) >= (fullDataRange - tolerance);
-                        
-                        if (isNearFullRange) {
-                            // If we're close to full range, show full range
-                            chart.options.scales.x.min = undefined;
-                            chart.options.scales.x.max = undefined;
-                            
-                            // Restore original visual time range when reaching full data range
-                            restoreOriginalVisualTimeRange();
-                            
-                            const subtitle = chart.options.plugins.subtitle;
-                            if (subtitle) {
-                                subtitle.text = 'Zobrazené všetky dostupné dáta - ďalší zoom out načíta viac dát';
-                                subtitle.color = '#9ca3af';
-                            }
-                        } else {
-                            // Progressive zoom out step
-                            chart.options.scales.x.min = newMin;
-                            chart.options.scales.x.max = newMax;
-                            
-                            const subtitle = chart.options.plugins.subtitle;
-                            if (subtitle) {
-                                subtitle.text = 'Postupný zoom out - kliknite znovu pre ďalší krok';
-                                subtitle.color = '#fbbf24';
-                            }
-                            
-                            // Update time format for new zoom level
-                            updateSingleChartTimeFormat(chart, newMin, newMax);
-                            
-                            // Update visual time range indication for progressive zoom-out
-                            updateVisualTimeRangeIndicatorForZoomOut(newMin, newMax);
-                        }
-                    } else {
-                        // Fallback: no data available, just clear zoom
-                        
-                        chart.options.scales.x.min = undefined;
-                        chart.options.scales.x.max = undefined;
-                        
-                        const subtitle = chart.options.plugins.subtitle;
-                        if (subtitle) {
-                            subtitle.text = 'Zobrazené všetky dostupné dáta - ďalší zoom out načíta viac dát';
-                            subtitle.color = '#9ca3af';
-                        }
-                    }
-            } else {
-                // No real zoom active - try to load larger time range if possible
-                // (This includes cases where chart has min/max set for full time range display)
-                
-                
-                if (currentTimeRange !== '1y') {
-                    const nextRange = getNextLargerRange(currentTimeRange);
-                    if (nextRange !== currentTimeRange) {
-                        if (startRangeExpansionLoad(chart, chartId, nextRange)) {
-                            return; // Async načítavanie spustené, ukončiť handler
-                        }
-                    } else {
-                        addDebugLog(`⚠️ Už na maximálnom rozsahu (${currentTimeRange})`);
-                        
-                    }
-                } else {
-                    addDebugLog(`🔴 Už na maximálnom rozsahu (1y) - žiadne ďalšie rozširovanie`);
-                    
-                    
-                    // Don't try to go beyond 1y, just show appropriate message
-                    const subtitle = chart.options.plugins.subtitle;
-                    if (subtitle) {
-                        subtitle.text = 'Zobrazený maximálny rozsah (1 rok) - označte oblasť pre zoom';
-                        subtitle.color = '#9ca3af';
-                    }
-                }
-            }
-            
-            // Reset to dynamic time formatting based on requested time range (not just data range)
-        // Apply this logic when there's no real zoom active (including full time range display)
-        if (!hasActiveZoom || !isRealZoom) {
-            // Check if this chart is permanently expanded - if so, skip this logic
-            if (window._expandedCharts && window._expandedCharts.has(chartId)) {
-                chart.update('active');
-                return;
-            }
-            
-            // When zoom is completely reset or showing full time range, show the full requested time range on axis
-            // even if data only covers part of it (e.g., show 30 days on axis but data only for last 7 days)
-            const timeRangeMs = getTimeRangeMs(currentTimeRange);
-            const now = new Date().getTime();
-            
-            // Find the actual data range for comparison
-            let dataMin = null;
-            let dataMax = null;
-            
-            if (chart.data && chart.data.datasets && chart.data.datasets.length > 0) {
+
+                // Get the full data range available in the chart
+                let dataMin = null;
+                let dataMax = null;
+
+                // Find min/max from all datasets
                 chart.data.datasets.forEach(dataset => {
                     if (dataset.data && dataset.data.length > 0) {
                         dataset.data.forEach(point => {
@@ -1999,153 +2179,311 @@
                         });
                     }
                 });
-            }
-            
-            // For shorter time ranges, optimize the display to reduce left-side gaps
-            let requestedMin, requestedMax;
-            const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
-            
-            if (isShortRange && dataMin !== null && dataMax !== null) {
-                // For short ranges: optimize to show all available data without gaps
-                const dataDuration = dataMax - dataMin;
-                
-                // If data spans less than requested range, show data-centric view with padding
-                if (dataDuration < timeRangeMs) {
-                    // Add small padding (5% of data duration or minimum 2 minutes)
-                    const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
-                    requestedMin = dataMin - padding;
-                    requestedMax = dataMax + padding;
-                } else {
-                    // If we have enough data, show full range ending at latest data
-                    requestedMin = dataMax - timeRangeMs;
-                    requestedMax = dataMax;
-                }
-            } else {
-                // For longer ranges (7d, 30d, 90d, 1y): always show full requested horizon
-                requestedMin = now - timeRangeMs;
-                requestedMax = now;
-            }
-            
-            // Set axis to show the optimized range
-            chart.options.scales.x.min = requestedMin;
-            chart.options.scales.x.max = requestedMax;
-            
-            // Use time formatting based on the requested range (not data range)
-            updateSingleChartTimeFormat(chart, requestedMin, requestedMax);
-            
-            // Update subtitle to show data coverage within the displayed range
-            const subtitle = chart.options.plugins.subtitle;
-            if (subtitle && dataMin !== null && dataMax !== null) {
-                const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
-                const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
-                
-                if (isShortRange && dataDays < requestedDays) {
-                    // For short ranges with limited data, show optimized view message
-                    if (dataDays < 1) {
-                        const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
-                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
-                    } else {
-                        subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
+
+
+
+                if (dataMin !== null && dataMax !== null) {
+                    const fullDataRange = dataMax - dataMin;
+
+                    const currentCenter = (currentMin + currentMax) / 2;
+
+                    // Expand by 2.5x each time for faster zoom-out, but keep centered
+                    const newRange = Math.min(currentRange * 2.5, fullDataRange);
+
+
+                    // If we can't expand within current data (newRange <= currentRange), 
+                    // we need to load a larger time range
+                    if (newRange <= currentRange) {
+
+
+                        // Skip progressive zoom and go directly to loading larger time range
+                        const nextRange = getNextLargerRange(currentTimeRange);
+                        if (nextRange !== currentTimeRange) {
+                            window._chartTimeRanges.set(chartId, nextRange);
+                            chart.options.scales.x.min = undefined;
+                            chart.options.scales.x.max = undefined;
+
+                            // Pri malom počte bodov spustiť rozšírenie okamžite (bez druhého kliku)
+                            if (startRangeExpansionLoad(chart, chartId, nextRange)) {
+                                return; // Async načítavanie spustené, nič viac nerob
+                            }
+                        }
                     }
-                    subtitle.color = '#10b981'; // Green color for optimized view
-                } else if (!isShortRange && dataDays < requestedDays) {
-                    // For long ranges, show horizon message
-                    subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
-                    subtitle.color = '#fbbf24';
+
+                    const newMin = Math.max(dataMin, currentCenter - newRange / 2);
+                    const newMax = Math.min(dataMax, currentCenter + newRange / 2);
+
+                    // Check if we've reached the full range (within 5% tolerance)
+                    const tolerance = fullDataRange * 0.05;
+                    const isNearFullRange = (newMax - newMin) >= (fullDataRange - tolerance);
+
+                    if (isNearFullRange) {
+                        // If we're close to full range, show full range
+                        chart.options.scales.x.min = undefined;
+                        chart.options.scales.x.max = undefined;
+
+                        // Restore original visual time range when reaching full data range
+                        restoreOriginalVisualTimeRange();
+
+                        const subtitle = chart.options.plugins.subtitle;
+                        if (subtitle) {
+                            subtitle.text = 'Zobrazené všetky dostupné dáta - ďalší zoom out načíta viac dát';
+                            subtitle.color = '#9ca3af';
+                        }
+                    } else {
+                        // Progressive zoom out step
+                        chart.options.scales.x.min = newMin;
+                        chart.options.scales.x.max = newMax;
+
+                        const subtitle = chart.options.plugins.subtitle;
+                        if (subtitle) {
+                            subtitle.text = 'Postupný zoom out - kliknite znovu pre ďalší krok';
+                            subtitle.color = '#fbbf24';
+                        }
+
+                        // Update time format for new zoom level
+                        updateSingleChartTimeFormat(chart, newMin, newMax);
+
+                        // Update visual time range indication for progressive zoom-out
+                        updateVisualTimeRangeIndicatorForZoomOut(newMin, newMax);
+                    }
                 } else {
-                    subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
-                    subtitle.color = '#9ca3af';
+                    // Fallback: no data available, just clear zoom
+
+                    chart.options.scales.x.min = undefined;
+                    chart.options.scales.x.max = undefined;
+
+                    const subtitle = chart.options.plugins.subtitle;
+                    if (subtitle) {
+                        subtitle.text = 'Zobrazené všetky dostupné dáta - ďalší zoom out načíta viac dát';
+                        subtitle.color = '#9ca3af';
+                    }
                 }
-            }
-            
-            // Restore original visual time range indication when zoom is completely reset
-            // PROBLÉM: pri max 1y sa tlačidlo vracalo na pôvodný interval (napr. 7d) cez _originalActiveButton
-            // RIEŠENIE: ak je aktuálny (per-chart) rozsah 1y, zachovaj vizuálne 1y a neobnovuj pôvodné tlačidlo
-            if (currentTimeRange === '1y' || (window._chartTimeRanges && window._chartTimeRanges.get(chartId) === '1y')) {
-                const btn1y = document.querySelector('.time-range-btn[data-range="1y"]');
-                if (btn1y) {
-                    // odstráň active zo všetkých a nastav len 1y
-                    document.querySelectorAll('.time-range-btn').forEach(b => b.classList.remove('active'));
-                    btn1y.classList.add('active');
-                }
-                // Nechaj _originalActiveButton nedotknutý – ak neskôr zmenší používateľ rozsah, vie sa obnoviť
-                addDebugLog && addDebugLog('🛡️ Zachovaný vizuálny interval 1y (neobnovený pôvodný)');
             } else {
-                restoreOriginalVisualTimeRange();
+                // No real zoom active - try to load larger time range if possible
+                // (This includes cases where chart has min/max set for full time range display)
+
+
+                if (currentTimeRange !== '1y') {
+                    const nextRange = getNextLargerRange(currentTimeRange);
+                    if (nextRange !== currentTimeRange) {
+                        if (startRangeExpansionLoad(chart, chartId, nextRange)) {
+                            return; // Async načítavanie spustené, ukončiť handler
+                        }
+                    } else {
+                        addDebugLog(`⚠️ Už na maximálnom rozsahu (${currentTimeRange})`);
+
+                    }
+                } else {
+                    addDebugLog(`🔴 Už na maximálnom rozsahu (1y) - žiadne ďalšie rozširovanie`);
+
+                    // Don't try to go beyond 1y, just show appropriate message
+                    const subtitle = chart.options.plugins.subtitle;
+                    if (subtitle) {
+                        subtitle.text = 'Zobrazený maximálny rozsah (1 rok) - označte oblasť pre zoom';
+                        subtitle.color = '#9ca3af';
+                    }
+                    // PERFORMANCE: early return — skip expensive data iteration & re-render
+                    // (previously fell through to O(N) dataMin/dataMax scan on ~23k+ points per chart)
+                    chart.update('none');
+                    addDebugLog(`✅ Reset dokončený pre ${chartId}`);
+                    return;
+                }
             }
-        }
-        
-        // Update chart
-        chart.update('active');
-        addDebugLog(`✅ Reset dokončený pre ${chartId}`);
+
+            // Reset to dynamic time formatting based on requested time range (not just data range)
+            // Apply this logic when there's no real zoom active (including full time range display)
+            if (!hasActiveZoom || !isRealZoom) {
+                // Check if this chart is permanently expanded - if so, skip this logic
+                if (window._expandedCharts && window._expandedCharts.has(chartId)) {
+                    chart.update('active');
+                    return;
+                }
+
+                // When zoom is completely reset or showing full time range, show the full requested time range on axis
+                // even if data only covers part of it (e.g., show 30 days on axis but data only for last 7 days)
+                const timeRangeMs = getTimeRangeMs(currentTimeRange);
+                const now = new Date().getTime();
+
+                // Find the actual data range for comparison
+                let dataMin = null;
+                let dataMax = null;
+
+                if (chart.data && chart.data.datasets && chart.data.datasets.length > 0) {
+                    chart.data.datasets.forEach(dataset => {
+                        if (dataset.data && dataset.data.length > 0) {
+                            dataset.data.forEach(point => {
+                                const x = point.x || point;
+                                if (dataMin === null || x < dataMin) dataMin = x;
+                                if (dataMax === null || x > dataMax) dataMax = x;
+                            });
+                        }
+                    });
+                }
+
+                // For shorter time ranges, optimize the display to reduce left-side gaps
+                let requestedMin, requestedMax;
+                const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
+
+                if (isShortRange && dataMin !== null && dataMax !== null) {
+                    // For short ranges: optimize to show all available data without gaps
+                    const dataDuration = dataMax - dataMin;
+
+                    // If data spans less than requested range, show data-centric view with padding
+                    if (dataDuration < timeRangeMs) {
+                        // Add small padding (5% of data duration or minimum 2 minutes)
+                        const padding = Math.max(dataDuration * 0.05, 2 * 60 * 1000);
+                        requestedMin = dataMin - padding;
+                        requestedMax = dataMax + padding;
+                    } else {
+                        // If we have enough data, show full range ending at latest data
+                        requestedMin = dataMax - timeRangeMs;
+                        requestedMax = dataMax;
+                    }
+                } else {
+                    // For longer ranges (7d, 30d, 90d, 1y): always show full requested horizon
+                    requestedMin = now - timeRangeMs;
+                    requestedMax = now;
+                }
+
+                // Set axis to show the optimized range
+                chart.options.scales.x.min = requestedMin;
+                chart.options.scales.x.max = requestedMax;
+
+                // Use time formatting based on the requested range (not data range)
+                updateSingleChartTimeFormat(chart, requestedMin, requestedMax);
+
+                // Update subtitle to show data coverage within the displayed range
+                const subtitle = chart.options.plugins.subtitle;
+                if (subtitle && dataMin !== null && dataMax !== null) {
+                    const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
+                    const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
+
+                    if (isShortRange && dataDays < requestedDays) {
+                        // For short ranges with limited data, show optimized view message
+                        if (dataDays < 1) {
+                            const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
+                            subtitle.text = `Optimalizované zobrazenie - dostupné ${dataHours}h dát`;
+                        } else {
+                            subtitle.text = `Optimalizované zobrazenie - dostupné ${dataDays}d dát`;
+                        }
+                        subtitle.color = '#10b981'; // Green color for optimized view
+                    } else if (!isShortRange && dataDays < requestedDays) {
+                        // For long ranges, show horizon message
+                        subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
+                        subtitle.color = '#fbbf24';
+                    } else {
+                        subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
+                        subtitle.color = '#9ca3af';
+                    }
+                }
+
+                // Restore original visual time range indication when zoom is completely reset
+                // PROBLÉM: pri max 1y sa tlačidlo vracalo na pôvodný interval (napr. 7d) cez _originalActiveButton
+                // RIEŠENIE: ak je aktuálny (per-chart) rozsah 1y, zachovaj vizuálne 1y a neobnovuj pôvodné tlačidlo
+                if (currentTimeRange === '1y' || (window._chartTimeRanges && window._chartTimeRanges.get(chartId) === '1y')) {
+                    const btn1y = document.querySelector('.time-range-btn[data-range="1y"]');
+                    if (btn1y) {
+                        // odstráň active zo všetkých a nastav len 1y
+                        document.querySelectorAll('.time-range-btn').forEach(b => b.classList.remove('active'));
+                        btn1y.classList.add('active');
+                    }
+                    // Nechaj _originalActiveButton nedotknutý – ak neskôr zmenší používateľ rozsah, vie sa obnoviť
+                    addDebugLog && addDebugLog('🛡️ Zachovaný vizuálny interval 1y (neobnovený pôvodný)');
+                } else {
+                    restoreOriginalVisualTimeRange();
+                }
+            }
+
+            // Update chart
+            chart.update('active');
+            addDebugLog(`✅ Reset dokončený pre ${chartId}`);
+
+            // Clear zoom-in window when ping chart is reset, recalculate header
+            if (chartId === 'pingChart' || window._globalZoomMode) {
+                window._pingZoomInWindow = null;
+            }
+            if (typeof window.updateHeaderMetrics === 'function') {
+                window.updateHeaderMetrics();
+            }
         }
 
         // Wrapper function for button-triggered zoom reset with debug logging
         function resetZoomButton(chartId) {
             addDebugLog(`🔎 resetZoomButton() kliknuté pre chart: ${chartId}`);
-            
+
             // Simple rate limiting for button clicks
             if (!window._buttonClickTimes) {
                 window._buttonClickTimes = {};
             }
-            
+
             const now = Date.now();
             const lastButtonClickTime = window._buttonClickTimes[chartId] || 0;
             const timeSinceLastButtonClick = now - lastButtonClickTime;
-            
+
             if (timeSinceLastButtonClick < 500) {
                 addDebugLog(`⏱️ resetZoomButton rate limited pre ${chartId} - posledný klik bol ${timeSinceLastButtonClick}ms dozadu`);
                 return;
             }
-            
+
             window._buttonClickTimes[chartId] = now;
-            addDebugLog(`➡️ Volám resetZoom(${chartId})`);
-            resetZoom(chartId);
+            if (window._globalZoomMode) {
+                addDebugLog(`➡️ Globálny zoom-out – volám resetZoom na všetkých grafoch`);
+                ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(id => {
+                    resetZoom(id);
+                });
+            } else {
+                addDebugLog(`➡️ Volám resetZoom(${chartId})`);
+                resetZoom(chartId);
+            }
         }
 
         // Reset zoom on all charts - called when time range changes
         function resetAllChartsZoom() {
-            
+
             // Clear per-chart time range tracking when resetting all charts
             if (window._chartTimeRanges) {
                 window._chartTimeRanges.clear();
                 addDebugLog(`🔄 Vymazané per-chart time ranges - všetky grafy späť na default`);
             }
-            
+
             // Clear permanently expanded charts when global time range changes
             if (window._expandedCharts) {
                 window._expandedCharts.clear();
             }
-            
+
             // Clear wasExpanded flags when global time range changes
             if (window._wasExpanded) {
                 window._wasExpanded.clear();
             }
-            
+
+            // Clear old zoom window state 
+            window._pingZoomInWindow = null;
+
             ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(chartId => {
                 const chart = Chart.getChart(chartId);
                 if (chart) {
                     // Clear zoom completely
                     chart.options.scales.x.min = undefined;
                     chart.options.scales.x.max = undefined;
-                    
+
                     // Reset subtitle
                     const subtitle = chart.options.plugins.subtitle;
                     if (subtitle) {
                         subtitle.text = 'Označte oblasť pre zoom, dvojité kliknutie pre zoom out';
                         subtitle.color = '#9ca3af';
                     }
-                    
+
                     // Reset to dynamic time formatting based on requested time range (not just data range)
                     // Show the full requested time range on axis even if data only covers part of it
                     const currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
                     const timeRangeMs = getTimeRangeMs(currentTimeRange);
                     const now = new Date().getTime();
-                    
+
                     // Find the actual data range for comparison
                     let dataMin = null;
                     let dataMax = null;
-                    
+
                     if (chart.data && chart.data.datasets && chart.data.datasets.length > 0) {
                         chart.data.datasets.forEach(dataset => {
                             if (dataset.data && dataset.data.length > 0) {
@@ -2157,16 +2495,16 @@
                             }
                         });
                     }
-                    
+
                     // For shorter time ranges, optimize the display to reduce left-side gaps
                     let requestedMin, requestedMax;
                     const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
-                    
+
                     if (isShortRange && dataMin !== null && dataMax !== null) {
                         // For short ranges: start from data beginning, but ensure we show the full requested duration
                         const dataDuration = dataMax - dataMin;
                         const minRequiredDuration = Math.min(timeRangeMs, dataDuration);
-                        
+
                         // If data spans less than requested range, show data-centric view with padding
                         if (dataDuration < timeRangeMs) {
                             // Add small padding (5% of data duration or minimum 2 minutes)
@@ -2183,19 +2521,19 @@
                         requestedMin = now - timeRangeMs;
                         requestedMax = now;
                     }
-                    
+
                     // Set axis to show the optimized range
                     chart.options.scales.x.min = requestedMin;
                     chart.options.scales.x.max = requestedMax;
-                    
+
                     // Use time formatting based on the requested range (not data range)
                     updateSingleChartTimeFormat(chart, requestedMin, requestedMax);
-                    
+
                     // Update subtitle to show data coverage within the displayed range
                     if (subtitle && dataMin !== null && dataMax !== null) {
                         const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
                         const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
-                        
+
                         if (isShortRange && dataDays < requestedDays) {
                             // For short ranges with limited data, show optimized view message
                             if (dataDays < 1) {
@@ -2217,10 +2555,10 @@
                         subtitle.text = 'Označte oblasť pre zoom, dvojité kliknutie pre zoom out';
                         subtitle.color = '#9ca3af';
                     }
-                    
+
                     // Restore original visual time range indication when all charts are reset
                     restoreOriginalVisualTimeRange();
-                    
+
                     // Use 'none' update mode to avoid animation conflicts with subsequent data loading
                     chart.update('none');
                 }
@@ -2233,7 +2571,7 @@
             if (window._singleChartZoomOut) {
                 return;
             }
-            
+
             ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(chartId => {
                 const chart = Chart.getChart(chartId);
                 if (chart) {
@@ -2249,11 +2587,11 @@
         // Apply full time range horizon to single chart
         function applyFullTimeRangeToChart(chart) {
             if (!chart) return;
-            
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`🔧 applyFullTimeRangeToChart: začiatok pre chart ${chart.canvas?.id || 'unknown'}`);
             }
-            
+
             // Skip if this chart is currently in single zoom-out mode
             if (window._singleChartZoomOut && chart.canvas && chart.canvas.id === window._singleChartZoomOut) {
                 if (typeof addDebugLog === 'function') {
@@ -2261,7 +2599,7 @@
                 }
                 return;
             }
-            
+
             // Skip if this chart is permanently expanded
             if (window._expandedCharts && chart.canvas && window._expandedCharts.has(chart.canvas.id)) {
                 if (typeof addDebugLog === 'function') {
@@ -2269,16 +2607,16 @@
                 }
                 return;
             }
-            
+
             // Get the requested time range and calculate full horizon
             const currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
             const timeRangeMs = getTimeRangeMs(currentTimeRange);
             const now = new Date().getTime();
-            
+
             // Find the actual data range for comparison
             let dataMin = null;
             let dataMax = null;
-            
+
             if (chart.data && chart.data.datasets && chart.data.datasets.length > 0) {
                 chart.data.datasets.forEach(dataset => {
                     if (dataset.data && dataset.data.length > 0) {
@@ -2290,21 +2628,21 @@
                     }
                 });
             }
-            
+
             if (typeof addDebugLog === 'function') {
                 addDebugLog(`🔧 applyFullTimeRangeToChart: currentTimeRange=${currentTimeRange}, dataMin=${dataMin}, dataMax=${dataMax}, datasets=${chart.data?.datasets?.length || 0}`);
             }
-            
+
             // For shorter time ranges, optimize the display to reduce left-side gaps
             let requestedMin, requestedMax;
             const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(currentTimeRange);
             const hasData = dataMin !== null && dataMax !== null;
             const latestReference = hasData ? Math.max(dataMax, now) : now; // always include aktuálny čas aj posledný bod
-            
+
             if (isShortRange && hasData) {
                 // For short ranges: start from data beginning, but ensure we show the full requested duration
                 const dataDuration = dataMax - dataMin;
-                
+
                 // If data spans less than requested range, show data-centric view with padding
                 if (dataDuration < timeRangeMs) {
                     // Add small padding (5% of data duration or minimum 2 minutes)
@@ -2321,7 +2659,7 @@
                 requestedMax = latestReference;
                 requestedMin = requestedMax - timeRangeMs;
             }
-            
+
             // Set axis to show the optimized range
             chart.options.scales.x.min = requestedMin;
             chart.options.scales.x.max = requestedMax;
@@ -2332,7 +2670,7 @@
 
             // NOTE: Time formatting is handled by monitoring.js updateChartTimeFormats()
             // during global time range changes. Only update time formats during zoom operations.
-            
+
             // Update subtitle to show data coverage within the displayed range
             const subtitle = chart.options.plugins.subtitle;
             if (subtitle && dataMin !== null && dataMax !== null) {
@@ -2340,10 +2678,10 @@
                 const dataDays = Math.ceil(dataDuration / (1000 * 60 * 60 * 24));
                 const requestedDays = Math.ceil(timeRangeMs / (1000 * 60 * 60 * 24));
                 const actualRangeDays = Math.ceil((requestedMax - requestedMin) / (1000 * 60 * 60 * 24));
-                
+
                 // Ak máme veľmi málo dát (menej ako 5 minút), považujme to za "žiadne užitočné dáta"
                 const minUsefulDuration = 5 * 60 * 1000; // 5 minút
-                
+
                 if (dataDuration < minUsefulDuration) {
                     // Veľmi málo dát - použijeme štandardnú správu
                     subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
@@ -2385,10 +2723,10 @@
                     addDebugLog(`🔧 applyFullTimeRangeToChart: nastavujem ŠTANDARDNÚ SPRÁVU (žiadne dáta)`);
                 }
             }
-            
+
             // Update chart (use 'none' to avoid animation during data loading)
             chart.update('none');
-            
+
         }
 
         // Export to window for access from monitoring.js
@@ -2399,16 +2737,16 @@
         // Helper function to update time format for single chart without affecting others
         function updateSingleChartTimeFormat(chart, minX, maxX) {
             if (!chart || !minX || !maxX) return;
-            
+
             // For full time range display, use the current time range setting instead of actual data range
             const currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
             const timeRangeMs = getTimeRangeMs(currentTimeRange);
-            
+
             // Check if we're displaying the full requested range (not zoomed in)
             const isFullRange = Math.abs((maxX - minX) - timeRangeMs) < (timeRangeMs * 0.1); // 10% tolerance
-            
+
             let diffMs, diffMinutes, diffHours, diffDays;
-            
+
             if (isFullRange) {
                 // Use the requested time range for formatting (full horizon display)
                 diffMs = timeRangeMs;
@@ -2422,10 +2760,10 @@
                 diffHours = diffMs / (1000 * 60 * 60);
                 diffDays = diffHours / 24;
             }
-            
+
             // Determine appropriate time format for this zoom level with better granularity
             let timeFormats;
-            
+
             // For full range display of long time periods, use specialized formatting
             if (isFullRange && diffDays >= 7) {
                 if (diffDays <= 7) {
@@ -2574,7 +2912,7 @@
                     maxTicksLimit: 8
                 };
             }
-            
+
             // Apply time formats to this chart only
             if (chart.options && chart.options.scales && chart.options.scales.x) {
                 chart.options.scales.x.time.displayFormats = timeFormats.displayFormats;
@@ -2584,7 +2922,7 @@
                 if (chart.options.scales.x.ticks) {
                     chart.options.scales.x.ticks.maxTicksLimit = timeFormats.maxTicksLimit || 8;
                 }
-                
+
             }
         }
 
@@ -2684,19 +3022,19 @@
                 return;
             }
             window._lastCleanupTime = now;
-            
-            
+
+
             try {
                 // Clear any pending loading states
                 if (window._chartLoadingStates) {
                     window._chartLoadingStates = {};
                 }
-                
+
                 // Clear pending zoom targets
                 if (window._pendingZoomTarget) {
                     window._pendingZoomTarget = null;
                 }
-                
+
                 // 1. Vyčistiť všetky premenné výberových okien
                 if (typeof chartSelectionBox !== 'undefined' && chartSelectionBox) {
                     if (chartSelectionBox.parentElement) {
@@ -2704,11 +3042,11 @@
                     }
                     chartSelectionBox = null;
                 }
-                
+
                 if (typeof chartIsSelecting !== 'undefined') {
                     chartIsSelecting = false;
                 }
-                
+
                 // 2. Nájsť a odstrániť všetky potenciálne výberové okná
                 const allContainers = document.querySelectorAll('.chart-container');
                 allContainers.forEach(container => {
@@ -2719,7 +3057,7 @@
                         'div.chart-selection-box',
                         'div[id*="selection"]'
                     ];
-                    
+
                     selectors.forEach(selector => {
                         const selectionBoxes = container.querySelectorAll(selector);
                         if (selectionBoxes.length > 0) {
@@ -2731,13 +3069,13 @@
                         });
                     });
                 });
-                
+
                 // 3. Vyčistiť všetky štýly dokumentu, ktoré by mohli ovplyvniť kurzor
                 document.body.style.cursor = '';
                 document.querySelectorAll('.chart-container').forEach(container => {
                     container.style.cursor = '';
                 });
-                
+
             } catch (error) {
                 console.error('Error during emergency cleanup:', error);
             }
@@ -2771,7 +3109,7 @@
         function getTimeRangeForMs(rangeMs) {
             const hour = 60 * 60 * 1000;
             const day = 24 * hour;
-            
+
             // Use midpoint boundaries to correctly categorize actual data ranges
             if (rangeMs <= 1.5 * hour) return '30m';     // up to 1.5h → 30m
             if (rangeMs <= 4.5 * hour) return '3h';      // up to 4.5h → 3h
@@ -2788,11 +3126,11 @@
         function getNextTimeRange(currentRange) {
             const rangeProgression = ['30m', '3h', '6h', '12h', '24h', '7d', '30d', '90d', '1y'];
             const currentIndex = rangeProgression.indexOf(currentRange);
-            
+
             if (currentIndex === -1 || currentIndex >= rangeProgression.length - 1) {
                 return null; // Already at maximum or invalid range
             }
-            
+
             return rangeProgression[currentIndex + 1];
         }
 
@@ -2801,7 +3139,7 @@
             // Always load data when expanding to a longer range
             const targetMs = getTimeRangeMs(targetRange);
             const currentMs = getTimeRangeMs(currentRange);
-            
+
             return targetMs > currentMs;
         }
 
@@ -2833,15 +3171,24 @@
             const deviceId = window.currentDeviceId;
             const apiRange = targetRange === '30m' ? 'recent' : targetRange;
 
+            // Dedup: reuse in-flight Promise for same device+range
+            // Prevents 4× identical API calls when global zoom mode triggers all charts simultaneously
+            const _cacheKey = `${deviceId}:${apiRange}`;
+            if (!window._rangeExpansionPromiseCache) window._rangeExpansionPromiseCache = {};
+            if (!window._rangeExpansionPromiseCache[_cacheKey]) {
+                window._rangeExpansionPromiseCache[_cacheKey] = fetch(`/api/monitoring/history/${deviceId}?range=${apiRange}`)
+                    .then(response => {
+                        addDebugLog(`📡 API odpoveď status: ${response.status} ${response.ok ? '✅' : '❌'}`);
+                        return response.json();
+                    });
+                // Expire cache after 10s to allow fresh requests later
+                setTimeout(() => { delete window._rangeExpansionPromiseCache[_cacheKey]; }, 10000);
+            }
             addDebugLog(`🌐 Volám API: /api/monitoring/history/${deviceId}?range=${apiRange}`);
-            fetch(`/api/monitoring/history/${deviceId}?range=${apiRange}`)
-                .then(response => {
-                    addDebugLog(`📡 API odpoveď status: ${response.status} ${response.ok ? '✅' : '❌'}`);
-                    return response.json();
-                })
+            window._rangeExpansionPromiseCache[_cacheKey]
                 .then(apiResponse => {
                     addDebugLog(`📦 API úspešné pre ${targetRange}, objekty: ${Object.keys(apiResponse || {}).join(', ')}`);
-                    
+
                     // Parse the new API format - different for ping vs SNMP data
                     let data = null;
                     if (apiResponse && typeof apiResponse === 'object') {
@@ -2851,52 +3198,52 @@
                         } else if ((chartId === 'cpuChart' || chartId === 'temperatureChart' || chartId === 'memoryChart') && apiResponse.snmp_data) {
                             // For SNMP charts, filter data by measurement type
                             const allSnmpData = apiResponse.snmp_data;
-                            
+
                             if (chartId === 'cpuChart') {
                                 // Filter for CPU data - look for items that have CPU-related fields
-                                data = allSnmpData.filter(item => 
-                                    item.cpu_load !== undefined || 
-                                    item.cpu_usage !== undefined || 
-                                    item.cpu !== undefined || 
+                                data = allSnmpData.filter(item =>
+                                    item.cpu_load !== undefined ||
+                                    item.cpu_usage !== undefined ||
+                                    item.cpu !== undefined ||
                                     (item.oid && item.oid.includes('cpu')) ||
                                     (item.name && item.name.toLowerCase().includes('cpu'))
                                 );
                             } else if (chartId === 'temperatureChart') {
                                 // Filter for temperature data
-                                data = allSnmpData.filter(item => 
-                                    item.temperature !== undefined || 
+                                data = allSnmpData.filter(item =>
+                                    item.temperature !== undefined ||
                                     item.temp !== undefined ||
                                     (item.oid && item.oid.includes('temp')) ||
                                     (item.name && item.name.toLowerCase().includes('temp'))
                                 );
                             } else if (chartId === 'memoryChart') {
                                 // Filter for memory data
-                                data = allSnmpData.filter(item => 
-                                    item.memory_usage !== undefined || 
+                                data = allSnmpData.filter(item =>
+                                    item.memory_usage !== undefined ||
                                     item.memory !== undefined ||
                                     (item.oid && item.oid.includes('memory')) ||
                                     (item.name && item.name.toLowerCase().includes('mem'))
                                 );
                             }
-                            
+
                             // If no filtered data found, use all snmp_data and let field mapping handle it
                             if (!data || data.length === 0) {
                                 data = allSnmpData;
                             }
                         }
                     }
-                    
+
                     if (!data || !Array.isArray(data)) {
                         addDebugLog(`❌ Žiadne dáta pre ${chartId} v API odpovedi! Dostupné kľúče: ${Object.keys(apiResponse || {}).join(', ')}`);
                         throw new Error(`No valid data array found for ${chartId}`);
                     }
-                    
+
                     addDebugLog(`✅ Našiel som ${data.length} záznamov pre ${chartId}`);
-                    
+
                     // Update chart data directly
                     const targetChart = Chart.getChart(chartId);
                     if (targetChart && data && data.length > 0) {
-                        
+
                         // Process data - different charts use different field names
                         let newData = [];
                         if (chartId === 'pingChart') {
@@ -2914,7 +3261,7 @@
                                 else if (item.cpu_usage !== undefined) cpuValue = item.cpu_usage;
                                 else if (item.cpu !== undefined) cpuValue = item.cpu;
                                 else if (item.value !== undefined) cpuValue = item.value;
-                                
+
                                 return {
                                     x: new Date(item.timestamp).getTime(),
                                     y: cpuValue
@@ -2929,7 +3276,7 @@
                                 if (item.temperature !== undefined) tempValue = item.temperature;
                                 else if (item.temp !== undefined) tempValue = item.temp;
                                 else if (item.value !== undefined) tempValue = item.value;
-                                
+
                                 return {
                                     x: new Date(item.timestamp).getTime(),
                                     y: tempValue
@@ -2937,15 +3284,15 @@
                             });
                         } else if (chartId === 'memoryChart') {
                             // Memory data from SNMP - handle both Used and Total Memory datasets
-                            
+
                             // Prepare arrays for both datasets
                             const usedMemData = [];
                             const totalMemData = [];
                             let lastTotalMem = null;
-                            
+
                             data.forEach((item, index) => {
                                 const timestamp = new Date(item.timestamp).getTime();
-                                
+
                                 // Used Memory (dataset 0)
                                 if (item.used_memory !== null && item.used_memory !== undefined) {
                                     const usedMem = parseFloat(item.used_memory);
@@ -2953,7 +3300,7 @@
                                         usedMemData.push({ x: timestamp, y: usedMem });
                                     }
                                 }
-                                
+
                                 // Total Memory (dataset 1) with forward-fill
                                 if (item.total_memory !== null && item.total_memory !== undefined) {
                                     const totalMem = parseFloat(item.total_memory);
@@ -2966,10 +3313,10 @@
                                     totalMemData.push({ x: timestamp, y: lastTotalMem });
                                 }
                             });
-                            
+
                             addDebugLog(`🔴 Used Memory: ${usedMemData.length} bodov`);
                             addDebugLog(`🔵 Total Memory: ${totalMemData.length} bodov`);
-                            
+
                             // Set both datasets
                             if (targetChart.data.datasets[0]) {
                                 targetChart.data.datasets[0].data = usedMemData;
@@ -2977,34 +3324,34 @@
                             if (targetChart.data.datasets[1]) {
                                 targetChart.data.datasets[1].data = totalMemData;
                             }
-                            
+
                             // Use combined data for axis calculations
                             newData = [...usedMemData, ...totalMemData];
                         }
-                        
+
                         // Filter valid data points
-                        newData = newData.filter(point => 
+                        newData = newData.filter(point =>
                             point.y !== null && point.y !== undefined && !isNaN(point.y)
                         );
                         addDebugLog(`🔍 Po filtrovaní: ${newData.length} platných bodov (odstránené null/undefined/NaN)`);
-                        
+
                         if (newData.length === 0 && data.length > 0) {
                             addDebugLog(`❌ VŠETKY dáta boli odfiltrované! Vzorka surových hodnôt: ${data.slice(0, 3).map(d => Object.keys(d).map(k => `${k}:${d[k]}`).join(',')).join(' | ')}`);
                         }
-                        
+
                         addDebugLog(`🔄 Spracoval som ${newData.length}/${data.length} platných bodov pre ${chartId}`);
-                        
+
                         // For memory chart, datasets are already set above
                         if (chartId !== 'memoryChart' && targetChart.data.datasets[0] && newData.length > 0) {
                             targetChart.data.datasets[0].data = newData;
                         }
-                        
+
                         // Apply time axis optimization for all charts
                         if (newData.length > 0) {
                             // Use the same logic as applyFullTimeRangeToChart for proper time axis scaling
                             const targetRangeMs = getTimeRangeMs(targetRange);
                             const now = new Date().getTime();
-                            
+
                             // Find actual data range
                             let dataMin = null;
                             let dataMax = null;
@@ -3013,15 +3360,15 @@
                                 if (dataMin === null || x < dataMin) dataMin = x;
                                 if (dataMax === null || x > dataMax) dataMax = x;
                             });
-                            
+
                             // Apply same optimization logic as applyFullTimeRangeToChart
                             let requestedMin, requestedMax;
                             const isShortRange = ['30m', '3h', '6h', '12h', '24h'].includes(targetRange);
-                            
+
                             if (isShortRange && dataMin !== null && dataMax !== null) {
                                 // For short ranges: optimize to show all available data without gaps
                                 const dataDuration = dataMax - dataMin;
-                                
+
                                 if (dataDuration < targetRangeMs) {
                                     // If we have less data than requested range, show data-centric view
                                     // Add small padding (5% of data duration or minimum 2 minutes)
@@ -3040,21 +3387,21 @@
                                 requestedMin = now - targetRangeMs;
                                 requestedMax = now;
                             }
-                            
+
                             targetChart.options.scales.x.min = requestedMin;
                             targetChart.options.scales.x.max = requestedMax;
-                            
+
                             addDebugLog(`🕒 Nastavená časová os: ${new Date(requestedMin).toLocaleTimeString()} - ${new Date(requestedMax).toLocaleTimeString()}`);
-                            
+
                             // Apply correct time formatting for the new range
                             updateSingleChartTimeFormat(targetChart, requestedMin, requestedMax);
-                            
+
                             // Update subtitle with proper data coverage info
                             let subtitle = targetChart.options.plugins.subtitle;
                             if (subtitle && dataMin !== null && dataMax !== null) {
                                 const dataDays = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60 * 24));
                                 const requestedDays = Math.ceil(targetRangeMs / (1000 * 60 * 60 * 24));
-                                
+
                                 if (isShortRange && dataDays < requestedDays) {
                                     if (dataDays < 1) {
                                         const dataHours = Math.ceil((dataMax - dataMin) / (1000 * 60 * 60));
@@ -3071,35 +3418,47 @@
                                 subtitle.text = `Načítané ${newData.length} bodov za ${targetRange}`;
                                 subtitle.color = '#9ca3af';
                             }
-                            
+
                             // Update visual time range indicator to reflect the new range
                             // Don't reset _originalActiveButton here - we're expanding to larger range
                             updateTimeRangeButtonsVisually(targetRange);
-                            
+
                             // Persist the expanded range so F5 reload keeps it
                             if (typeof window.persistZoomRange === 'function') {
                                 window.persistZoomRange(targetRange);
                             }
-                            
-                            // Update chart
+
+                            // Update chart with native Chart.js curve animation for all transitions
+                            // (performance-heavy max-range case is handled by early return in resetZoom)
                             targetChart.update('active');
-                            
+
                             // Apply Y-axis optimization for ping chart after loading new data
                             if (chartId === 'pingChart' && typeof window.applyYAxisOptimization === 'function') {
                                 setTimeout(() => {
                                     window.applyYAxisOptimization(targetChart, 'ping');
                                 }, 100);
                             }
-                            
+
                             addDebugLog(`✅ Úspešne aktualizovaný graf ${chartId} na ${targetRange} s ${newData.length} bodmi`);
-                            
+
                             // CRITICAL: Update per-chart time range instead of global
                             // Each chart maintains its own independent time range state
                             window._chartTimeRanges.set(chartId, targetRange);
                             addDebugLog(`🔄 Aktualizovaný per-chart rozsah pre ${chartId}: ${targetRange}`);
+
+                            // Sync ping history and recalculate uptime/latency header after range expansion
+                            if (chartId === 'pingChart') {
+                                window._pingZoomInWindow = null; // range expansion overrides zoom-in window
+                                if (typeof window.setPingHistoryForUptime === 'function') {
+                                    window.setPingHistoryForUptime(data);
+                                }
+                            }
+                            if (typeof window.updateHeaderMetrics === 'function') {
+                                window.updateHeaderMetrics();
+                            }
                         } else {
                             addDebugLog(`⚠️ Žiadne platné dáta na aktualizáciu grafu ${chartId} (${newData.length} bodov)`);
-                            
+
                             const subtitle = targetChart.options.plugins.subtitle;
                             if (subtitle) {
                                 subtitle.text = `Žiadne dáta pre ${targetRange}`;
@@ -3108,13 +3467,15 @@
                         }
                     } else {
                         addDebugLog(`❌ Graf ${chartId} nenájdený alebo žiadne dáta`);
-                        
+
                     }
                 })
                 .catch(error => {
                     addDebugLog(`💥 API volanie zlyhalo: ${error.message}`);
                     console.error('Direct API call failed:', error);
-                    
+                    // Clear cache on error so next attempt makes a fresh request
+                    delete window._rangeExpansionPromiseCache[_cacheKey];
+
                     const subtitle = chart.options.plugins.subtitle;
                     if (subtitle) {
                         subtitle.text = 'Chyba pri načítavaní dát - skúste znovu';
@@ -3129,7 +3490,7 @@
         // Funkcia pre načítavanie dodatočných dát pre zoom-out
         function loadAdditionalDataForZoom(newRange, targetChart, targetMin, targetMax) {
             if (typeof window.currentDeviceId !== 'undefined' && window.currentDeviceId) {
-                
+
                 // Store zoom target for after data loads
                 if (targetChart && targetMin !== undefined && targetMax !== undefined) {
                     window._pendingZoomTarget = {
@@ -3138,61 +3499,61 @@
                         max: targetMax
                     };
                 }
-                
+
                 // Temporarily update the global range for data loading
                 const originalGlobalRange = window.currentTimeRange;
                 window.currentTimeRange = newRange;
-                
+
                 // Load data for the larger range using the monitoring.js function
                 if (typeof window.loadHistoricalData === 'function') {
                     window.loadHistoricalData(window.currentDeviceId).then(() => {
-                        
+
                         // Apply pending zoom to target chart
                         if (window._pendingZoomTarget) {
                             const chart = Chart.getChart(window._pendingZoomTarget.chartId);
                             if (chart) {
                                 chart.options.scales.x.min = window._pendingZoomTarget.min;
                                 chart.options.scales.x.max = window._pendingZoomTarget.max;
-                                
+
                                 // Update subtitle for successful zoom out
                                 const subtitle = chart.options.plugins.subtitle;
                                 if (subtitle) {
                                     subtitle.text = 'Zoom aktívny s rozšírenými dátami - dvojité kliknutie pre reset';
                                     subtitle.color = '#fbbf24';
                                 }
-                                
+
                                 // Update time format for the new zoom level
                                 updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
-                                
+
                                 chart.update('active');
                             }
                             window._pendingZoomTarget = null;
                         }
-                        
+
                         // Restore original global range after loading
                         window.currentTimeRange = originalGlobalRange;
                     }).catch(error => {
                         console.error('Error loading additional data for zoom:', error);
-                        
+
                         // Clear pending zoom on error and apply basic zoom
                         if (window._pendingZoomTarget) {
                             const chart = Chart.getChart(window._pendingZoomTarget.chartId);
                             if (chart) {
                                 chart.options.scales.x.min = window._pendingZoomTarget.min;
                                 chart.options.scales.x.max = window._pendingZoomTarget.max;
-                                
+
                                 const subtitle = chart.options.plugins.subtitle;
                                 if (subtitle) {
                                     subtitle.text = 'Zoom aktívny s dostupnými dátami - dvojité kliknutie pre reset';
                                     subtitle.color = '#fbbf24';
                                 }
-                                
+
                                 updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
                                 chart.update('active');
                             }
                             window._pendingZoomTarget = null;
                         }
-                        
+
                         // Restore original range on error
                         window.currentTimeRange = originalGlobalRange;
                     });
@@ -3201,13 +3562,13 @@
                     if (targetChart && targetMin !== undefined && targetMax !== undefined) {
                         targetChart.options.scales.x.min = targetMin;
                         targetChart.options.scales.x.max = targetMax;
-                        
+
                         const subtitle = targetChart.options.plugins.subtitle;
                         if (subtitle) {
                             subtitle.text = 'Zoom aktívny s dostupnými dátami - dvojité kliknutie pre reset';
                             subtitle.color = '#fbbf24';
                         }
-                        
+
                         updateSingleChartTimeFormat(targetChart, targetMin, targetMax);
                         targetChart.update('active');
                     }
@@ -3217,20 +3578,20 @@
 
         // Debug helper functions (integrated with our debug system)
         let debugSettings = {};
-        
+
         const loadDebugSettings = async () => {
             try {
                 const response = await fetch('/api/settings');
                 const settings = await response.json();
                 debugSettings = settings;
-                
+
                 // Initialize debug terminal after settings are loaded
                 initializeDebugTerminal();
             } catch (error) {
                 console.error('Failed to load debug settings:', error);
             }
         };
-        
+
         // Load debug settings on initialization
         loadDebugSettings();
         // Add custom zoom functionality to charts
@@ -3241,7 +3602,7 @@
             let chartSelectionBox = null;
             let lastTapTime = 0;
             let touchStartX = 0;
-            
+
             // Remove any existing listeners for this chart
             canvas.removeEventListener('mousedown', canvas._zoomMouseDown);
             canvas.removeEventListener('mousemove', canvas._zoomMouseMove);
@@ -3251,31 +3612,37 @@
             canvas.removeEventListener('touchmove', canvas._zoomTouchMove);
             canvas.removeEventListener('touchend', canvas._zoomTouchEnd);
             canvas.removeEventListener('dblclick', canvas._zoomDoubleClick);
-            
+
             // Double click/tap handler for zoom out
-            const doubleClickHandler = function(e) {
+            const doubleClickHandler = function (e) {
                 e.preventDefault();
-                
-                
+
+
                 // Additional debouncing for double-click to prevent rapid calls
                 const now = Date.now();
                 if (!chart._lastDoubleClickTime) {
                     chart._lastDoubleClickTime = 0;
                 }
-                
+
                 const timeSinceLastDoubleClick = now - chart._lastDoubleClickTime;
                 if (timeSinceLastDoubleClick < 800) { // 800ms debouncing for double-click - reasonable protection
                     return;
                 }
-                
+
                 chart._lastDoubleClickTime = now;
-                
-                // Reset zoom - use chart ID directly
-                resetZoom(chart.canvas.id);
+
+                // Reset zoom - global or individual mode
+                if (window._globalZoomMode) {
+                    ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(id => {
+                        resetZoom(id);
+                    });
+                } else {
+                    resetZoom(chart.canvas.id);
+                }
             };
-            
+
             // Mouse down handler with improved precision for dense data
-            const mouseDownHandler = function(e) {
+            const mouseDownHandler = function (e) {
                 // Prevent any browser text selection during drag
                 e.preventDefault();
                 e.stopPropagation();
@@ -3305,9 +3672,9 @@
 
                 createSelectionBox();
             };
-            
+
             // Mouse move handler with improved responsiveness
-            const mouseMoveHandler = function(e) {
+            const mouseMoveHandler = function (e) {
                 if (chartIsSelecting && chartSelectionBox && currentChart === chart) {
                     e.preventDefault();
 
@@ -3336,10 +3703,10 @@
                     canvas.style.cursor = selectionWidth > 10 ? 'col-resize' : 'crosshair';
                 }
             };
-            
+
             // Mouse up handler (na document, aby fungoval aj mimo canvas)
-            const mouseUpHandler = function(e) {
-                
+            const mouseUpHandler = function (e) {
+
                 // Vždy vyčistiť výber bez ohľadu na kontext
                 if (chartSelectionBox) {
                     try {
@@ -3375,7 +3742,7 @@
                         currentChart = null;
                     }
                 }
-                
+
                 // Reset stavových premenných - už sa robí v cleanupSelection(), takže je zbytočné
                 // chartIsSelecting = false;
                 // window._chartSelectionActive = false; 
@@ -3383,17 +3750,17 @@
                 //     currentChart = null;
                 // }
             };
-            
+
             // Mouse leave handler: pri aktívnom ťahaní už NErušíme selection, len ho necháme zamrznuté
-            const mouseLeaveHandler = function(e) {
+            const mouseLeaveHandler = function (e) {
                 if (chartIsSelecting && currentChart === chart) {
                     // NERUŠ – čakáme na mouseup (globálne)
                     // (prípadný cleanup prebehne v mouseUpHandler alebo pri extrémnej vzdialenosti v move logike)
                 }
             };
-            
+
             // Touch start handler
-            const touchStartHandler = function(e) {
+            const touchStartHandler = function (e) {
                 // Determine if touch starts inside the actual plotting area (chartArea)
                 const touch = e.touches[0];
                 const rect = canvas.getBoundingClientRect();
@@ -3410,7 +3777,7 @@
                 }
                 // Inside allowed zone – teraz blokujeme default (scroll) a pokračujeme
                 e.preventDefault();
-                
+
                 // Double tap detection (len ak sme vnútri grafu)
                 const currentTime = Date.now();
                 const tapLength = currentTime - lastTapTime;
@@ -3419,13 +3786,19 @@
                     const since = currentTime - chart._lastDoubleTapTime;
                     if (since >= 1000) {
                         chart._lastDoubleTapTime = currentTime;
-                        resetZoom(chart.canvas.id);
+                        if (window._globalZoomMode) {
+                            ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(id => {
+                                resetZoom(id);
+                            });
+                        } else {
+                            resetZoom(chart.canvas.id);
+                        }
                     }
                     lastTapTime = currentTime;
                     return;
                 }
                 lastTapTime = currentTime;
-                
+
                 // Start controlled selection
                 chartIsSelecting = true;
                 currentChart = chart;
@@ -3434,9 +3807,9 @@
                 chartStartX = touchStartX;
                 createSelectionBox();
             };
-            
+
             // Touch move handler
-            const touchMoveHandler = function(e) {
+            const touchMoveHandler = function (e) {
                 if (chartIsSelecting && chartSelectionBox && currentChart === chart) {
                     e.preventDefault();
                     const touch = e.touches[0];
@@ -3445,9 +3818,9 @@
                     updateSelectionBox(touchStartX, currentCanvasX);
                 }
             };
-            
+
             // Touch end handler
-            const touchEndHandler = function(e) {
+            const touchEndHandler = function (e) {
                 if (chartIsSelecting && currentChart === chart) {
                     e.preventDefault();
                     if (chartSelectionBox) {
@@ -3459,7 +3832,7 @@
                     cleanupSelection();
                 }
             };
-            
+
             // Helper function to create selection box
             function createSelectionBox() {
                 chartSelectionBox = document.createElement('div');
@@ -3470,22 +3843,22 @@
                 chartSelectionBox.style.pointerEvents = 'none';
                 chartSelectionBox.style.zIndex = '1000';
                 chartSelectionBox.style.display = 'none';
-                
+
                 const chartContainer = canvas.closest('.chart-container');
                 if (chartContainer) {
                     chartContainer.appendChild(chartSelectionBox);
                 }
             }
-            
+
             // Helper function to update selection box with improved precision
             function updateSelectionBox(startX, currentX) {
                 if (!chartSelectionBox || !chartIsSelecting) {
                     return; // Safety check
                 }
-                
+
                 // Improved threshold for dense data - smaller minimum movement required
                 const minMovement = 3; // Reduced from 5 for better precision with dense data
-                
+
                 if (Math.abs(currentX - startX) > minMovement) {
                     const area = chart.chartArea;
                     const canvasRect = canvas.getBoundingClientRect();
@@ -3510,68 +3883,93 @@
                     chartSelectionBox.style.borderColor = 'rgb(59, 130, 246)';
                 }
             }
-            
+
             // Helper function to handle zoom selection with improved precision for dense data
             function handleZoomSelection(startX, endX) {
                 // Reduced minimum selection width for better precision with dense data
                 const minSelectionWidth = 10; // Reduced from 20 for better precision
-                
+
                 if (Math.abs(endX - startX) > minSelectionWidth) {
                     const chartArea = chart.chartArea;
-                    
+
                     // Improved clamping with better edge handling
                     const clampedStartX = Math.max(chartArea.left, Math.min(chartArea.right, startX));
                     const clampedEndX = Math.max(chartArea.left, Math.min(chartArea.right, endX));
-                    
+
                     // Get data values for the selected pixels
                     let startDataX = chart.scales.x.getValueForPixel(clampedStartX);
                     let endDataX = chart.scales.x.getValueForPixel(clampedEndX);
-                    
+
                     // Snap to nearby data points for better precision with dense data
                     if (chart.data.datasets[0] && chart.data.datasets[0].data.length > 100) {
                         // Only enable snap-to-data for dense datasets (>100 points)
                         startDataX = snapToNearestDataPoint(startDataX, chart);
                         endDataX = snapToNearestDataPoint(endDataX, chart);
                     }
-                    
+
                     const minX = Math.min(startDataX, endDataX);
                     const maxX = Math.max(startDataX, endDataX);
-                    
+
                     // Validate selection range
                     if (maxX - minX < 1000) { // Less than 1 second selection - probably accidental
                         return;
                     }
-                    
-                    
-                    // Apply zoom with animation
-                    chart.options.scales.x.min = minX;
-                    chart.options.scales.x.max = maxX;
-                    chart.update('active'); // Use 'active' mode for animation
-                    
-                    const subtitle = chart.options.plugins.subtitle;
-                    if (subtitle) {
-                        subtitle.text = 'Zoom aktívny - dvojité kliknutie pre zoom out';
-                        subtitle.color = '#fbbf24';
+
+
+                    // Apply zoom with animation – global or individual mode
+                    if (window._globalZoomMode) {
+                        ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(id => {
+                            const targetChart = Chart.getChart(id);
+                            if (!targetChart) return;
+                            targetChart.options.scales.x.min = minX;
+                            targetChart.options.scales.x.max = maxX;
+                            targetChart.update('active');
+                            const sub = targetChart.options.plugins.subtitle;
+                            if (sub) {
+                                sub.text = 'Zoom aktívny - dvojité kliknutie pre zoom out';
+                                sub.color = '#fbbf24';
+                            }
+                            updateSingleChartTimeFormat(targetChart, minX, maxX);
+                        });
+                    } else {
+                        chart.options.scales.x.min = minX;
+                        chart.options.scales.x.max = maxX;
+                        chart.update('active'); // Use 'active' mode for animation
+
+                        const subtitle = chart.options.plugins.subtitle;
+                        if (subtitle) {
+                            subtitle.text = 'Zoom aktívny - dvojité kliknutie pre zoom out';
+                            subtitle.color = '#fbbf24';
+                        }
+
+                        // Update time range and chart formatting with new zoom-in logic
+                        updateSingleChartTimeFormat(chart, minX, maxX);
                     }
-                    
-                    // Update time range and chart formatting with new zoom-in logic
-                    updateSingleChartTimeFormat(chart, minX, maxX);
-                    
+
                     // Add visual time range indication (safe - does not affect existing logic)
                     updateVisualTimeRangeIndicator(minX, maxX);
+
+                    // Track zoom-in window for uptime/latency recalculation
+                    // Set only when ping chart is affected (global mode or drag on pingChart itself)
+                    if (window._globalZoomMode || chart.canvas.id === 'pingChart') {
+                        window._pingZoomInWindow = { fromTs: minX, toTs: maxX };
+                    }
+                    if (typeof window.updateHeaderMetrics === 'function') {
+                        window.updateHeaderMetrics();
+                    }
                 }
             }
-            
+
             // Helper function to snap selection to nearest data point for better precision
             function snapToNearestDataPoint(targetValue, chart) {
                 if (!chart.data.datasets[0] || !chart.data.datasets[0].data) {
                     return targetValue;
                 }
-                
+
                 const data = chart.data.datasets[0].data;
                 let nearestValue = targetValue;
                 let minDistance = Infinity;
-                
+
                 data.forEach(point => {
                     const pointX = point.x || point;
                     const distance = Math.abs(pointX - targetValue);
@@ -3580,25 +3978,25 @@
                         nearestValue = pointX;
                     }
                 });
-                
+
                 // Only snap if the nearest point is within reasonable distance (5% of visible range)
                 const visibleRange = chart.scales.x.max - chart.scales.x.min;
                 const snapThreshold = visibleRange * 0.05;
-                
+
                 if (minDistance < snapThreshold) {
                     return nearestValue;
                 }
-                
+
                 return targetValue;
             }
-            
+
             // Helper function to cleanup selection with cursor reset
             function cleanupSelection() {
-                
+
                 try {
                     // Reset cursor style
                     canvas.style.cursor = '';
-                    
+
                     // Force cleanup of selection box
                     if (chartSelectionBox) {
                         if (chartSelectionBox.parentElement) {
@@ -3608,16 +4006,16 @@
                         chartSelectionBox = null;
                     } else {
                     }
-                    
+
                     // Reset selection state
                     chartIsSelecting = false;
                     window._chartSelectionActive = false; // Clear global flag
-                    
+
                     // Reset current chart if it's this chart
                     if (currentChart === chart) {
                         currentChart = null;
                     }
-                    
+
                     // Remove any stray selection boxes (failsafe)
                     const chartContainer = canvas.closest('.chart-container');
                     if (chartContainer) {
@@ -3631,9 +4029,9 @@
                 } catch (error) {
                     console.error('Error during selection cleanup:', error);
                 }
-                
+
             }
-            
+
             // Store references for cleanup
             canvas._zoomMouseDown = mouseDownHandler;
             canvas._zoomMouseMove = mouseMoveHandler;
@@ -3643,18 +4041,18 @@
             canvas._zoomTouchMove = touchMoveHandler;
             canvas._zoomTouchEnd = touchEndHandler;
             canvas._zoomDoubleClick = doubleClickHandler;
-            
+
             // Add event listeners
             canvas.addEventListener('mousedown', mouseDownHandler);
             canvas.addEventListener('mousemove', mouseMoveHandler);
             canvas.addEventListener('mouseleave', mouseLeaveHandler);
             document.addEventListener('mouseup', mouseUpHandler);
-            
+
             // Touch events for mobile
             canvas.addEventListener('touchstart', touchStartHandler, { passive: false });
             canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
             canvas.addEventListener('touchend', touchEndHandler, { passive: false });
-            
+
             // Double click for zoom out
             canvas.addEventListener('dblclick', doubleClickHandler);
         }
@@ -3669,7 +4067,7 @@
             }
             updateThemeIcon();
         }
-        
+
         function toggleTheme() {
             const isLight = document.body.classList.contains('light-theme');
             if (isLight) {
@@ -3686,66 +4084,114 @@
                 window.updateChartsTheme();
             }
         }
-        
+
         function updateThemeIcon() {
             const icon = document.getElementById('themeIcon');
             const isLight = document.body.classList.contains('light-theme');
             icon.className = isLight ? 'fas fa-moon' : 'fas fa-sun';
         }
-        
+
         // Initialize theme on page load
         initTheme();
-        
+
+        // ===== ZOOM MODE TOGGLE (Individual / Global) =====
+        window._globalZoomMode = localStorage.getItem('mikrotik-zoom-mode') === 'global';
+
+        function applyZoomModeUI() {
+            const btn = document.getElementById('zoomModeToggle');
+            const icon = document.getElementById('zoomModeIcon');
+            const text = document.getElementById('zoomModeText');
+            if (!btn) return;
+            if (window._globalZoomMode) {
+                btn.classList.add('zoom-global-active');
+                icon.className = 'fas fa-fw fa-expand-arrows-alt text-base';
+                if (text) text.textContent = 'Globálny';
+                btn.title = 'Zoom: Globálny režim – prepnúť na Individuálny';
+            } else {
+                btn.classList.remove('zoom-global-active');
+                icon.className = 'fas fa-fw fa-compress-arrows-alt text-base';
+                if (text) text.textContent = 'Individuálny';
+                btn.title = 'Zoom: Individuálny režim – prepnúť na Globálny';
+            }
+        }
+
+        // Po vyrenderovaní stránky zmeraj skutočnú šírku buttonu v stave
+        // "Individuálny" (dlhší text) a lockni ju ako min-width –
+        // button tak nikdy nezmení rozmer pri prepínaní módov.
+        document.addEventListener('DOMContentLoaded', function () {
+            const btn = document.getElementById('zoomModeToggle');
+            const text = document.getElementById('zoomModeText');
+            if (!btn || !text) return;
+            // Dočasne nastaviť dlhší text, aby sme zmerali max šírku
+            const origText = text.textContent;
+            text.textContent = 'Individuálny';
+            btn.style.minWidth = '';
+            requestAnimationFrame(function () {
+                const w = btn.getBoundingClientRect().width;
+                btn.style.minWidth = w + 'px';
+                text.textContent = origText;
+            });
+        }, { once: true });
+
+        function toggleZoomMode() {
+            window._globalZoomMode = !window._globalZoomMode;
+            localStorage.setItem('mikrotik-zoom-mode', window._globalZoomMode ? 'global' : 'individual');
+            applyZoomModeUI();
+            addDebugLog(`🔀 Zoom mode: ${window._globalZoomMode ? 'GLOBÁLNY' : 'INDIVIDUÁLNY'}`);
+        }
+
+        applyZoomModeUI();
+
         // Export functions to global scope for access from monitoring.js
         window.addCustomZoom = addCustomZoom;
         window.resetZoom = resetZoom;
         window.cleanupAllSelections = cleanupAllSelections;
-        
+
         // Emergency keyboard shortcut for stuck selection boxes
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' || e.key === 'Esc') {
                 cleanupAllSelections();
             }
         });
-        
+
         // Global click event handler for emergency cleanup
         let clickTimeout;
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             // Delay the cleanup to avoid interfering with double-click
             clearTimeout(clickTimeout);
             clickTimeout = setTimeout(() => {
                 // Check if click was outside any chart container
                 const chartContainers = document.querySelectorAll('.chart-container');
                 let isInsideChart = false;
-                
+
                 chartContainers.forEach(container => {
                     if (container.contains(e.target)) {
                         isInsideChart = true;
                     }
                 });
-                
+
                 // Only cleanup if click is outside charts AND no selection is currently active
                 if (!isInsideChart && !window._chartSelectionActive) {
                     cleanupAllSelections();
                 }
             }, 300); // 300ms delay to avoid double-click interference
         });
-        
+
         // Theme toggle event listener
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
         });
-        
+
         // Safe visual time range indication for zoom-in (uses existing active button styling)
         function updateVisualTimeRangeIndicator(minX, maxX) {
             // Only visual indication - does NOT change window.currentTimeRange or affect zoom-out logic
             if (!minX || !maxX) return;
-            
+
             const diffMs = maxX - minX;
             const diffMinutes = diffMs / (1000 * 60);
             const diffHours = diffMs / (1000 * 60 * 60);
             const diffDays = diffHours / 24;
-            
+
             // Determine what time range this zoom level corresponds to visually
             let visualRange = null;
             if (diffMinutes <= 35) {
@@ -3767,7 +4213,7 @@
             } else {
                 visualRange = '1y';
             }
-            
+
             // Store original active button to restore later (only once)
             if (!window._originalActiveButton) {
                 const currentActiveBtn = document.querySelector('.time-range-btn.active');
@@ -3775,24 +4221,24 @@
                     window._originalActiveButton = currentActiveBtn.getAttribute('data-range');
                 }
             }
-            
+
             // Apply visual indication using existing .active class system
             if (visualRange) {
                 updateTimeRangeButtonsVisually(visualRange);
             }
         }
-        
+
         // Enhanced visual time range indication for zoom-out (handles larger ranges properly)
         function updateVisualTimeRangeIndicatorForZoomOut(minX, maxX) {
             // Enhanced logic for zoom-out that properly handles larger time ranges
             if (!minX || !maxX) return;
-            
+
             const diffMs = maxX - minX;
             const diffMinutes = diffMs / (1000 * 60);
             const diffHours = diffMs / (1000 * 60 * 60);
             const diffDays = diffHours / 24;
             const diffMonths = diffDays / 30;
-            
+
             // Enhanced logic with better boundaries for larger ranges
             let visualRange = null;
             if (diffMinutes <= 35) {
@@ -3814,7 +4260,7 @@
             } else {
                 visualRange = '1y';
             }
-            
+
             // Store original active button to restore later (only once)
             if (!window._originalActiveButton) {
                 const currentActiveBtn = document.querySelector('.time-range-btn.active');
@@ -3822,14 +4268,14 @@
                     window._originalActiveButton = currentActiveBtn.getAttribute('data-range');
                 }
             }
-            
+
             // Apply visual indication using existing .active class system
             if (visualRange) {
                 updateTimeRangeButtonsVisually(visualRange);
             }
-            
+
         }
-        
+
         // Helper to visually update time range buttons using existing active styling
         function updateTimeRangeButtonsVisually(visualRange) {
             // Remove active class from all buttons
@@ -3856,7 +4302,7 @@
                 }
             });
         }
-        
+
         // Restore original active button when zoom is reset
         function restoreOriginalVisualTimeRange() {
             // Remove active class from all buttons
@@ -3869,7 +4315,7 @@
                     btn.originalTitle = undefined;
                 }
             });
-            
+
             // Restore original active button
             if (window._originalActiveButton) {
                 const originalBtn = document.querySelector(`[data-range="${window._originalActiveButton}"]`);
@@ -3887,7 +4333,7 @@
                 }
             }
         }
-        
+
         // Force styling on mobile devices - especially for WebView
         function applyMobileSelectStyling() {
             const selects = document.querySelectorAll('select');
@@ -3897,7 +4343,7 @@
                 options.forEach(option => {
                     // Check if we're in light theme
                     const isLightTheme = document.body.classList.contains('light-theme');
-                    
+
                     if (isLightTheme) {
                         option.style.backgroundColor = '#e3edfa';
                         option.style.color = '#334155';
@@ -3906,83 +4352,83 @@
                         option.style.color = '#ffffff';
                     }
                 });
-                
+
                 // Apply styling on focus/click events
-                select.addEventListener('focus', function() {
+                select.addEventListener('focus', function () {
                     setTimeout(() => applyMobileSelectStyling(), 50);
                 });
-                
-                select.addEventListener('click', function() {
+
+                select.addEventListener('click', function () {
                     setTimeout(() => applyMobileSelectStyling(), 50);
                 });
             });
         }
-        
+
         // Apply mobile styling on page load and theme changes
         document.addEventListener('DOMContentLoaded', applyMobileSelectStyling);
-        
+
         // Re-apply when theme changes
         const originalToggleTheme = window.toggleTheme;
         if (originalToggleTheme) {
-            window.toggleTheme = function() {
+            window.toggleTheme = function () {
                 originalToggleTheme();
                 setTimeout(applyMobileSelectStyling, 100);
             };
         }
-        
+
         // Custom Dropdown Functionality
         function initializeCustomDropdown() {
             const container = document.getElementById('deviceSelectorContainer');
             const button = document.getElementById('deviceSelectorButton');
             const dropdown = document.getElementById('deviceSelectorDropdown');
             const textElement = document.getElementById('deviceSelectorText');
-            
+
             if (!container || !button || !dropdown || !textElement) {
                 return;
             }
-            
+
             let selectedValue = '';
-            
+
             // Toggle dropdown
-            button.addEventListener('click', function(e) {
+            button.addEventListener('click', function (e) {
                 e.stopPropagation();
                 container.classList.toggle('open');
             });
-            
+
             // Close dropdown when clicking outside
-            document.addEventListener('click', function(e) {
+            document.addEventListener('click', function (e) {
                 if (!container.contains(e.target)) {
                     container.classList.remove('open');
                 }
             });
-            
+
             // Handle option selection
-            dropdown.addEventListener('click', function(e) {
+            dropdown.addEventListener('click', function (e) {
                 if (e.target.classList.contains('custom-select-option')) {
                     const value = e.target.getAttribute('data-value');
                     const deviceName = e.target.getAttribute('data-name');
                     const deviceIp = e.target.getAttribute('data-ip');
-                    
+
                     // Update selected value
                     selectedValue = value;
-                    
+
                     // Pre mobile verziu v button zobraz len názov, pre PC názov + IP
                     const isMobile = window.innerWidth <= 768;
-                    const buttonText = value ? 
-                        (isMobile ? deviceName : e.target.textContent) : 
+                    const buttonText = value ?
+                        (isMobile ? deviceName : e.target.textContent) :
                         'Vyberte zariadenie...';
-                    
+
                     textElement.textContent = buttonText;
-                    
+
                     // Update visual selection
                     dropdown.querySelectorAll('.custom-select-option').forEach(opt => {
                         opt.classList.remove('selected');
                     });
                     e.target.classList.add('selected');
-                    
+
                     // Close dropdown
                     container.classList.remove('open');
-                    
+
                     // Trigger change event for compatibility
                     if (window._deviceChangeHandler) {
                         window._deviceChangeHandler({
@@ -3991,24 +4437,24 @@
                     }
                 }
             });
-            
+
             // Expose methods for compatibility with existing code
             window.customDeviceSelector = {
-                setValue: function(value) {
+                setValue: function (value) {
                     selectedValue = value;
                     const option = dropdown.querySelector(`[data-value="${value}"]`);
                     if (option) {
                         const deviceName = option.getAttribute('data-name');
                         const deviceIp = option.getAttribute('data-ip');
-                        
+
                         // Pre mobile verziu v button zobraz len názov, pre PC názov + IP
                         const isMobile = window.innerWidth <= 768;
-                        const buttonText = value ? 
-                            (isMobile && deviceName ? deviceName : option.textContent) : 
+                        const buttonText = value ?
+                            (isMobile && deviceName ? deviceName : option.textContent) :
                             'Vyberte zariadenie...';
-                        
+
                         textElement.textContent = buttonText;
-                        
+
                         // Update visual selection
                         dropdown.querySelectorAll('.custom-select-option').forEach(opt => {
                             opt.classList.remove('selected');
@@ -4016,12 +4462,12 @@
                         option.classList.add('selected');
                     }
                 },
-                getValue: function() {
+                getValue: function () {
                     return selectedValue;
                 },
-                populateOptions: function(devices) {
+                populateOptions: function (devices) {
                     dropdown.innerHTML = '<div class="custom-select-option" data-value="">Vyberte zariadenie...</div>';
-                    
+
                     let maxWidth = 0;
                     const tempElement = document.createElement('div');
                     tempElement.style.visibility = 'hidden';
@@ -4029,7 +4475,7 @@
                     tempElement.style.whiteSpace = 'nowrap';
                     tempElement.style.font = getComputedStyle(button).font;
                     document.body.appendChild(tempElement);
-                    
+
                     devices.forEach(device => {
                         const option = document.createElement('div');
                         option.className = 'custom-select-option';
@@ -4037,11 +4483,11 @@
                         option.setAttribute('data-name', device.name);
                         option.setAttribute('data-ip', device.ip);
                         option.setAttribute('data-paused', device.monitoring_paused ? 'true' : 'false');
-                        
+
                         // Use device status from database or default to unknown
                         const status = device.status || 'unknown';
                         const isPaused = device.monitoring_paused;
-                        
+
                         // Generate status indicator
                         let statusIndicator;
                         if (isPaused) {
@@ -4058,22 +4504,22 @@
                                     statusIndicator = '⚪'; // White dot for unknown
                             }
                         }
-                        
+
                         const optionText = `${statusIndicator} ${device.name} (${device.ip})`;
                         option.textContent = optionText;
                         option.dataset.status = status;
                         option.dataset.paused = isPaused;
-                        
+
                         // Measure text width for PC only
                         if (window.innerWidth > 768) {
                             tempElement.textContent = optionText;
                             const textWidth = tempElement.offsetWidth + 60; // Add padding and arrow space
                             maxWidth = Math.max(maxWidth, textWidth);
                         }
-                        
+
                         dropdown.appendChild(option);
                     });
-                    
+
                     document.body.removeChild(tempElement);
                     // Set width with constraints - only for PC
                     if (window.innerWidth > 768) {
@@ -4084,13 +4530,13 @@
                         tempElement2.style.whiteSpace = 'nowrap';
                         tempElement2.style.font = getComputedStyle(button).font;
                         document.body.appendChild(tempElement2);
-                        
+
                         tempElement2.textContent = 'Vyberte zariadenie...';
                         const placeholderWidth = tempElement2.offsetWidth + 60;
                         maxWidth = Math.max(maxWidth, placeholderWidth);
-                        
+
                         document.body.removeChild(tempElement2);
-                        
+
                         const finalWidth = Math.min(Math.max(maxWidth, 280), 500); // Min 280px, Max 500px
                         button.style.width = finalWidth + 'px';
                         dropdown.style.width = finalWidth + 'px';
@@ -4100,17 +4546,17 @@
                         dropdown.style.width = '100%';
                     }
                 },
-                updateDeviceStatus: function(deviceId, status, isPaused = null) {
+                updateDeviceStatus: function (deviceId, status, isPaused = null) {
                     const options = dropdown.querySelectorAll('.custom-select-option[data-value]');
                     let deviceUpdated = false;
-                    
+
                     options.forEach(option => {
                         if (option.getAttribute('data-value') == deviceId) {
                             const deviceName = option.getAttribute('data-name');
                             const deviceIp = option.getAttribute('data-ip');
-                            
+
                             const pausedStatus = isPaused !== null ? isPaused : (option.getAttribute('data-paused') === 'true');
-                            
+
                             // Generate status indicator
                             let statusIndicator;
                             if (pausedStatus) {
@@ -4127,18 +4573,18 @@
                                         statusIndicator = '⚪'; // White dot for unknown
                                 }
                             }
-                            
+
                             option.textContent = `${statusIndicator} ${deviceName} (${deviceIp})`;
                             option.dataset.status = status;
                             option.dataset.paused = pausedStatus;
                             deviceUpdated = true;
-                            
+
                             // OPRAVA: Vždy aktualizuj button text ak je toto zariadenie vybrané
                             if (option.getAttribute('data-value') == selectedValue) {
                                 // Pre mobile verziu v button zobraz len názov, pre PC názov + IP
                                 const isMobile = window.innerWidth <= 768;
-                                const buttonText = isMobile ? 
-                                    `${statusIndicator} ${deviceName}` : 
+                                const buttonText = isMobile ?
+                                    `${statusIndicator} ${deviceName}` :
                                     `${statusIndicator} ${deviceName} (${deviceIp})`;
                                 textElement.textContent = buttonText;
                             }
@@ -4147,13 +4593,13 @@
                 }
             };
         }
-        
+
         // Initialize custom dropdown on page load
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             initializeCustomDropdown();
             applyMobileSelectStyling();
         });
-        
+
         // Fallback: initialize immediately if DOM is already ready
         if (document.readyState === 'loading') {
             // DOM still loading, wait for DOMContentLoaded
@@ -4188,12 +4634,12 @@
         function validatePingInterval(input) {
             const value = parseInt(input.value);
             const errorElement = input.parentElement.querySelector('.ping-interval-error');
-            
+
             // Odstráň existujúcu chybovú správu
             if (errorElement) {
                 errorElement.remove();
             }
-            
+
             // Skontroluj validáciu
             if (input.value !== '' && value > 0 && value < 20) {
                 const error = document.createElement('div');
@@ -4209,11 +4655,11 @@
         function validateRetryInterval(input) {
             const value = parseInt(input.value);
             const errorElement = input.parentElement.querySelector('.retry-interval-error');
-            
+
             if (errorElement) {
                 errorElement.remove();
             }
-            
+
             if (input.value !== '' && value !== 0 && (value < 5 || value > 120)) {
                 const error = document.createElement('div');
                 error.className = 'retry-interval-error text-xs text-red-400 mt-1';
@@ -4226,4 +4672,5 @@
         }
     </script>
 </body>
+
 </html>

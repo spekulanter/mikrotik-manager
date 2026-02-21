@@ -708,11 +708,12 @@
             }
         }
 
-        /* Tlačidlo prepínača témy */
-        .theme-toggle {
+        /* Tlačidlo prepínača témy a zobrazenia */
+        .theme-toggle,
+        .view-toggle-btn {
             padding: 0.5rem;
-            border: 1px solid var(--border-color);
-            background-color: var(--card-bg);
+            border: 1px solid transparent;
+            background-color: transparent;
             color: var(--text-color);
             border-radius: 0.5rem;
             cursor: pointer;
@@ -720,19 +721,25 @@
             font-size: 16px;
             width: 40px;
             height: 40px;
-            display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .theme-toggle:hover {
+        .theme-toggle {
+            display: flex;
+        }
+
+        .theme-toggle:hover,
+        .view-toggle-btn:hover {
             border-color: var(--accent-color);
             background-color: rgba(56, 189, 248, 0.1);
         }
 
-        /* Responsive nastavenia pre theme toggle */
+        /* Responsive nastavenia pre theme a view toggle */
         @media (max-width: 768px) {
-            .theme-toggle {
+
+            .theme-toggle,
+            .view-toggle-btn {
                 width: 36px;
                 height: 36px;
                 font-size: 14px;
@@ -1152,8 +1159,15 @@
             box-shadow: 0 6px 12px rgba(201, 75, 75, 0.16);
         }
 
-        body.light-theme .theme-toggle {
+        body.light-theme .theme-toggle,
+        body.light-theme .view-toggle-btn {
+            color: #64748b;
+        }
+
+        body.light-theme .theme-toggle:hover,
+        body.light-theme .view-toggle-btn:hover {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            color: var(--accent-color);
         }
 
         body.light-theme #logsContainer::-webkit-scrollbar-track {
@@ -1892,10 +1906,15 @@
                 <span class="text-gray-400 text-sm hidden sm:inline">Správa, zálohovanie a monitoring vašich
                     zariadení</span>
             </div>
-            <div class="flex items-center gap-4">
-                <button class="theme-toggle" id="themeToggleBtn" title="Prepnúť tému">
-                    <i class="fas fa-sun" id="theme-icon"></i>
-                </button>
+            <div class="flex items-center justify-between w-auto lg:w-[24rem]">
+                <div class="flex items-center gap-2">
+                    <button id="viewToggleBtn" class="view-toggle-btn hidden md:flex" title="Prepnúť zobrazenie">
+                        <i class="fas fa-list"></i>
+                    </button>
+                    <button class="theme-toggle" id="themeToggleBtn" title="Prepnúť tému">
+                        <i class="fas fa-sun" id="theme-icon"></i>
+                    </button>
+                </div>
                 <div id="userStatus" class="flex items-center gap-2">
                     <!-- Táto časť sa naplní dynamicky cez JavaScript -->
                 </div>
@@ -1939,11 +1958,6 @@
                         <button id="settingsBtn"
                             class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
                             <i class="fas fa-cog"></i> Nastavenia
-                        </button>
-                        <button id="viewToggleBtn"
-                            class="btn bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white px-3 py-2 rounded-lg hidden md:flex items-center gap-2 text-sm"
-                            title="Prepnúť zobrazenie">
-                            <i class="fas fa-list"></i>
                         </button>
                         <button id="activityQuickBtn"
                             class="btn bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm sm:hidden"
@@ -2936,7 +2950,7 @@
                     const data = await api.get('user/status');
                     if (data.username) {
                         document.getElementById('userStatus').innerHTML = `
-                    <span class="text-sm text-gray-400 mr-4 hidden md:inline">Prihlásený ako: <strong class="font-semibold text-gray-200">${data.username}</strong></span>
+                    <span class="text-sm text-gray-400 mr-2 hidden md:inline">Prihlásený: <strong class="font-semibold text-gray-200">${data.username}</strong></span>
                     <div class="flex items-center gap-2 text-sm">
                         <a href="#" id="manageAccountLink" class="text-sky-500 hover:text-sky-400 hover:underline">Upraviť</a>
                         <span class="text-gray-600">|</span>

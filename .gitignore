@@ -4,3 +4,9 @@ __pycache__/
 *.pyo
 *.pyd
 .vscode/settings.json
+
+# AI Assistant files
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+sync-agents.sh

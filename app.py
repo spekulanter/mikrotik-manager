@@ -1266,42 +1266,53 @@ def get_snmp_data(ip, community='public'):
         
         HRPROCESSORLOAD_TABLE = '1.3.6.1.2.1.25.3.3.1.2'
         
-        # CPU friendly processing - malé pauzy medzi OID requestmi
-        # Optimalizované pre offline zariadenia - skrátené timeouty
-        for i, (name, oid) in enumerate(oids.items()):
-            # Pridáme malú pauzu každé 3 OIDy pre zníženie CPU záťaže
-            if i > 0 and i % 3 == 0:
-                time.sleep(0.1)  # 100ms pauza
-                
-            # Skrátené timeouty pre rýchlejšie detekciu offline zariadení: 2s timeout, 1 pokus
-            errorIndication, errorStatus, _, varBinds = next(getCmd(SnmpEngine(),CommunityData(community,mpModel=0),UdpTransportTarget((ip,161),timeout=2,retries=1),ContextData(),ObjectType(ObjectIdentity(oid))))
-            
-            if errorIndication or errorStatus: 
+        object_types = [ObjectType(ObjectIdentity(oid)) for oid in oids.values()]
+        
+        # Jeden hromadný SNMPv2c (mpModel=1) dopyt pre všetky hodnoty naraz
+        # Odstránená umelá pauza, prenos letí v 1 balíku
+        errorIndication, errorStatus, errorIndex, varBinds = next(
+            getCmd(
+                SnmpEngine(),
+                CommunityData(community, mpModel=1), # v2c je ideálne pre bulk requesty
+                UdpTransportTarget((ip, 161), timeout=2, retries=1),
+                ContextData(),
+                *object_types
+            )
+        )
+        
+        if errorIndication or errorStatus:
+            # Handler pre offline zariadenie (alebo blokovaný SNMP)
+            for name in oids.keys():
                 results[name] = 'N/A'
-                # Early exit pre offline zariadenia - ak zlyhá uptime (prvý kritický test), nemusíme testovať ďalšie OIDy
-                if name == 'uptime':
-                    # Vyplníme zostávajúce hodnoty ako N/A a skončíme
-                    for remaining_name in list(oids.keys())[i+1:]:
-                        results[remaining_name] = 'N/A'
-                    break
-            else:
-                val = varBinds[0][1]
-                if name == 'uptime':
-                    seconds = int(float(val) / 100.0)
-                    td = timedelta(seconds=seconds)
-                    results[name] = f"{td.days}d {td.seconds//3600}h {(td.seconds//60)%60}m"
-                    results['uptime_seconds'] = str(seconds)
-                elif name == 'temperature': 
-                    results[name] = str(int(int(val)/10.0))
-                elif name in ['used_memory', 'total_memory']:
-                    # Memory hodnoty sú v KB, konvertujeme na MB
-                    try:
+            results['uptime_seconds'] = '0'
+        else:
+            for i, (name, oid) in enumerate(oids.items()):
+                val = varBinds[i][1]
+                val_str = str(val)
+                # V SNMPv2c môže chýbajúce OID (napr. chýbajúci senzor teploty) vrátiť NoSuchInstance
+                if 'NoSuch' in val_str or val_str == '':
+                    results[name] = 'N/A'
+                    if name == 'uptime':
+                        results['uptime_seconds'] = '0'
+                    continue
+                
+                try:
+                    if name == 'uptime':
+                        seconds = int(float(val) / 100.0)
+                        td = timedelta(seconds=seconds)
+                        results[name] = f"{td.days}d {td.seconds//3600}h {(td.seconds//60)%60}m"
+                        results['uptime_seconds'] = str(seconds)
+                    elif name == 'temperature': 
+                        results[name] = str(int(int(val)/10.0))
+                    elif name in ['used_memory', 'total_memory']:
                         mb_value = int(val) / 1024
-                        results[name] = str(round(mb_value))  # Zaokrúhlenie na celé MB
-                    except:
-                        results[name] = 'N/A'
-                else: 
-                    results[name] = str(val)
+                        results[name] = str(round(mb_value))
+                    else: 
+                        results[name] = str(val)
+                except Exception:
+                    results[name] = 'N/A'
+                    if name == 'uptime':
+                        results['uptime_seconds'] = '0'
         
         # Ak zariadenie odpovedalo (máme uptime), dopočítame CPU count a priemerný load zo štandardnej tabuľky hrProcessorLoad
         if results.get('uptime') and results.get('uptime') != 'N/A':
@@ -1310,7 +1321,7 @@ def get_snmp_data(ip, community='public'):
                 core_count = 0
                 for (errInd, errStat, _, varBinds) in nextCmd(
                     SnmpEngine(),
-                    CommunityData(community, mpModel=0),
+                    CommunityData(community, mpModel=1),
                     UdpTransportTarget((ip, 161), timeout=2, retries=1),
                     ContextData(),
                     ObjectType(ObjectIdentity(HRPROCESSORLOAD_TABLE)),

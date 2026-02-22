@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="sk">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Aktualizátor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --main-bg: #111827;
+            --card-bg: #1f2937;
+            --border-color: #374151;
+            --text-color: #d1d5db;
+            --accent-color: #38bdf8;
+            --accent-color-hover: #0ea5e9;
+            --success-color: #4ade80;
+            --warning-color: #facc15;
+            --danger-color: #f87171;
+        }
+
+        body {
+            background-color: var(--main-bg);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+
+        .main-container {
+            margin: 20px auto;
+            max-width: 1400px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+        }
+
+        .header-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+            gap: 10px;
+        }
+
+        .btn-back {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .btn-back:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+        }
+
+        .btn-refresh {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: white;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-refresh:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-refresh.loading i {
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+
+        .info-card {
+            background-color: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-container {
+            background-color: #111827;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            overflow-x: auto;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+            min-width: 1000px;
+        }
+
+        .table thead th {
+            background-color: var(--card-bg);
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--border-color);
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .table tbody tr:hover {
+            background-color: rgba(56, 189, 248, 0.05);
+        }
+
+        .table tbody td {
+            padding: 12px 16px;
+            font-size: 14px;
+            vertical-align: middle;
+        }
+
+        .action-btn {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .action-btn:hover {
+            border-color: var(--accent-color);
+            color: white;
+            background-color: rgba(56, 189, 248, 0.1);
+        }
+
+        .action-btn.primary {
+            background-color: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        .action-btn.primary:hover {
+            background-color: var(--accent-color-hover);
+        }
+
+        .action-btn.danger {
+            background-color: transparent;
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+        }
+
+        .action-btn.danger:hover {
+            background-color: rgba(248, 113, 113, 0.1);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .cert-inputs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .cert-inputs input {
+            background-color: #111827;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            width: 70px;
+            font-size: 13px;
+        }
+
+        /* Light Theme Styles */
+        body.light-theme {
+            --main-bg: #cddbf2;
+            --card-bg: #deeafa;
+            --border-color: #b8c9e6;
+            --text-color: #1f2937;
+            --accent-color: #0369a1;
+            --accent-color-hover: #0284c7;
+            --success-color: #059669;
+            --danger-color: #dc2626;
+        }
+
+        body.light-theme .table-container,
+        body.light-theme input {
+            background-color: #deeafa;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        pre.changelog {
+            white-space: pre-wrap;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            color: var(--text-color);
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        body.light-theme pre.changelog {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <div class="header-actions">
+            <button id="refreshDevicesBtn" class="btn-refresh" onclick="refreshDevices()"
+                title="Obnoviť stav zariadení">
+                <i class="fas fa-sync"></i>
+                <span>Obnoviť</span>
+            </button>
+            <button id="themeToggle" class="btn-back" onclick="toggleTheme()" title="Prepnúť tému">
+                <i class="fas fa-moon"></i>
+            </button>
+            <a href="/" class="btn-back">
+                <i class="fas fa-arrow-left"></i>
+                <span>Späť</span>
+            </a>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="font-size: 2.2rem; font-weight: 600; color: var(--accent-color); margin-bottom: 10px;">
+                <i class="fa-solid fa-arrows-rotate"></i> MikroTik Aktualizátor
+            </h1>
+            <p style="color: #9ca3af;">Verzie RouterOS, Firmware a konfigurácia SSL Certifikátov</p>
+        </div>
+
+        <div class="info-card" id="rssInfoCard">
+            <div>
+                <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: var(--accent-color);">
+                    Najnovšia verzia (z mikrotik.com)</h3>
+                <p id="rssLatestVersion">Načítavam dáta z RSS feedu...</p>
+            </div>
+            <div>
+                <button onclick="openChangelogModal()" class="action-btn primary" id="btnShowChangelog"
+                    style="display:none;">
+                    <i class="fas fa-list-alt"></i> Zobraziť Changelog
+                </button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th width="15%">Zariadenie / IP</th>
+                        <th width="10%">Status</th>
+                        <th width="20%">RouterOS verzia</th>
+                        <th width="20%">Firmware (RouterBOARD)</th>
+                        <th width="35%">Akcie</th>
+                    </tr>
+                </thead>
+                <tbody id="devicesTableBody">
+                    <tr>
+                        <td colspan="5" style="text-align:center; padding: 30px;">
+                            <div style="display:inline-block; margin-bottom: 10px;" class="loading-spinner"></div><br>
+                            Načítavam zoznam zariadení z databázy...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modálne okno pre Changelog -->
+    <div id="changelogModal" class="modal-overlay" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="font-size: 1.3rem; font-weight: 600; color: var(--accent-color);" id="modalTitle">Changelog
+                </h2>
+                <button onclick="closeModal()"
+                    style="background:none; border:none; color:var(--text-color); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <pre class="changelog" id="modalContent">Načítavam...</pre>
+        </div>
+    </div>
+
+    <script>
+        let rssData = null;
+        let devicesList = [];
+        let deviceDataMap = {};
+
+        // Theme management
+        function toggleTheme() {
+            const body = document.body;
+            body.classList.toggle('light-theme');
+            const isLight = body.classList.contains('light-theme');
+            localStorage.setItem('mikrotik_theme', isLight ? 'light' : 'dark');
+            const icon = document.querySelector('#themeToggle i');
+            icon.className = isLight ? 'fas fa-sun' : 'fas fa-moon';
+        }
+
+        // INIT
+        document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('mikrotik_theme') === 'light') {
+                document.body.classList.add('light-theme');
+                document.querySelector('#themeToggle i').className = 'fas fa-sun';
+            }
+            fetchRssData();
+            fetchDevices();
+        });
+
+        async function fetchRssData() {
+            try {
+                const res = await fetch('/api/updater/rss');
+                const json = await res.json();
+                if (json.status === 'success' && json.data.latest) {
+                    rssData = json.data.latest;
+                    document.getElementById('rssLatestVersion').innerHTML = `<strong>RouterOS ${rssData.version}</strong> (Vydané: ${rssData.pubDate})`;
+                    document.getElementById('btnShowChangelog').style.display = 'inline-flex';
+                } else {
+                    document.getElementById('rssLatestVersion').innerText = 'Nepodarilo sa načítať stabilnú verziu z RSS.';
+                }
+            } catch (err) {
+                document.getElementById('rssLatestVersion').innerText = 'Chyba API pri načítaní RSS.';
+            }
+        }
+
+        function openChangelogModal() {
+            if (rssData) {
+                document.getElementById('modalTitle').innerText = rssData.title;
+                // RSS contains HTML sometimes, we strip or set innerHTML depending on format
+                // the description string in MK RSS is plain text nicely formatted so innerText/textContent works best.
+                const div = document.createElement('div');
+                div.innerHTML = rssData.description; // it might contain <br> tags
+                document.getElementById('modalContent').innerHTML = div.innerHTML;
+                document.getElementById('changelogModal').style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeModal(e) {
+            if (e && e.target !== document.getElementById('changelogModal')) return;
+            document.getElementById('changelogModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        async function fetchDevices() {
+            try {
+                const res = await fetch('/api/devices');
+                const devices = await res.json();
+                devicesList = devices;
+                renderTableShells();
+                devices.forEach(d => fetchDeviceDetails(d.id));
+            } catch (err) {
+                document.getElementById('devicesTableBody').innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger-color);">Chyba pri načítaní databázy zariadení.</td></tr>`;
+            }
+        }
+
+        async function refreshDevices() {
+            const btn = document.getElementById('refreshDevicesBtn');
+            btn.classList.add('loading');
+            btn.disabled = true;
+
+            // Resetuj stavové bunky na "Načítavam..."
+            devicesList.forEach(d => {
+                const statusEl = document.getElementById(`status-${d.id}`);
+                const osEl = document.getElementById(`os-${d.id}`);
+                const fwEl = document.getElementById(`fw-${d.id}`);
+                if (statusEl) statusEl.innerHTML = `<span style="color:#9ca3af"><i class="fas fa-spinner fa-spin"></i> Načítavam...</span>`;
+                if (osEl) osEl.innerHTML = `<span style="color:#9ca3af">...</span>`;
+                if (fwEl) fwEl.innerHTML = `<span style="color:#9ca3af">...</span>`;
+            });
+
+            // Re-fetch detailov pre všetky zariadenia
+            await Promise.all(devicesList.map(d => fetchDeviceDetails(d.id)));
+
+            btn.classList.remove('loading');
+            btn.disabled = false;
+        }
+
+
+        function renderTableShells() {
+            const tbody = document.getElementById('devicesTableBody');
+            tbody.innerHTML = '';
+            devicesList.forEach(dev => {
+                const tr = document.createElement('tr');
+                tr.id = `row-${dev.id}`;
+                tr.innerHTML = `
+                    <td>
+                        <strong>${dev.name}</strong><br>
+                        <span style="color:#9ca3af; font-size:12px;">${dev.ip}</span>
+                    </td>
+                    <td id="status-${dev.id}">
+                        <span class="loading-spinner" style="width:12px; height:12px; border-width: 2px;"></span> Zisťujem
+                    </td>
+                    <td id="os-${dev.id}">Načítavam...</td>
+                    <td id="fw-${dev.id}">Načítavam...</td>
+                    <td>
+                        <!-- Akcie prázdne kým nenačíta dáta -->
+                        <div id="actions-${dev.id}" style="display:flex; flex-wrap:wrap; gap:8px; opacity:0.5;">
+                            Čaká sa na spojenie...
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function fetchDeviceDetails(id) {
+            try {
+                const res = await fetch(`/api/updater/device/${id}`);
+                if (!res.ok) throw new Error('API Chyba');
+                const data = await res.json();
+                deviceDataMap[id] = data;
+
+                if (data.status === 'success') {
+                    let statusHtml = `<span style="color:var(--success-color)"><i class="fas fa-check-circle"></i> Online</span>`;
+                    if (!data.ssl_ok) {
+                        statusHtml += `<br><span style="color:var(--warning-color); font-size:11px;"><i class="fas fa-exclamation-triangle"></i> Bez TLS certifikátu</span>`;
+                    }
+                    document.getElementById(`status-${id}`).innerHTML = statusHtml;
+
+                    document.getElementById(`os-${id}`).innerHTML = `
+                        Nainštalovaná: <strong>${data.os['installed-version']}</strong><br>
+                        Dostupná: <strong style="${data.os['installed-version'] !== data.os['latest-version'] ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${data.os['latest-version']}</strong>
+                    `;
+
+                    document.getElementById(`fw-${id}`).innerHTML = `
+                        Nainštalovaný: <strong>${data.firmware['current-firmware']}</strong><br>
+                        Upgrade prep: <strong style="${data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'] ? 'color:var(--warning-color)' : 'color:var(--success-color)'}">${data.firmware['upgrade-firmware']}</strong><br>
+                        <span style="font-size:11px; color:#9ca3af;">Model: ${data.firmware['model']}</span>
+                    `;
+
+                    renderActions(id, data);
+                } else {
+                    document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
+                    document.getElementById(`os-${id}`).innerHTML = `Chyba spojenia API`;
+                    document.getElementById(`fw-${id}`).innerHTML = `N/A`;
+                    document.getElementById(`actions-${id}`).innerHTML = `Nemožno vykonať akcie (Zariadenie nedostupné)`;
+                }
+            } catch (err) {
+                document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
+                document.getElementById(`os-${id}`).innerHTML = `N/A`;
+                document.getElementById(`fw-${id}`).innerHTML = `N/A`;
+                document.getElementById(`actions-${id}`).innerHTML = `Nemožno vykonať akcie (Zariadenie nedostupné)`;
+            }
+        }
+
+        function renderActions(id, data) {
+            const hasOsUpdate = data.os['installed-version'] !== 'N/A' && data.os['installed-version'] !== data.os['latest-version'];
+            const hasFwUpdate = data.firmware['current-firmware'] !== 'N/A' && data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'];
+            const noSsl = !data.ssl_ok;
+
+            let html = `
+                <button onclick="apiCall('/api/updater/install-os/${id}', this)" class="action-btn ${hasOsUpdate ? 'primary' : ''}">
+                    <i class="fas fa-download"></i> Update OS
+                </button>
+                <button onclick="apiCall('/api/updater/install-firmware/${id}', this)" class="action-btn ${hasFwUpdate ? 'primary' : ''}">
+                    <i class="fas fa-microchip"></i> Update Firmware
+                </button>
+                <button onclick="rebootDevice(${id}, this)" class="action-btn danger">
+                    <i class="fas fa-power-off"></i> Reštart
+                </button>
+                <div style="width:100%; height:4px;"></div>
+                <div class="cert-inputs">
+                    <input type="number" id="cert-days-${id}" value="365" min="1" max="3650" title="Dĺžka platnosti v dňoch"> dní
+                    <button onclick="renewSSL(${id}, this)" class="action-btn ${noSsl ? 'danger' : ''}" style="margin-left: 5px;">
+                        <i class="fas fa-shield-alt"></i> ${noSsl ? 'Vytvoriť TLS Cert ⚠️' : 'Obnoviť TLS Cert'}
+                    </button>
+                </div>
+            `;
+            document.getElementById(`actions-${id}`).style.opacity = '1';
+            document.getElementById(`actions-${id}`).innerHTML = html;
+        }
+
+        async function apiCall(endpoint, btn) {
+            const prevHtml = btn.innerHTML;
+            btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`;
+            btn.disabled = true;
+            try {
+                const res = await fetch(endpoint, { method: 'POST' });
+                const json = await res.json();
+                if (json.status === 'success') {
+                    alert('Úspech: ' + json.message);
+                } else {
+                    alert('Chyba: ' + (json.message || 'Neznáma chyba'));
+                }
+            } catch (err) {
+                alert('Chyba siete: ' + err.message);
+            } finally {
+                btn.innerHTML = prevHtml;
+                btn.disabled = false;
+            }
+        }
+
+        async function rebootDevice(id, btn) {
+            if (!confirm("Skutočne chcete reštartovať (reboot) toto zariadenie?")) return;
+            apiCall(`/api/updater/reboot/${id}`, btn);
+        }
+
+        async function renewSSL(id, btn) {
+            const prevHtml = btn.innerHTML;
+            btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`;
+            btn.disabled = true;
+
+            const days = document.getElementById(`cert-days-${id}`).value;
+            try {
+                const res = await fetch(`/api/updater/certificate/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: parseInt(days) })
+                });
+                const json = await res.json();
+                if (json.status === 'success') {
+                    alert('Úspech: ' + json.message);
+                } else {
+                    alert('Chyba: ' + (json.message || 'Neznáma chyba API'));
+                }
+            } catch (err) {
+                alert('Chyba siete pri obnove SSL certifikátu: ' + err.message);
+            } finally {
+                btn.innerHTML = prevHtml;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1134,6 +1134,19 @@
             color: #0f172a !important;
         }
 
+        body.light-theme .bg-violet-600 {
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6) !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(139, 92, 246, 0.2);
+            border: none !important;
+        }
+
+        body.light-theme .bg-violet-600:hover,
+        body.light-theme .hover\:bg-violet-700:hover {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+            box-shadow: 0 6px 12px rgba(124, 58, 237, 0.22);
+        }
+
         body.light-theme .bg-amber-500 {
             background: linear-gradient(135deg, #ffd36a, #f2b94a) !important;
             color: #0f172a !important;
@@ -1953,12 +1966,18 @@
                         </button>
                         <button id="viewBackupsBtn"
                             class="btn bg-slate-500 hover:bg-slate-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
-                            onclick="window.location.href='/backups'">
+                            onclick="window.location.href='/backups.html'">
                             <i class="fas fa-archive"></i> Zálohy
                         </button>
+                        <button id="updaterBtn"
+                            class="btn bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                            onclick="window.location.href='/updater.html'">
+                            <i class="fas fa-arrows-rotate"></i> Aktualizátor
+                        </button>
                         <button id="settingsBtn"
-                            class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
-                            <i class="fas fa-cog"></i> Nastavenia
+                            class="btn bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg flex items-center text-sm"
+                            title="Nastavenia" aria-label="Nastavenia">
+                            <i class="fas fa-cog"></i>
                         </button>
                         <button id="activityQuickBtn"
                             class="btn bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm sm:hidden"
@@ -4190,6 +4209,12 @@
 
             document.getElementById('addDeviceBtn').addEventListener('click', () => openDeviceModal());
             document.getElementById('settingsBtn').addEventListener('click', () => window.location.href = '/settings.html');
+            document.getElementById('monitoringBtn').addEventListener('click', () => {
+                window.location.href = '/monitoring.html';
+            });
+            document.getElementById('updaterBtn').addEventListener('click', () => {
+                window.location.href = '/updater.html';
+            });
             document.getElementById('cancelDeviceBtn').addEventListener('click', closeModal);
             document.getElementById('cancelSettingsBtn').addEventListener('click', closeModal);
             document.getElementById('cancelAccountManageBtn').addEventListener('click', closeModal);

@@ -34,6 +34,8 @@ import schedule
 import heapq
 import itertools
 from concurrent.futures import ThreadPoolExecutor
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -43,6 +45,8 @@ import base64
 from io import BytesIO
 from cryptography.fernet import Fernet
 import base64 as b64
+import requests
+import xml.etree.ElementTree as ET
 
 # --- Definície adresárov pred konfiguráciou aplikácie ---
 DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
@@ -1976,6 +1980,311 @@ def delete_backup(filename):
         logger.error(f"Chyba pri vymazávaní záložného súboru '{filename}': {e}")
         add_log('error', f"Chyba pri vymazávaní záložného súboru {filename}: {e}")
         return jsonify({'status': 'error', 'message': f'Chyba pri vymazávaní súboru: {str(e)}'}), 500
+
+# --- UPDATER FUNCTIONS ---
+
+RSS_CACHE = {'timestamp': 0, 'data': None}
+RSS_CACHE_DURATION = 3600 # 1 hour
+
+def fetch_mikrotik_rss():
+    global RSS_CACHE
+    now = time.time()
+    if now - RSS_CACHE['timestamp'] < RSS_CACHE_DURATION and RSS_CACHE['data']:
+        return RSS_CACHE['data']
+        
+    try:
+        response = requests.get('https://mikrotik.com/download.rss', timeout=10)
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+        
+        namespaces = {'content': 'http://purl.org/rss/1.0/modules/content/'}
+        items = []
+        for item in root.findall('./channel/item'):
+            title_el = item.find('title')
+            desc_el = item.find('description')
+            content_el = item.find('content:encoded', namespaces)
+            
+            if title_el is not None:
+                title = title_el.text or ''
+                if '[stable]' in title.lower():
+                    version_match = re.search(r'RouterOS ([\d\.]+) \[stable\]', title, re.IGNORECASE)
+                    version = version_match.group(1) if version_match else title.replace('RouterOS ', '').replace(' [stable]', '').replace(' [Stable]', '')
+                    
+                    desc = ''
+                    if content_el is not None and content_el.text:
+                        desc = content_el.text
+                    elif desc_el is not None and desc_el.text:
+                        desc = desc_el.text
+                        
+                    items.append({
+                        'title': title,
+                        'version': version,
+                        'description': desc,
+                        'pubDate': item.find('pubDate').text if item.find('pubDate') is not None else ''
+                    })
+        
+        latest = items[0] if items else None
+        
+        result = {'items': items, 'latest': latest}
+        RSS_CACHE['data'] = result
+        RSS_CACHE['timestamp'] = now
+        return result
+    except Exception as e:
+        logger.error(f"Failed to fetch MikroTik RSS: {e}")
+        return None
+
+def mk_api(device_id, method, endpoint, payload=None, timeout_val=20):
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if not device:
+        return None, {'status': 'error', 'message': 'Zariadenie nenájdené.'}, 404
+        
+    device = get_device_with_decrypted_password(dict(device))
+    ip = device['ip']
+    username = device['username']
+    password = device['password']
+    
+    # Skúsime najprv HTTPS, ak zlyhá (napr. zariadenie nemá certifikát), fallback na HTTP
+    for scheme in ['https', 'http']:
+        url = f"{scheme}://{ip}/rest/{endpoint.lstrip('/')}"
+        try:
+            response = requests.request(
+                method=method,
+                url=url,
+                auth=(username, password),
+                json=payload,
+                verify=False,
+                timeout=timeout_val
+            )
+            if response.status_code in [200, 201, 202]:
+                try:
+                    return response.json(), None, response.status_code
+                except:
+                    return response.text, None, response.status_code
+            else:
+                err_msg = response.text
+                try:
+                    err_json = response.json()
+                    if 'detail' in err_json:
+                        err_msg = err_json['detail']
+                except:
+                    pass
+                return None, {'status': 'error', 'message': f'Chyba API ({response.status_code}): {err_msg}'}, response.status_code
+        except Exception as e:
+            if scheme == 'https':
+                continue  # HTTPS zlyhalo, skúsime HTTP
+            return None, {'status': 'error', 'message': f'Chyba spojenia: {str(e)}'}, 500
+    
+    return None, {'status': 'error', 'message': 'Zariadenie nedostupné cez HTTPS ani HTTP.'}, 500
+
+@app.route('/updater.html')
+@login_required
+def updater_page():
+    if not current_user.totp_enabled:
+        return redirect(url_for('setup_2fa'))
+    return send_from_directory('.', 'updater.html')
+
+@app.route('/api/updater/rss')
+@login_required
+def api_updater_rss():
+    data = fetch_mikrotik_rss()
+    if data:
+        return jsonify({'status': 'success', 'data': data})
+    return jsonify({'status': 'error', 'message': 'Nepodarilo sa načítať RSS.'}), 500
+
+@app.route('/api/updater/device/<int:device_id>')
+@login_required
+def api_updater_device(device_id):
+    # OS Version Check
+    os_data, err, code = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
+    if err: return jsonify(err), code
+    
+    os_info = {}
+    if isinstance(os_data, list) and len(os_data) > 0:
+        os_info = os_data[-1]
+    elif isinstance(os_data, dict):
+        os_info = os_data
+        
+    # Firmware Version Check
+    fw_data, err2, code2 = mk_api(device_id, 'GET', 'system/routerboard')
+    fw_info = {}
+    if not err2:
+        if isinstance(fw_data, list) and len(fw_data) > 0:
+            fw_info = fw_data[0]
+        elif isinstance(fw_data, dict):
+            fw_info = fw_data
+    
+    # Kontrola HTTPS dostupnosti (či zariadenie má platný certifikát)
+    ssl_ok = False
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if device:
+        device_dec = get_device_with_decrypted_password(dict(device))
+        try:
+            requests.get(f"https://{device_dec['ip']}/rest/system/identity",
+                        auth=(device_dec['username'], device_dec['password']),
+                        verify=False, timeout=3)
+            ssl_ok = True
+        except:
+            pass
+            
+    return jsonify({
+        'status': 'success',
+        'ssl_ok': ssl_ok,
+        'os': {
+            'installed-version': os_info.get('installed-version', 'N/A'),
+            'latest-version': os_info.get('latest-version', 'N/A'),
+            'status': os_info.get('status', 'N/A'),
+            'channel': os_info.get('channel', 'N/A')
+        },
+        'firmware': {
+            'current-firmware': fw_info.get('current-firmware', 'N/A'),
+            'upgrade-firmware': fw_info.get('upgrade-firmware', 'N/A'),
+            'model': fw_info.get('model', 'N/A'),
+            'board-name': fw_info.get('board-name', 'N/A')
+        }
+    })
+
+@app.route('/api/updater/install-os/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_install_os(device_id):
+    data, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
+    if err:
+        return jsonify(err), code
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if device:
+        add_log('INFO', 'Spustená aktualizácia RouterOS.', device_ip=device['ip'])
+    
+    return jsonify({'status': 'success', 'message': 'Aktualizácia OS spustená. Zariadenie sa reštartuje.'})
+
+@app.route('/api/updater/install-firmware/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_install_firmware(device_id):
+    data, err, code = mk_api(device_id, 'POST', 'system/routerboard/upgrade')
+    if err: return jsonify(err), code
+    
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if device:
+        add_log('INFO', 'Správa o upgrade firmvéru odoslaná, čaká sa na ručný reštart.', device_ip=device['ip'])
+        
+    return jsonify({'status': 'success', 'message': 'Firmware upgrade pripravený v pamäti. Následne vykonajte reštart.'})
+
+@app.route('/api/updater/reboot/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_reboot(device_id):
+    data, err, code = mk_api(device_id, 'POST', 'system/reboot')
+    if err: return jsonify(err), code
+    
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if device:
+        add_log('INFO', 'Príkaz na reštart úspešne odoslaný.', device_ip=device['ip'])
+        
+    return jsonify({'status': 'success', 'message': 'Príkaz na reštart úspešne odoslaný.'})
+
+@app.route('/api/updater/certificate/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_certificate(device_id):
+    data = request.json or {}
+    days = data.get('days', 365)
+    
+    logger.info(f"[{device_id}] Starting SSL certificate regeneration for {days} days.")
+    
+    # Získanie údajov zariadenia
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if not device:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+    
+    device_dec = get_device_with_decrypted_password(dict(device))
+    ip = device_dec['ip']
+    username = device_dec['username']
+    password = device_dec['password']
+    
+    # Pomocná funkcia - volanie cez HTTP (port 80) namiesto HTTPS
+    # Dôvod: keď odstránime starý certifikát z www-ssl, HTTPS sa úplne rozpadne
+    # a všetky následné HTTPS requesty zlyhajú na SSLZeroReturnError.
+    # HTTP port 80 funguje vždy spoľahlivo.
+    def http_api(method, endpoint, payload=None, timeout=20):
+        url = f"http://{ip}/rest/{endpoint.lstrip('/')}"
+        try:
+            r = requests.request(method, url, auth=(username, password), json=payload, timeout=timeout)
+            if r.status_code in [200, 201, 202]:
+                try:
+                    return r.json(), None
+                except:
+                    return r.text, None
+            else:
+                err_msg = r.text
+                try:
+                    ej = r.json()
+                    if 'detail' in ej:
+                        err_msg = ej['detail']
+                except:
+                    pass
+                return None, f'API chyba ({r.status_code}): {err_msg}'
+        except Exception as e:
+            return None, f'Chyba spojenia: {str(e)}'
+    
+    # 1. Odstránenie starého certifikátu (ignorujeme chybu ak neexistuje)
+    http_api('POST', 'certificate/remove', {'numbers': 'WebCert'})
+    time.sleep(2)
+    
+    # 2. Pridanie nového certifikátu
+    res, err = http_api('POST', 'certificate/add', {
+        'name': 'WebCert',
+        'common-name': 'WebCert',
+        'days-valid': str(days)
+    }, timeout=30)
+    if err:
+        return jsonify({'status': 'error', 'message': f'Chyba pri pridaní certifikátu: {err}'}), 500
+    
+    time.sleep(3)
+    
+    # 3. Zistenie interného .id certifikátu (REST API vyžaduje .id namiesto mena)
+    cert_id = None
+    for attempt in range(5):
+        res, err = http_api('GET', 'certificate?name=WebCert')
+        if not err and isinstance(res, list) and len(res) > 0:
+            cert_id = res[0].get('.id')
+            if cert_id:
+                break
+        time.sleep(2)
+    
+    if not cert_id:
+        return jsonify({'status': 'error', 'message': 'Nepodarilo sa získať ID certifikátu na podpísanie.'}), 500
+    
+    # 4. Podpísanie certifikátu
+    res, err = http_api('POST', 'certificate/sign', {'number': cert_id}, timeout=30)
+    
+    # Overenie, či bol certifikát podpísaný (trusted=true, RouterBOARD môže trvať 5-15s)
+    signed = False
+    for attempt in range(6):
+        time.sleep(3)
+        res, err = http_api('GET', f'certificate/{cert_id}')
+        if isinstance(res, dict) and res.get('trusted') == 'true':
+            signed = True
+            break
+    
+    if not signed:
+        return jsonify({'status': 'error', 'message': 'Certifikát sa nepodarilo podpísať v časovom limite.'}), 500
+    
+    # 5. Aktivácia certifikátu pre www-ssl službu
+    res, err = http_api('POST', 'ip/service/set', {
+        'numbers': 'www-ssl',
+        'certificate': 'WebCert',
+        'disabled': 'no'
+    })
+    
+    if err:
+        return jsonify({'status': 'error', 'message': f'Chyba pri nastavení služby www-ssl: {err}'}), 500
+    
+    add_log('INFO', f'Nový SSL certifikát vygenerovaný ({days} dní) a aplikovaný na www-ssl.', device_ip=ip)
+    return jsonify({'status': 'success', 'message': f'Certifikát úspešne vygenerovaný ({days} dní) a aplikovaný.'})
+
+
 
 @app.route('/')
 @login_required

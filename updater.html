@@ -445,6 +445,98 @@
             text-align: center;
         }
 
+        /* ── Table row checkboxes (device list + select-all) ──────────────────── */
+        .device-select-cb,
+        #selectAllCb {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 17px;
+            height: 17px;
+            background-color: var(--card-bg);
+            border: 1.5px solid var(--border-color);
+            border-radius: 4px;
+            display: inline-grid;
+            place-content: center;
+            cursor: pointer;
+            margin: 0;
+            transition: border-color 0.18s, background-color 0.18s, box-shadow 0.18s;
+            flex-shrink: 0;
+            vertical-align: middle;
+        }
+
+        .device-select-cb:hover,
+        #selectAllCb:hover {
+            border-color: var(--success-color);
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15);
+        }
+
+        .device-select-cb::before,
+        #selectAllCb::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            transform: scale(0);
+            transition: 140ms transform ease-in-out;
+            background-color: var(--success-color);
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .device-select-cb:checked,
+        #selectAllCb:checked {
+            background-color: rgba(74, 222, 128, 0.12);
+            border-color: var(--success-color);
+        }
+
+        .device-select-cb:checked::before,
+        #selectAllCb:checked::before {
+            transform: scale(1);
+        }
+
+        /* Indeterminate – "vybrať všetky" keď sú niektoré zaškrtnuté */
+        #selectAllCb:indeterminate {
+            background-color: rgba(74, 222, 128, 0.08);
+            border-color: var(--success-color);
+        }
+
+        #selectAllCb:indeterminate::before {
+            transform: scale(1);
+            clip-path: polygon(0 38%, 100% 38%, 100% 62%, 0 62%);
+            background-color: var(--success-color);
+        }
+
+        /* Light theme variants */
+        body.light-theme .device-select-cb,
+        body.light-theme #selectAllCb {
+            background-color: #f9fafb;
+            border-color: #d1d5db;
+        }
+
+        body.light-theme .device-select-cb:hover,
+        body.light-theme #selectAllCb:hover {
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+        }
+
+        body.light-theme .device-select-cb:checked,
+        body.light-theme #selectAllCb:checked {
+            background-color: rgba(22, 163, 74, 0.08);
+            border-color: #16a34a;
+        }
+
+        body.light-theme .device-select-cb:checked::before,
+        body.light-theme #selectAllCb:checked::before {
+            background-color: #16a34a;
+        }
+
+        body.light-theme #selectAllCb:indeterminate {
+            background-color: rgba(22, 163, 74, 0.06);
+            border-color: #16a34a;
+        }
+
+        body.light-theme #selectAllCb:indeterminate::before {
+            background-color: #16a34a;
+        }
+
         /* Dropdown custom checkbox */
         .dropdown-checkbox {
             appearance: none;
@@ -483,6 +575,37 @@
         .dropdown-checkbox:checked::before {
             transform: scale(1);
         }
+
+        /* ── Version-check toast notification ─────────────────────────────────── */
+        .update-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(0);
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: #d1d5db;
+            font-size: 14px;
+            z-index: 9999;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 520px;
+            animation: toastIn 0.25s ease;
+            pointer-events: none;
+        }
+
+        .update-toast.info  { border-color: #3b82f6; }
+        .update-toast.success { border-color: #4ade80; }
+        .update-toast.warning { border-color: #facc15; }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+            to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
     </style>
 </head>
 
@@ -493,6 +616,9 @@
                 title="Obnoviť stav zariadení">
                 <i class="fas fa-sync"></i>
                 <span>Obnoviť</span>
+            </button>
+            <button onclick="window.location.href='/settings.html'" class="btn-back" title="Nastavenia">
+                <i class="fas fa-cog"></i> <span>Nastavenia</span>
             </button>
             <button id="themeToggle" class="btn-back" onclick="toggleTheme()" title="Prepnúť tému">
                 <i class="fas fa-moon"></i>
@@ -520,7 +646,7 @@
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <button id="bulkUpdateBtn" class="btn-bulk-update" onclick="bulkUpdateDevices()" disabled
                     title="Aktualizovať vybrané zariadenia">
-                    <i class="fas fa-layer-group"></i>
+                    <i class="fas fa-download"></i>
                     <span>Aktualizovať vybrané</span>
                 </button>
                 <button onclick="openChangelogModal()" class="action-btn primary" id="btnShowChangelog"
@@ -593,6 +719,7 @@
                     stateToSave[id] = {
                         active: state.active,
                         persistedResult: state.persistedResult,
+                        currentStep: state.currentStep || null,
                         htmlContent: document.getElementById(`actions-${id}`)?.innerHTML || state.htmlContent
                     };
                 }
@@ -667,6 +794,21 @@
                 devicesList = devices;
                 originalOrder = [...devices];
                 renderTableShells();
+                // Resume or clean up update states interrupted by navigation/reload
+                devices.forEach(d => {
+                    const st = _deviceUpdateState[d.id];
+                    if (!st) return;
+                    if (st.active) {
+                        resumeUpdateAfterReload(d.id);
+                    } else if (st.persistedResult) {
+                        // Update ended (all steps ✓) but waitOnlineThenRefresh was interrupted –
+                        // ping the device; if it's back online just clean up the frozen status.
+                        fetch(`/api/updater/ping/${d.id}`)
+                            .then(r => r.json())
+                            .then(j => { if (j.status === 'online') clearUpdateState(d.id); })
+                            .catch(() => {});
+                    }
+                });
                 devices.forEach(d => fetchDeviceDetails(d.id));
             } catch (err) {
                 document.getElementById('devicesTableBody').innerHTML =
@@ -780,12 +922,21 @@
                     `;
 
                     // Firmware cell
+                    // upgrade-firmware is based on installed RouterOS, not latest available.
+                    // If firmware appears up-to-date but OS has a pending update, project the
+                    // future firmware target from os.latest-version so the user sees it correctly.
+                    const fwCurrent = data.firmware['current-firmware'];
+                    const fwUpgrade = data.firmware['upgrade-firmware'];
+                    const hasOsUpdateFw = data.os['installed-version'] !== 'N/A' && data.os['installed-version'] !== data.os['latest-version'];
+                    const fwAvailable = (fwCurrent !== 'N/A' && fwCurrent === fwUpgrade && hasOsUpdateFw && data.os['latest-version'] !== 'N/A')
+                        ? data.os['latest-version']
+                        : fwUpgrade;
                     document.getElementById(`fw-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
-                            <span style="color: #9ca3af; text-align: center;">Aktuálny:</span> 
-                            <strong>${data.firmware['current-firmware']}</strong>
-                            <span style="color: #9ca3af; text-align: center;">Dostupný:</span> 
-                            <strong style="${data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'] ? 'color:var(--warning-color)' : 'color:var(--success-color)'}">${data.firmware['upgrade-firmware']}</strong>
+                            <span style="color: #9ca3af; text-align: center;">Aktuálny:</span>
+                            <strong>${fwCurrent}</strong>
+                            <span style="color: #9ca3af; text-align: center;">Dostupný:</span>
+                            <strong style="${fwCurrent !== fwAvailable ? 'color:var(--warning-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
                         </div>
                     `;
                     document.getElementById(`model-${id}`).innerHTML = data.firmware['model'];
@@ -814,7 +965,11 @@
 
         function renderActions(id, data) {
             const hasOsUpdate = data.os['installed-version'] !== 'N/A' && data.os['installed-version'] !== data.os['latest-version'];
-            const hasFwUpdate = data.firmware['current-firmware'] !== 'N/A' && data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'];
+            const _fwCur = data.firmware['current-firmware'];
+            const _fwUpg = data.firmware['upgrade-firmware'];
+            const _fwAvail = (_fwCur !== 'N/A' && _fwCur === _fwUpg && hasOsUpdate && data.os['latest-version'] !== 'N/A')
+                ? data.os['latest-version'] : _fwUpg;
+            const hasFwUpdate = _fwCur !== 'N/A' && _fwCur !== _fwAvail;
             const anyUpdate = hasOsUpdate || hasFwUpdate;
             const noSsl = !data.ssl_ok;
             const certLabel = noSsl ? 'Vytvoriť TLS Cert ⚠️' : 'Obnoviť TLS Cert';
@@ -845,10 +1000,10 @@
                             </button>
                         </div>
                         <div class="update-dropdown" id="dropdown-${id}" onclick="event.stopPropagation()">
-                            <button onclick="apiCall('/api/updater/install-os/${id}', this)" class="action-btn dropdown-item ${hasOsUpdate ? 'primary' : ''}">
+                            <button onclick="installOsWithCheck(${id}, this)" class="action-btn dropdown-item ${hasOsUpdate ? 'primary' : ''}">
                                 <i class="fas fa-download"></i> Update RouterOS
                             </button>
-                            <button onclick="apiCall('/api/updater/install-firmware/${id}', this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : ''}">
+                            <button onclick="installFirmwareWithCheck(${id}, this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : ''}">
                                 <i class="fas fa-microchip"></i> Update Firmware
                             </button>
                             <div class="dropdown-divider"></div>
@@ -895,8 +1050,71 @@
             event.stopPropagation();
             const dd = document.getElementById(ddId);
             const isOpen = dd.style.display === 'block';
-            document.querySelectorAll('.update-dropdown').forEach(d => d.style.display = 'none');
-            dd.style.display = isOpen ? 'none' : 'block';
+            document.querySelectorAll('.update-dropdown').forEach(d => {
+                d.style.display = 'none';
+                d.style.top = '';
+                d.style.bottom = '';
+            });
+            if (!isOpen) {
+                dd.style.display = 'block';
+                const rect = dd.getBoundingClientRect();
+                const spaceBelow = window.innerHeight - rect.bottom;
+                if (spaceBelow < 0) {
+                    dd.style.top = 'auto';
+                    dd.style.bottom = 'calc(100% + 4px)';
+                } else {
+                    dd.style.top = 'calc(100% + 4px)';
+                    dd.style.bottom = 'auto';
+                }
+            }
+        }
+
+        // ─── Toast notification ───────────────────────────────────────────────────
+        function showToast(message, type = 'info', duration = 4500) {
+            const existing = document.getElementById('updateToast');
+            if (existing) existing.remove();
+
+            const icons   = { info: 'fa-info-circle', success: 'fa-check-circle', warning: 'fa-exclamation-triangle' };
+            const colors  = { info: '#3b82f6', success: '#4ade80', warning: '#facc15' };
+
+            const toast = document.createElement('div');
+            toast.id = 'updateToast';
+            toast.className = `update-toast ${type}`;
+            toast.innerHTML = `<i class="fas ${icons[type] || 'fa-info-circle'}" style="color:${colors[type] || '#3b82f6'}; font-size:16px; flex-shrink:0;"></i><span>${message}</span>`;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.3s ease';
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 320);
+            }, duration);
+        }
+
+        // ─── Version-aware individual update wrappers ─────────────────────────────
+        async function installOsWithCheck(id, btn) {
+            const data = deviceDataMap[id];
+            if (data && data.os) {
+                const installed = data.os['installed-version'];
+                const latest    = data.os['latest-version'];
+                if (installed && latest && installed !== 'N/A' && latest !== 'N/A' && installed === latest) {
+                    showToast(`RouterOS je už aktuálny (${installed}) – aktualizácia nebola spustená.`, 'info');
+                    return;
+                }
+            }
+            apiCall(`/api/updater/install-os/${id}`, btn);
+        }
+
+        async function installFirmwareWithCheck(id, btn) {
+            const data = deviceDataMap[id];
+            if (data && data.firmware) {
+                const current = data.firmware['current-firmware'];
+                const upgrade = data.firmware['upgrade-firmware'];
+                if (current && upgrade && current !== 'N/A' && upgrade !== 'N/A' && current === upgrade) {
+                    showToast(`Firmware je už na aktuálnej verzii (${current}) – aktualizácia nebola spustená.`, 'info');
+                    return;
+                }
+            }
+            apiCall(`/api/updater/install-firmware/${id}`, btn);
         }
 
         // ─── Individual action wrappers ───────────────────────────────────────────
@@ -1109,6 +1327,9 @@
             if (!el) return;
             el.className = 'inline-step' + (state ? ` ${state}` : '');
             el.textContent = `${STEP_ICONS[state] || '○'} ${STEP_LABELS[stepNum]}`;
+            if (state === 'active' && _deviceUpdateState[id]) {
+                _deviceUpdateState[id].currentStep = stepNum;
+            }
             saveUpdateState();
         }
 
@@ -1215,10 +1436,157 @@
             }
         }
 
+        // ─── Shared helper: steps 5-6-7 (firmware check + optional reboot) ─────────
+        async function _doFirmwareAndReboot(id, isLowMem) {
+            // Step 5 – Check firmware versions (fetch fresh data)
+            setInlineStep(id, 5, 'active');
+            setInlineStatus(id, 'Kontrolujem verzie firmware...');
+            let fwUpdateNeeded = true;
+            try {
+                const freshRes = await fetch(`/api/updater/device/${id}`);
+                const freshData = await freshRes.json();
+                if (freshData.status === 'success') {
+                    deviceDataMap[id] = freshData;
+                    const cur = freshData.firmware['current-firmware'];
+                    const upg = freshData.firmware['upgrade-firmware'];
+                    if (cur !== 'N/A' && cur === upg) fwUpdateNeeded = false;
+                }
+            } catch (e) { /* keep fwUpdateNeeded = true */ }
+
+            if (!fwUpdateNeeded) {
+                setInlineStep(id, 5, 'done');
+                setInlineStep(id, 6, 'done');
+                setInlineStep(id, 7, 'done');
+                endInlineUpdate(id, true, '✅ Firmware je aktuálny. Aktualizácia dokončená!');
+                setTimeout(() => { if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) clearUpdateState(id); }, 2000);
+                return;
+            }
+
+            const fwRes = await fetch(`/api/updater/install-firmware/${id}`, { method: 'POST' });
+            const fwData = await fwRes.json();
+            if (fwData.status !== 'success') {
+                setInlineStep(id, 5, 'error');
+                endInlineUpdate(id, false, `❌ Chyba Update Firmware: ${fwData.message}`);
+                return;
+            }
+            setInlineStep(id, 5, 'done');
+
+            // Step 6 – 20s countdown
+            setInlineStep(id, 6, 'active');
+            await inlineCountdown(id, 6, 20);
+            setInlineStep(id, 6, 'done');
+
+            await _doFinalReboot(id, isLowMem);
+        }
+
+        async function _doFinalReboot(id, isLowMem) {
+            // Step 7 – Final reboot
+            setInlineStep(id, 7, 'active');
+            setInlineStatus(id, 'Odosielam príkaz na finálny reštart...');
+            const rebootRes = await fetch(`/api/updater/reboot/${id}`, { method: 'POST' });
+            const rebootData = await rebootRes.json();
+            if (rebootData.status !== 'success') {
+                setInlineStep(id, 7, 'error');
+                endInlineUpdate(id, false, `❌ Chyba Reštart: ${rebootData.message}`);
+                return;
+            }
+            setInlineStep(id, 7, 'done');
+            endInlineUpdate(id, true, '✅ Aktualizácia dokončená!');
+            await waitOnlineThenRefresh(id, isLowMem);
+        }
+
+        // ─── Auto-resume after page navigation / reload ───────────────────────────
+        async function resumeUpdateAfterReload(id) {
+            const state = _deviceUpdateState[id];
+            if (!state || !state.active) return;
+
+            const dev = devicesList.find(d => d.id === id);
+            const isLowMem = dev && dev.low_memory;
+
+            const actionsEl = document.getElementById(`actions-${id}`);
+            if (actionsEl) actionsEl.style.opacity = '1';
+
+            const step = state.currentStep || 2;
+
+            setInlineStatus(id, '⟳ Obnova procesu po navigácii...', '#9ca3af');
+
+            try {
+                if (step <= 4) {
+                    // Was waiting for reboot or boot – check current device status
+                    let isOnline = false;
+                    try {
+                        const r = await fetch(`/api/updater/ping/${id}`);
+                        const j = await r.json();
+                        isOnline = (j.status === 'online');
+                    } catch (e) { isOnline = false; }
+
+                    if (!isOnline) {
+                        // Device still offline – wait for it to boot
+                        setInlineStep(id, 2, 'done');
+                        setInlineStep(id, 3, 'active');
+                        setInlineStatus(id, 'Čakám kým zariadenie nabootuje...');
+                        const onlineTimeout = isLowMem ? 300000 : 180000;
+                        const cameOnline = await pollOnline(id, onlineTimeout, 5000);
+                        if (!cameOnline) {
+                            setInlineStep(id, 3, 'error');
+                            endInlineUpdate(id, false, `❌ Zariadenie sa nevrátilo online v časovom limite (${onlineTimeout / 1000}s).`);
+                            return;
+                        }
+                        setInlineStep(id, 3, 'done');
+                        setInlineStep(id, 4, 'active');
+                        await inlineCountdown(id, 4, 120);
+                        setInlineStep(id, 4, 'done');
+                    } else {
+                        // Device already online – skip steps 2-4
+                        setInlineStep(id, 2, 'done');
+                        setInlineStep(id, 3, 'done');
+                        setInlineStep(id, 4, 'done');
+                    }
+                    await _doFirmwareAndReboot(id, isLowMem);
+
+                } else if (step === 5) {
+                    await _doFirmwareAndReboot(id, isLowMem);
+
+                } else if (step === 6) {
+                    // Was in 20s countdown after firmware install – skip to reboot
+                    setInlineStep(id, 6, 'done');
+                    await _doFinalReboot(id, isLowMem);
+
+                } else if (step === 7) {
+                    await _doFinalReboot(id, isLowMem);
+                }
+
+            } catch (err) {
+                endInlineUpdate(id, false, `❌ Chyba pri obnovení procesu: ${err.message}`);
+            }
+        }
+
         // ─── Full update sequence ─────────────────────────────────────────────────
         async function fullUpdateDevice(id) {
             const dev = devicesList.find(d => d.id === id);
             const isLowMem = dev && dev.low_memory;
+
+            // Pre-check: skip if both OS and Firmware are already up to date
+            const data = deviceDataMap[id];
+            if (data) {
+                const hasOsUpdate = data.os &&
+                    data.os['installed-version'] !== 'N/A' &&
+                    data.os['installed-version'] !== data.os['latest-version'];
+                const hasFwUpdate = data.firmware &&
+                    data.firmware['current-firmware'] !== 'N/A' &&
+                    data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'];
+
+                if (!hasOsUpdate && !hasFwUpdate) {
+                    const osVer = (data.os && data.os['installed-version']) ? data.os['installed-version'] : '–';
+                    const fwVer = (data.firmware && data.firmware['current-firmware']) ? data.firmware['current-firmware'] : '–';
+                    showToast(
+                        `Zariadenie má najnovšie verzie – RouterOS ${osVer}, Firmware ${fwVer}. Aktualizácia nebola spustená.`,
+                        'success',
+                        5500
+                    );
+                    return;
+                }
+            }
 
             startInlineUpdate(id);
 
@@ -1273,60 +1641,7 @@
                     setInlineStep(id, 4, 'done');
                 }
 
-                // Step 5 – Check firmware versions (fetch fresh data)
-                setInlineStep(id, 5, 'active');
-                setInlineStatus(id, 'Kontrolujem verzie firmware...');
-                let fwUpdateNeeded = true;
-                try {
-                    const freshRes = await fetch(`/api/updater/device/${id}`);
-                    const freshData = await freshRes.json();
-                    if (freshData.status === 'success') {
-                        deviceDataMap[id] = freshData;
-                        const cur = freshData.firmware['current-firmware'];
-                        const upg = freshData.firmware['upgrade-firmware'];
-                        if (cur !== 'N/A' && cur === upg) fwUpdateNeeded = false;
-                    }
-                } catch (e) { /* keep fwUpdateNeeded = true */ }
-
-                if (!fwUpdateNeeded) {
-                    setInlineStep(id, 5, 'done');
-                    setInlineStep(id, 6, 'done');
-                    setInlineStep(id, 7, 'done');
-                    endInlineUpdate(id, true, '✅ Firmware je aktuálny. Aktualizácia dokončená!');
-                    // Device is already online (didn't reboot for firmware), refresh directly
-                    setTimeout(() => { if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) clearUpdateState(id); }, 2000);
-                    return;
-                }
-
-                const fwRes = await fetch(`/api/updater/install-firmware/${id}`, { method: 'POST' });
-                const fwData = await fwRes.json();
-                if (fwData.status !== 'success') {
-                    setInlineStep(id, 5, 'error');
-                    endInlineUpdate(id, false, `❌ Chyba Update Firmware: ${fwData.message}`);
-                    return;
-                }
-                setInlineStep(id, 5, 'done');
-
-                // Step 6 – 20s countdown
-                setInlineStep(id, 6, 'active');
-                await inlineCountdown(id, 6, 20);
-                setInlineStep(id, 6, 'done');
-
-                // Step 7 – Final reboot
-                setInlineStep(id, 7, 'active');
-                setInlineStatus(id, 'Odosielam príkaz na finálny reštart...');
-                const rebootRes = await fetch(`/api/updater/reboot/${id}`, { method: 'POST' });
-                const rebootData = await rebootRes.json();
-                if (rebootData.status !== 'success') {
-                    setInlineStep(id, 7, 'error');
-                    endInlineUpdate(id, false, `❌ Chyba Reštart: ${rebootData.message}`);
-                    return;
-                }
-                setInlineStep(id, 7, 'done');
-                endInlineUpdate(id, true, '✅ Aktualizácia dokončená!');
-
-                // Wait for device to reboot and come back, then refresh the row
-                await waitOnlineThenRefresh(id, isLowMem);
+                await _doFirmwareAndReboot(id, isLowMem);
 
             } catch (err) {
                 endInlineUpdate(id, false, `❌ Neočakávaná chyba: ${err.message}`);

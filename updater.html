@@ -43,6 +43,7 @@
             justify-content: flex-end;
             margin-bottom: 20px;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .btn-back {
@@ -90,6 +91,31 @@
             animation: spin 0.8s linear infinite;
         }
 
+        .btn-bulk-update {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: white;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-bulk-update:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+        }
+
+        .btn-bulk-update:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         @keyframes spin {
             from {
                 transform: rotate(0deg);
@@ -100,7 +126,6 @@
             }
         }
 
-
         .info-card {
             background-color: rgba(56, 189, 248, 0.1);
             border: 1px solid rgba(56, 189, 248, 0.3);
@@ -110,6 +135,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .table-container {
@@ -124,7 +151,7 @@
             width: 100%;
             border-collapse: collapse;
             margin: 0;
-            min-width: 1000px;
+            min-width: 1050px;
         }
 
         .table thead th {
@@ -136,6 +163,11 @@
             padding: 12px 16px;
             text-align: left;
             font-size: 13px;
+        }
+
+        .table thead th.th-sortable {
+            cursor: pointer;
+            user-select: none;
         }
 
         .table tbody tr {
@@ -165,6 +197,7 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
+            white-space: nowrap;
         }
 
         .action-btn:hover {
@@ -193,6 +226,148 @@
             background-color: rgba(248, 113, 113, 0.1);
         }
 
+        /* Button group: main button + dropdown toggle */
+        .btn-group-main {
+            display: inline-flex;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .btn-group-main .full-update-btn {
+            border-radius: 6px 0 0 6px;
+            border-right: none;
+        }
+
+        .btn-group-main .dropdown-toggle-btn {
+            border-radius: 0 6px 6px 0;
+            padding: 6px 10px;
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-group-main .full-update-btn.primary+.dropdown-toggle-btn {
+            background-color: var(--accent-color-hover);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        .btn-group-main .full-update-btn.primary+.dropdown-toggle-btn:hover {
+            background-color: #0284c7;
+        }
+
+        .btn-group-main .full-update-btn.danger+.dropdown-toggle-btn {
+            background-color: transparent;
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+        }
+
+        .btn-group-main .full-update-btn.danger+.dropdown-toggle-btn:hover {
+            background-color: rgba(248, 113, 113, 0.1);
+        }
+
+        /* Dropdown */
+        .update-dropdown-wrap {
+            position: relative;
+            display: inline-block;
+        }
+
+        .update-dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            z-index: 200;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            min-width: 180px;
+            padding: 4px 0;
+            display: none;
+        }
+
+        .update-dropdown .dropdown-item {
+            width: 100%;
+            border: none;
+            border-radius: 0;
+            padding: 8px 14px;
+            text-align: left;
+            background: transparent;
+            justify-content: flex-start;
+        }
+
+        .update-dropdown .dropdown-item:hover {
+            background-color: rgba(56, 189, 248, 0.1);
+        }
+
+        .update-dropdown .dropdown-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 4px 0;
+        }
+
+        .update-dropdown .dropdown-label {
+            padding: 8px 14px 4px;
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .update-dropdown .dropdown-input-row {
+            padding: 6px 14px 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .update-dropdown .dropdown-input-row input {
+            background-color: #111827;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            width: 70px;
+            font-size: 13px;
+        }
+
+        /* Inline progress in Akcie cell */
+        .inline-progress {
+            font-size: 12px;
+            line-height: 1.75;
+        }
+
+        .inline-step {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #6b7280;
+        }
+
+        .inline-step.active {
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        .inline-step.done {
+            color: var(--success-color);
+        }
+
+        .inline-step.error {
+            color: var(--danger-color);
+        }
+
+        .inline-status {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .inline-decision {
+            display: none;
+            gap: 6px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -217,24 +392,7 @@
             overflow-y: auto;
         }
 
-        .cert-inputs {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 4px;
-        }
-
-        .cert-inputs input {
-            background-color: #111827;
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            border-radius: 4px;
-            padding: 4px 8px;
-            width: 70px;
-            font-size: 13px;
-        }
-
-        /* Light Theme Styles */
+        /* Light Theme */
         body.light-theme {
             --main-bg: #cddbf2;
             --card-bg: #deeafa;
@@ -247,7 +405,11 @@
         }
 
         body.light-theme .table-container,
-        body.light-theme input {
+        body.light-theme .update-dropdown .dropdown-input-row input {
+            background-color: #deeafa;
+        }
+
+        body.light-theme .update-dropdown {
             background-color: #deeafa;
         }
 
@@ -259,12 +421,6 @@
             border-radius: 50%;
             border-top-color: #fff;
             animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
         }
 
         pre.changelog {
@@ -279,6 +435,53 @@
 
         body.light-theme pre.changelog {
             background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Checkbox column */
+        .table thead th.th-checkbox,
+        .table tbody td.td-checkbox {
+            width: 36px;
+            padding: 12px 8px 12px 16px;
+            text-align: center;
+        }
+
+        /* Dropdown custom checkbox */
+        .dropdown-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 14px !important;
+            height: 14px !important;
+            min-width: 14px !important;
+            min-height: 14px !important;
+            padding: 0 !important;
+            flex-shrink: 0;
+            background-color: var(--main-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            display: inline-grid;
+            place-content: center;
+            cursor: pointer;
+            margin: 0;
+            transition: all 0.2s;
+        }
+
+        body.light-theme .dropdown-checkbox {
+            background-color: rgba(255, 255, 255, 0.7);
+            border-color: #d1d5db;
+        }
+
+        .dropdown-checkbox::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            background-color: var(--success-color);
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        .dropdown-checkbox:checked::before {
+            transform: scale(1);
         }
     </style>
 </head>
@@ -307,13 +510,19 @@
             <p style="color: #9ca3af;">Verzie RouterOS, Firmware a konfigurácia SSL Certifikátov</p>
         </div>
 
+        <!-- RSS info card – bulk update button moved here -->
         <div class="info-card" id="rssInfoCard">
             <div>
                 <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: var(--accent-color);">
                     Najnovšia verzia (z mikrotik.com)</h3>
                 <p id="rssLatestVersion">Načítavam dáta z RSS feedu...</p>
             </div>
-            <div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button id="bulkUpdateBtn" class="btn-bulk-update" onclick="bulkUpdateDevices()" disabled
+                    title="Aktualizovať vybrané zariadenia">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Aktualizovať vybrané</span>
+                </button>
                 <button onclick="openChangelogModal()" class="action-btn primary" id="btnShowChangelog"
                     style="display:none;">
                     <i class="fas fa-list-alt"></i> Zobraziť Changelog
@@ -325,16 +534,24 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th width="15%">Zariadenie / IP</th>
-                        <th width="10%">Status</th>
-                        <th width="20%">RouterOS verzia</th>
-                        <th width="20%">Firmware (RouterBOARD)</th>
-                        <th width="35%">Akcie</th>
+                        <th class="th-checkbox">
+                            <input type="checkbox" id="selectAllCb" title="Vybrať všetky"
+                                onchange="toggleSelectAll(this)">
+                        </th>
+                        <th class="th-sortable" onclick="handleThClick(1)" style="text-align: center;">Zariadenie / IP
+                        </th>
+                        <th class="th-sortable" onclick="handleThClick(2)" width="10%" style="text-align: center;">
+                            Status</th>
+                        <th class="th-sortable" onclick="handleThClick(3)" width="20%" style="text-align: center;">
+                            RouterOS verzia</th>
+                        <th class="th-sortable" onclick="handleThClick(4)" width="20%" style="text-align: center;">
+                            Firmware (RouterBOARD)</th>
+                        <th width="35%" style="text-align: center;">Akcie</th>
                     </tr>
                 </thead>
                 <tbody id="devicesTableBody">
                     <tr>
-                        <td colspan="5" style="text-align:center; padding: 30px;">
+                        <td colspan="6" style="text-align:center; padding: 30px;">
                             <div style="display:inline-block; margin-bottom: 10px;" class="loading-spinner"></div><br>
                             Načítavam zoznam zariadení z databázy...
                         </td>
@@ -344,7 +561,7 @@
         </div>
     </div>
 
-    <!-- Modálne okno pre Changelog -->
+    <!-- Changelog modal -->
     <div id="changelogModal" class="modal-overlay" onclick="closeModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -361,34 +578,61 @@
         let rssData = null;
         let devicesList = [];
         let deviceDataMap = {};
+        let originalOrder = [];
+        let sortState = { column: null, direction: 'asc' };
 
-        // Theme management
-        function toggleTheme() {
-            const body = document.body;
-            body.classList.toggle('light-theme');
-            const isLight = body.classList.contains('light-theme');
-            localStorage.setItem('mikrotik_theme', isLight ? 'light' : 'dark');
-            const icon = document.querySelector('#themeToggle i');
-            icon.className = isLight ? 'fas fa-sun' : 'fas fa-moon';
+        // Per-device inline update state
+        let _deviceUpdateState = JSON.parse(localStorage.getItem('mikrotik_updater_state') || '{}');
+
+        // Setup clear storage on logout if needed, but not here
+        function saveUpdateState() {
+            // Nemôžeme serializovať funkcie ako decideResolve
+            const stateToSave = {};
+            for (const [id, state] of Object.entries(_deviceUpdateState)) {
+                if (state.active || state.persistedResult) {
+                    stateToSave[id] = {
+                        active: state.active,
+                        persistedResult: state.persistedResult,
+                        htmlContent: document.getElementById(`actions-${id}`)?.innerHTML || state.htmlContent
+                    };
+                }
+            }
+            localStorage.setItem('mikrotik_updater_state', JSON.stringify(stateToSave));
         }
 
-        // INIT
+        // ─── Theme ───────────────────────────────────────────────────────────────
+        function toggleTheme() {
+            document.body.classList.toggle('light-theme');
+            const isLight = document.body.classList.contains('light-theme');
+            localStorage.setItem('mikrotik_theme', isLight ? 'light' : 'dark');
+            document.querySelector('#themeToggle i').className = isLight ? 'fas fa-sun' : 'fas fa-moon';
+        }
+
+        // ─── INIT ─────────────────────────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('mikrotik_theme') === 'light') {
                 document.body.classList.add('light-theme');
                 document.querySelector('#themeToggle i').className = 'fas fa-sun';
             }
+            // Close all dropdowns on outside click
+            document.addEventListener('click', function (e) {
+                if (!e.target.closest('.update-dropdown-wrap')) {
+                    document.querySelectorAll('.update-dropdown').forEach(d => d.style.display = 'none');
+                }
+            });
             fetchRssData();
             fetchDevices();
         });
 
+        // ─── RSS ──────────────────────────────────────────────────────────────────
         async function fetchRssData() {
             try {
                 const res = await fetch('/api/updater/rss');
                 const json = await res.json();
                 if (json.status === 'success' && json.data.latest) {
                     rssData = json.data.latest;
-                    document.getElementById('rssLatestVersion').innerHTML = `<strong>RouterOS ${rssData.version}</strong> (Vydané: ${rssData.pubDate})`;
+                    document.getElementById('rssLatestVersion').innerHTML =
+                        `<strong>RouterOS ${rssData.version}</strong> (Vydané: ${rssData.pubDate})`;
                     document.getElementById('btnShowChangelog').style.display = 'inline-flex';
                 } else {
                     document.getElementById('rssLatestVersion').innerText = 'Nepodarilo sa načítať stabilnú verziu z RSS.';
@@ -401,10 +645,8 @@
         function openChangelogModal() {
             if (rssData) {
                 document.getElementById('modalTitle').innerText = rssData.title;
-                // RSS contains HTML sometimes, we strip or set innerHTML depending on format
-                // the description string in MK RSS is plain text nicely formatted so innerText/textContent works best.
                 const div = document.createElement('div');
-                div.innerHTML = rssData.description; // it might contain <br> tags
+                div.innerHTML = rssData.description;
                 document.getElementById('modalContent').innerHTML = div.innerHTML;
                 document.getElementById('changelogModal').style.display = 'flex';
                 document.body.style.overflow = 'hidden';
@@ -417,15 +659,18 @@
             document.body.style.overflow = 'auto';
         }
 
+        // ─── Devices ─────────────────────────────────────────────────────────────
         async function fetchDevices() {
             try {
                 const res = await fetch('/api/devices');
                 const devices = await res.json();
                 devicesList = devices;
+                originalOrder = [...devices];
                 renderTableShells();
                 devices.forEach(d => fetchDeviceDetails(d.id));
             } catch (err) {
-                document.getElementById('devicesTableBody').innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--danger-color);">Chyba pri načítaní databázy zariadení.</td></tr>`;
+                document.getElementById('devicesTableBody').innerHTML =
+                    `<tr><td colspan="6" style="text-align:center; color: var(--danger-color);">Chyba pri načítaní databázy zariadení.</td></tr>`;
             }
         }
 
@@ -434,8 +679,9 @@
             btn.classList.add('loading');
             btn.disabled = true;
 
-            // Resetuj stavové bunky na "Načítavam..."
             devicesList.forEach(d => {
+                // Skip devices with active update in progress
+                if (_deviceUpdateState[d.id]?.active) return;
                 const statusEl = document.getElementById(`status-${d.id}`);
                 const osEl = document.getElementById(`os-${d.id}`);
                 const fwEl = document.getElementById(`fw-${d.id}`);
@@ -444,13 +690,11 @@
                 if (fwEl) fwEl.innerHTML = `<span style="color:#9ca3af">...</span>`;
             });
 
-            // Re-fetch detailov pre všetky zariadenia
             await Promise.all(devicesList.map(d => fetchDeviceDetails(d.id)));
 
             btn.classList.remove('loading');
             btn.disabled = false;
         }
-
 
         function renderTableShells() {
             const tbody = document.getElementById('devicesTableBody');
@@ -458,20 +702,32 @@
             devicesList.forEach(dev => {
                 const tr = document.createElement('tr');
                 tr.id = `row-${dev.id}`;
+
+                // Restore logic
+                let isRestored = false;
+                let restoredHtml = '';
+                if (_deviceUpdateState[dev.id] && (_deviceUpdateState[dev.id].active || _deviceUpdateState[dev.id].persistedResult)) {
+                    isRestored = true;
+                    restoredHtml = _deviceUpdateState[dev.id].htmlContent || '';
+                }
+
                 tr.innerHTML = `
+                    <td class="td-checkbox">
+                        <input type="checkbox" class="device-select-cb" data-id="${dev.id}" onchange="onCbChange()">
+                    </td>
                     <td>
                         <strong>${dev.name}</strong><br>
                         <span style="color:#9ca3af; font-size:12px;">${dev.ip}</span>
+                        <div id="model-${dev.id}" style="font-size:11px; color:#9ca3af; margin-top:4px;"></div>
                     </td>
-                    <td id="status-${dev.id}">
+                    <td id="status-${dev.id}" style="text-align: center;">
                         <span class="loading-spinner" style="width:12px; height:12px; border-width: 2px;"></span> Zisťujem
                     </td>
-                    <td id="os-${dev.id}">Načítavam...</td>
-                    <td id="fw-${dev.id}">Načítavam...</td>
+                    <td id="os-${dev.id}" style="text-align: center;">Načítavam...</td>
+                    <td id="fw-${dev.id}" style="text-align: center;">Načítavam...</td>
                     <td>
-                        <!-- Akcie prázdne kým nenačíta dáta -->
                         <div id="actions-${dev.id}" style="display:flex; flex-wrap:wrap; gap:8px; opacity:0.5;">
-                            Čaká sa na spojenie...
+                            ${isRestored ? restoredHtml : 'Čaká sa na spojenie...'}
                         </div>
                     </td>
                 `;
@@ -480,6 +736,9 @@
         }
 
         async function fetchDeviceDetails(id) {
+            // Do not overwrite the cell if an update is actively running on this device
+            if (_deviceUpdateState[id]?.active) return;
+
             try {
                 const res = await fetch(`/api/updater/device/${id}`);
                 if (!res.ok) throw new Error('API Chyba');
@@ -487,65 +746,160 @@
                 deviceDataMap[id] = data;
 
                 if (data.status === 'success') {
+                    // Status cell
                     let statusHtml = `<span style="color:var(--success-color)"><i class="fas fa-check-circle"></i> Online</span>`;
                     if (!data.ssl_ok) {
                         statusHtml += `<br><span style="color:var(--warning-color); font-size:11px;"><i class="fas fa-exclamation-triangle"></i> Bez TLS certifikátu</span>`;
                     }
+                    // Cert expiry badge
+                    if (data.cert_expiry !== null && data.cert_expiry !== undefined) {
+                        const d = data.cert_expiry.days_remaining;
+                        const warnDays = data.cert_expiry_warning_days || 10;
+                        const effectiveWarn = warnDays + 3; // Zobraziť žltú farbu 3 dni pred naplánovanou automatickou obnovou
+                        let certColor, certIcon;
+                        if (d <= 0) {
+                            certColor = 'var(--danger-color)'; certIcon = '⛔';
+                        } else if (d <= effectiveWarn) {
+                            certColor = 'var(--warning-color)'; certIcon = '⚠️';
+                        } else {
+                            certColor = 'var(--success-color)'; certIcon = '';
+                        }
+                        const certText = d <= 0 ? `${certIcon} Cert: vypršaný` : `${certIcon} Cert: ${d}d`;
+                        statusHtml += `<br><span style="color:${certColor}; font-size:11px;">${certText}</span>`;
+                    }
                     document.getElementById(`status-${id}`).innerHTML = statusHtml;
 
+                    // OS cell
                     document.getElementById(`os-${id}`).innerHTML = `
-                        Nainštalovaná: <strong>${data.os['installed-version']}</strong><br>
-                        Dostupná: <strong style="${data.os['installed-version'] !== data.os['latest-version'] ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${data.os['latest-version']}</strong>
+                        <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
+                            <span style="color: #9ca3af; text-align: center;">Aktuálna:</span> 
+                            <strong>${data.os['installed-version']}</strong>
+                            <span style="color: #9ca3af; text-align: center;">Dostupná:</span> 
+                            <strong style="${data.os['installed-version'] !== data.os['latest-version'] ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${data.os['latest-version']}</strong>
+                        </div>
                     `;
 
+                    // Firmware cell
                     document.getElementById(`fw-${id}`).innerHTML = `
-                        Nainštalovaný: <strong>${data.firmware['current-firmware']}</strong><br>
-                        Upgrade prep: <strong style="${data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'] ? 'color:var(--warning-color)' : 'color:var(--success-color)'}">${data.firmware['upgrade-firmware']}</strong><br>
-                        <span style="font-size:11px; color:#9ca3af;">Model: ${data.firmware['model']}</span>
+                        <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
+                            <span style="color: #9ca3af; text-align: center;">Aktuálny:</span> 
+                            <strong>${data.firmware['current-firmware']}</strong>
+                            <span style="color: #9ca3af; text-align: center;">Dostupný:</span> 
+                            <strong style="${data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'] ? 'color:var(--warning-color)' : 'color:var(--success-color)'}">${data.firmware['upgrade-firmware']}</strong>
+                        </div>
                     `;
+                    document.getElementById(`model-${id}`).innerHTML = data.firmware['model'];
 
-                    renderActions(id, data);
+                    // Only render actions if no update is currently running/persisted
+                    if (!(_deviceUpdateState[id] && (_deviceUpdateState[id].active || _deviceUpdateState[id].persistedResult))) {
+                        renderActions(id, data);
+                    } else {
+                        document.getElementById(`actions-${id}`).style.opacity = '1';
+                    }
                 } else {
                     document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
                     document.getElementById(`os-${id}`).innerHTML = `Chyba spojenia API`;
                     document.getElementById(`fw-${id}`).innerHTML = `N/A`;
-                    document.getElementById(`actions-${id}`).innerHTML = `Nemožno vykonať akcie (Zariadenie nedostupné)`;
+                    document.getElementById(`actions-${id}`).innerHTML = `<span style="color:var(--danger-color); font-size:13px;">Zariadenie nedostupné</span>`;
+                    document.getElementById(`actions-${id}`).style.opacity = '1';
                 }
             } catch (err) {
                 document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
                 document.getElementById(`os-${id}`).innerHTML = `N/A`;
                 document.getElementById(`fw-${id}`).innerHTML = `N/A`;
-                document.getElementById(`actions-${id}`).innerHTML = `Nemožno vykonať akcie (Zariadenie nedostupné)`;
+                document.getElementById(`actions-${id}`).innerHTML = `<span style="color:var(--danger-color); font-size:13px;">Zariadenie nedostupné</span>`;
+                document.getElementById(`actions-${id}`).style.opacity = '1';
             }
         }
 
         function renderActions(id, data) {
             const hasOsUpdate = data.os['installed-version'] !== 'N/A' && data.os['installed-version'] !== data.os['latest-version'];
             const hasFwUpdate = data.firmware['current-firmware'] !== 'N/A' && data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'];
+            const anyUpdate = hasOsUpdate || hasFwUpdate;
             const noSsl = !data.ssl_ok;
+            const certLabel = noSsl ? 'Vytvoriť TLS Cert ⚠️' : 'Obnoviť TLS Cert';
+            const certClass = noSsl ? 'danger' : '';
 
-            let html = `
-                <button onclick="apiCall('/api/updater/install-os/${id}', this)" class="action-btn ${hasOsUpdate ? 'primary' : ''}">
-                    <i class="fas fa-download"></i> Update OS
-                </button>
-                <button onclick="apiCall('/api/updater/install-firmware/${id}', this)" class="action-btn ${hasFwUpdate ? 'primary' : ''}">
-                    <i class="fas fa-microchip"></i> Update Firmware
-                </button>
-                <button onclick="rebootDevice(${id}, this)" class="action-btn danger">
-                    <i class="fas fa-power-off"></i> Reštart
-                </button>
-                <div style="width:100%; height:4px;"></div>
-                <div class="cert-inputs">
-                    <input type="number" id="cert-days-${id}" value="365" min="1" max="3650" title="Dĺžka platnosti v dňoch"> dní
-                    <button onclick="renewSSL(${id}, this)" class="action-btn ${noSsl ? 'danger' : ''}" style="margin-left: 5px;">
-                        <i class="fas fa-shield-alt"></i> ${noSsl ? 'Vytvoriť TLS Cert ⚠️' : 'Obnoviť TLS Cert'}
-                    </button>
+            let certDropdownSub = '';
+            if (data.cert_expiry && data.cert_expiry.days_remaining !== undefined) {
+                let remaining = data.cert_expiry.days_remaining;
+                let warning = data.cert_expiry_warning_days || 10;
+                let diff = remaining - warning;
+                if (diff > 0) {
+                    certDropdownSub = `<span style="font-size:11px; color:#9ca3af; display:block; margin-bottom:8px;">(Auto-obnova o ${diff} dní)</span>`;
+                } else {
+                    certDropdownSub = `<span style="font-size:11px; color:var(--warning-color); display:block; margin-bottom:8px;">(Čaká na auto-obnovu)</span>`;
+                }
+            }
+
+            const html = `
+                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                    <!-- Main update button + dropdown -->
+                    <div class="update-dropdown-wrap">
+                        <div class="btn-group-main">
+                            <button onclick="fullUpdateDevice(${id})" class="action-btn full-update-btn ${anyUpdate ? 'primary' : ''}" title="Spustiť plný update: OS → Firmware → Reštart">
+                                <i class="fas fa-sync-alt"></i> Update MikroTik
+                            </button>
+                            <button onclick="toggleDropdown('dropdown-${id}', event)" class="action-btn dropdown-toggle-btn ${anyUpdate ? 'primary' : ''}" title="Jednotlivé akcie">
+                                <i class="fas fa-chevron-down" style="font-size:11px;"></i>
+                            </button>
+                        </div>
+                        <div class="update-dropdown" id="dropdown-${id}" onclick="event.stopPropagation()">
+                            <button onclick="apiCall('/api/updater/install-os/${id}', this)" class="action-btn dropdown-item ${hasOsUpdate ? 'primary' : ''}">
+                                <i class="fas fa-download"></i> Update RouterOS
+                            </button>
+                            <button onclick="apiCall('/api/updater/install-firmware/${id}', this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : ''}">
+                                <i class="fas fa-microchip"></i> Update Firmware
+                            </button>
+                            <div class="dropdown-divider"></div>
+                            <button onclick="rebootDevice(${id}, this)" class="action-btn dropdown-item danger">
+                                <i class="fas fa-power-off"></i> Reštart
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cert button + dropdown (days input) -->
+                    <div class="update-dropdown-wrap" style="margin-left: 10px;">
+                        <div class="btn-group-main">
+                            <button onclick="renewSSL(${id})" id="cert-btn-${id}" class="action-btn full-update-btn ${certClass}" title="${certLabel}">
+                                <i class="fas fa-shield-alt"></i> ${certLabel}
+                            </button>
+                            <button onclick="toggleDropdown('cert-dd-${id}', event)" class="action-btn dropdown-toggle-btn ${certClass}" title="Nastaviť platnosť certifikátu">
+                                <i class="fas fa-chevron-down" style="font-size:11px;"></i>
+                            </button>
+                        </div>
+                        <div class="update-dropdown" id="cert-dd-${id}" style="min-width: max-content;" onclick="event.stopPropagation()">
+                            <div class="dropdown-label" style="padding-bottom: 2px;">${certDropdownSub}Platnosť certifikátu</div>
+                            <div class="dropdown-input-row" style="display: flex; align-items: center; justify-content: flex-start; gap: 14px; margin-bottom: 4px; padding-top: 2px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input type="number" id="cert-days-${id}" value="${data.cert_auto_renewal_days || 180}" min="1" max="3650" style="width: 70px;">
+                                    <span style="font-size:13px;">dní</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 4px; margin-left: auto;">
+                                    <button onclick="saveCertSettings(${id}, true)" class="action-btn" style="padding: 4px 8px; font-size: 11.5px;" title="${data.is_custom_cert_days ? 'Aktualizovať trvalú hodnotu pre toto zariadenie' : 'Uložiť ako trvalú hodnotu'}">
+                                        <i class="fas fa-save" style="${data.is_custom_cert_days ? 'color:var(--success-color)' : ''}"></i> Uložiť
+                                    </button>
+                                    ${data.is_custom_cert_days ? `<button onclick="saveCertSettings(${id}, false)" class="action-btn danger" style="padding: 4px 8px; font-size: 11px;" title="Zmazať individuálnu hodnotu a vrátiť sa ku globálnej"><i class="fas fa-trash"></i></button>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
             document.getElementById(`actions-${id}`).style.opacity = '1';
             document.getElementById(`actions-${id}`).innerHTML = html;
         }
 
+        // ─── Generic dropdown toggle ──────────────────────────────────────────────
+        function toggleDropdown(ddId, event) {
+            event.stopPropagation();
+            const dd = document.getElementById(ddId);
+            const isOpen = dd.style.display === 'block';
+            document.querySelectorAll('.update-dropdown').forEach(d => d.style.display = 'none');
+            dd.style.display = isOpen ? 'none' : 'block';
+        }
+
+        // ─── Individual action wrappers ───────────────────────────────────────────
         async function apiCall(endpoint, btn) {
             const prevHtml = btn.innerHTML;
             btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`;
@@ -571,17 +925,23 @@
             apiCall(`/api/updater/reboot/${id}`, btn);
         }
 
-        async function renewSSL(id, btn) {
+        async function renewSSL(id) {
+            const btn = document.getElementById(`cert-btn-${id}`);
+            const daysEl = document.getElementById(`cert-days-${id}`);
+            const days = parseInt(daysEl ? daysEl.value : 180) || 180;
+
+            // Close cert dropdown
+            const dd = document.getElementById(`cert-dd-${id}`);
+            if (dd) dd.style.display = 'none';
+
             const prevHtml = btn.innerHTML;
             btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`;
             btn.disabled = true;
-
-            const days = document.getElementById(`cert-days-${id}`).value;
             try {
                 const res = await fetch(`/api/updater/certificate/${id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ days: parseInt(days) })
+                    body: JSON.stringify({ days })
                 });
                 const json = await res.json();
                 if (json.status === 'success') {
@@ -594,7 +954,404 @@
             } finally {
                 btn.innerHTML = prevHtml;
                 btn.disabled = false;
+                refreshDevices();
             }
+        }
+
+        async function saveCertSettings(id, save) {
+            const daysEl = document.getElementById(`cert-days-${id}`);
+            const days = parseInt(daysEl ? daysEl.value : 180) || 180;
+            try {
+                await fetch(`/api/updater/certificate/save_settings/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days, save_for_device: save })
+                });
+                refreshDevices();
+            } catch (err) {
+                console.error('Nepodarilo sa uložiť nastavenia certifikátu na pozadí:', err);
+            }
+        }
+
+        // ─── Column sorting (2-state: asc ↔ desc) ────────────────────────────────
+        function handleThClick(col) {
+            if (sortState.column === col) {
+                // Toggle direction: asc → desc → asc
+                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortState.column = col;
+                sortState.direction = 'asc';
+            }
+            sortTable();
+        }
+
+        function compareVersions(a, b) {
+            const pa = (a || '').split('.').map(n => parseInt(n) || 0);
+            const pb = (b || '').split('.').map(n => parseInt(n) || 0);
+            const len = Math.max(pa.length, pb.length);
+            for (let i = 0; i < len; i++) {
+                const diff = (pa[i] || 0) - (pb[i] || 0);
+                if (diff !== 0) return diff;
+            }
+            return 0;
+        }
+
+        function getSortKey(devId, col) {
+            const dev = devicesList.find(d => d.id === devId);
+            const dd = deviceDataMap[devId];
+            switch (col) {
+                case 1: return (dev ? dev.name.toLowerCase() : '');
+                case 2: return (dd && dd.status === 'success') ? 0 : 1;
+                case 3: return (dd && dd.os) ? dd.os['installed-version'] || '' : '';
+                case 4: return (dd && dd.firmware) ? dd.firmware['current-firmware'] || '' : '';
+                default: return '';
+            }
+        }
+
+        function sortTable() {
+            const tbody = document.getElementById('devicesTableBody');
+            const ordered = [...devicesList].sort((a, b) => {
+                const ak = getSortKey(a.id, sortState.column);
+                const bk = getSortKey(b.id, sortState.column);
+                let cmp;
+                if (sortState.column === 3 || sortState.column === 4) {
+                    cmp = compareVersions(ak, bk);
+                } else if (typeof ak === 'number') {
+                    cmp = ak - bk;
+                } else {
+                    cmp = ak < bk ? -1 : ak > bk ? 1 : 0;
+                }
+                return sortState.direction === 'asc' ? cmp : -cmp;
+            });
+            ordered.forEach(dev => {
+                const row = document.getElementById(`row-${dev.id}`);
+                if (row) tbody.appendChild(row);
+            });
+        }
+
+        // ─── Checkbox / bulk select ───────────────────────────────────────────────
+        function toggleSelectAll(masterCb) {
+            document.querySelectorAll('.device-select-cb').forEach(cb => {
+                cb.checked = masterCb.checked;
+            });
+            onCbChange();
+        }
+
+        function onCbChange() {
+            const checked = document.querySelectorAll('.device-select-cb:checked').length;
+            const total = document.querySelectorAll('.device-select-cb').length;
+            document.getElementById('selectAllCb').checked = (checked === total && total > 0);
+            document.getElementById('selectAllCb').indeterminate = (checked > 0 && checked < total);
+            document.getElementById('bulkUpdateBtn').disabled = (checked === 0);
+        }
+
+        function getCheckedDeviceIds() {
+            return Array.from(document.querySelectorAll('.device-select-cb:checked'))
+                .map(cb => parseInt(cb.getAttribute('data-id')));
+        }
+
+        // ─── Inline progress helpers ──────────────────────────────────────────────
+        const STEP_LABELS = ['', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', '120s pauza', 'Update Firmware', '20s pauza', 'Finálny reštart'];
+        const STEP_ICONS = { '': '○', active: '⟳', done: '✓', error: '✗' };
+
+        function startInlineUpdate(id) {
+            _deviceUpdateState[id] = { active: true, decideResolve: null, persistedResult: false };
+            const actionsEl = document.getElementById(`actions-${id}`);
+            if (!actionsEl) return;
+            actionsEl.style.opacity = '1';
+
+            let stepsHtml = '';
+            for (let i = 1; i <= 7; i++) {
+                stepsHtml += `<div id="istep-${id}-${i}" class="inline-step">○ ${STEP_LABELS[i]}</div>`;
+            }
+
+            actionsEl.innerHTML = `
+                <div>
+                    <div class="inline-progress">${stepsHtml}</div>
+                    <div id="istatus-${id}" class="inline-status"></div>
+                    <div id="idecision-${id}" class="inline-decision">
+                        <button onclick="inlineDecisionAnswer(${id}, 'continue')" class="action-btn primary" style="font-size:12px; padding:4px 10px;">
+                            <i class="fas fa-forward"></i> Pokračovať
+                        </button>
+                        <button onclick="inlineDecisionAnswer(${id}, 'stop')" class="action-btn danger" style="font-size:12px; padding:4px 10px;">
+                            <i class="fas fa-stop"></i> Zastaviť
+                        </button>
+                    </div>
+                </div>
+            `;
+            saveUpdateState();
+        }
+
+        // Add clearState helper
+        function clearUpdateState(id) {
+            if (_deviceUpdateState[id]) {
+                delete _deviceUpdateState[id];
+                saveUpdateState();
+            }
+            fetchDeviceDetails(id);
+        }
+
+        function endInlineUpdate(id, success, message) {
+            if (_deviceUpdateState[id]) {
+                _deviceUpdateState[id].active = false;
+                _deviceUpdateState[id].persistedResult = true;
+            }
+            const statusEl = document.getElementById(`istatus-${id}`);
+            if (statusEl) {
+                statusEl.style.color = success ? 'var(--success-color)' : 'var(--danger-color)';
+                statusEl.innerHTML = `${message} <button onclick="clearUpdateState(${id})" style="background:none; border:none; color:var(--accent-color); cursor:pointer; font-size:12px; text-decoration:underline; padding:0; margin-left:4px;">Zatvoriť</button>`;
+            }
+            saveUpdateState();
+        }
+
+        function setInlineStep(id, stepNum, state) {
+            const el = document.getElementById(`istep-${id}-${stepNum}`);
+            if (!el) return;
+            el.className = 'inline-step' + (state ? ` ${state}` : '');
+            el.textContent = `${STEP_ICONS[state] || '○'} ${STEP_LABELS[stepNum]}`;
+            saveUpdateState();
+        }
+
+        function setInlineStatus(id, msg, color) {
+            const el = document.getElementById(`istatus-${id}`);
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = color || '#9ca3af';
+            saveUpdateState();
+        }
+
+        function inlineCountdown(id, stepNum, seconds) {
+            return new Promise(resolve => {
+                let remaining = seconds;
+                const tick = () => {
+                    const el = document.getElementById(`istep-${id}-${stepNum}`);
+                    if (el) el.textContent = `⟳ ${STEP_LABELS[stepNum]} (${remaining}s)`;
+                    setInlineStatus(id, `Čakám ${remaining}s...`);
+                    if (remaining <= 0) { resolve(); return; }
+                    remaining--;
+                    setTimeout(tick, 1000);
+                };
+                tick();
+            });
+        }
+
+        function waitInlineDecision(id) {
+            return new Promise(resolve => {
+                if (_deviceUpdateState[id]) _deviceUpdateState[id].decideResolve = resolve;
+                const decEl = document.getElementById(`idecision-${id}`);
+                if (decEl) decEl.style.display = 'flex';
+                saveUpdateState();
+            });
+        }
+
+        function inlineDecisionAnswer(id, answer) {
+            const decEl = document.getElementById(`idecision-${id}`);
+            if (decEl) decEl.style.display = 'none';
+            saveUpdateState();
+
+            const resolve = _deviceUpdateState[id]?.decideResolve;
+            if (resolve) {
+                _deviceUpdateState[id].decideResolve = null;
+                resolve(answer);
+            } else {
+                // Obnova stateu bez resolve? Pravdepodobne bol refresh stranky.
+                // Ulozime zamer, ale updater bol strateny
+                setInlineStatus(id, "Zastavené. Úloha bola ukončená pri obnove stránky.", "var(--warning-color)");
+                endInlineUpdate(id, false, "Kroky neprešli kvôli obnove spojenia.");
+            }
+        }
+
+        // Sleep helper
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        // Poll device offline
+        async function pollOffline(deviceId, timeoutMs, intervalMs) {
+            const start = Date.now();
+            while (Date.now() - start < timeoutMs) {
+                await sleep(intervalMs);
+                try {
+                    const r = await fetch(`/api/updater/ping/${deviceId}`);
+                    const j = await r.json();
+                    if (j.status === 'offline') return true;
+                } catch (e) {
+                    return true; // fetch error = device likely offline
+                }
+            }
+            return false;
+        }
+
+        // Poll device online
+        async function pollOnline(deviceId, timeoutMs, intervalMs) {
+            const start = Date.now();
+            while (Date.now() - start < timeoutMs) {
+                await sleep(intervalMs);
+                try {
+                    const r = await fetch(`/api/updater/ping/${deviceId}`);
+                    const j = await r.json();
+                    if (j.status === 'online') return true;
+                } catch (e) { /* continue */ }
+            }
+            return false;
+        }
+
+        // After final reboot: wait for device to go offline then come back, then refresh row
+        async function waitOnlineThenRefresh(id, isLowMem) {
+            // Wait for device to go offline (up to 60s)
+            await pollOffline(id, 60000, 2000);
+            // Then wait for it to come back online
+            const onlineTimeout = isLowMem ? 300000 : 180000;
+            setInlineStatus(id, 'Čakám kým zariadenie nabootuje...');
+            const cameOnline = await pollOnline(id, onlineTimeout, 5000);
+            if (cameOnline) {
+                setInlineStatus(id, '✅ Zariadenie online. Obnovujem údaje...', 'var(--success-color)');
+                await sleep(3000); // Brief settle time for services
+                clearUpdateState(id); // This will restore normal buttons
+            } else {
+                const statusEl = document.getElementById(`istatus-${id}`);
+                if (statusEl) {
+                    statusEl.style.color = 'var(--warning-color)';
+                    statusEl.innerHTML = `⚠️ Zariadenie sa nevrátilo online. <button onclick="clearUpdateState(${id})" style="background:none; border:none; color:var(--accent-color); cursor:pointer; font-size:12px; text-decoration:underline; padding:0; margin-left:4px;">Zatvoriť</button>`;
+                }
+            }
+        }
+
+        // ─── Full update sequence ─────────────────────────────────────────────────
+        async function fullUpdateDevice(id) {
+            const dev = devicesList.find(d => d.id === id);
+            const isLowMem = dev && dev.low_memory;
+
+            startInlineUpdate(id);
+
+            try {
+                // Step 1 – Update OS
+                setInlineStep(id, 1, 'active');
+                setInlineStatus(id, 'Odosielam príkaz na aktualizáciu RouterOS...');
+                const osRes = await fetch(`/api/updater/install-os/${id}`, { method: 'POST' });
+                const osData = await osRes.json();
+                if (osData.status !== 'success') {
+                    setInlineStep(id, 1, 'error');
+                    endInlineUpdate(id, false, `❌ Chyba Update OS: ${osData.message}`);
+                    return;
+                }
+                setInlineStep(id, 1, 'done');
+
+                // Step 2 – Wait for offline (reboot confirmation)
+                setInlineStep(id, 2, 'active');
+                setInlineStatus(id, 'Čakám na reštart zariadenia...');
+                const offlineTimeout = isLowMem ? 240000 : 90000;
+                const wentOffline = await pollOffline(id, offlineTimeout, 2000);
+
+                if (!wentOffline) {
+                    setInlineStep(id, 2, 'error');
+                    setInlineStatus(id, '⚠️ Zariadenie sa nereštartovalo – OS bol pravdepodobne aktuálny. Pokračovať s Firmware?', 'var(--warning-color)');
+                    const decision = await waitInlineDecision(id);
+                    if (decision === 'stop') {
+                        endInlineUpdate(id, true, '⏹ Zastavené.');
+                        return;
+                    }
+                    setInlineStep(id, 2, 'done');
+                    setInlineStep(id, 3, 'done');
+                    setInlineStep(id, 4, 'done');
+                } else {
+                    setInlineStep(id, 2, 'done');
+
+                    // Step 3 – Wait online
+                    setInlineStep(id, 3, 'active');
+                    setInlineStatus(id, 'Čakám kým zariadenie nabootuje...');
+                    const onlineTimeout = isLowMem ? 300000 : 180000;
+                    const cameOnline = await pollOnline(id, onlineTimeout, 5000);
+                    if (!cameOnline) {
+                        setInlineStep(id, 3, 'error');
+                        endInlineUpdate(id, false, `❌ Zariadenie sa nevrátilo online v časovom limite (${onlineTimeout / 1000}s).`);
+                        return;
+                    }
+                    setInlineStep(id, 3, 'done');
+
+                    // Step 4 – 120s countdown
+                    setInlineStep(id, 4, 'active');
+                    await inlineCountdown(id, 4, 120);
+                    setInlineStep(id, 4, 'done');
+                }
+
+                // Step 5 – Check firmware versions (fetch fresh data)
+                setInlineStep(id, 5, 'active');
+                setInlineStatus(id, 'Kontrolujem verzie firmware...');
+                let fwUpdateNeeded = true;
+                try {
+                    const freshRes = await fetch(`/api/updater/device/${id}`);
+                    const freshData = await freshRes.json();
+                    if (freshData.status === 'success') {
+                        deviceDataMap[id] = freshData;
+                        const cur = freshData.firmware['current-firmware'];
+                        const upg = freshData.firmware['upgrade-firmware'];
+                        if (cur !== 'N/A' && cur === upg) fwUpdateNeeded = false;
+                    }
+                } catch (e) { /* keep fwUpdateNeeded = true */ }
+
+                if (!fwUpdateNeeded) {
+                    setInlineStep(id, 5, 'done');
+                    setInlineStep(id, 6, 'done');
+                    setInlineStep(id, 7, 'done');
+                    endInlineUpdate(id, true, '✅ Firmware je aktuálny. Aktualizácia dokončená!');
+                    // Device is already online (didn't reboot for firmware), refresh directly
+                    setTimeout(() => { if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) clearUpdateState(id); }, 2000);
+                    return;
+                }
+
+                const fwRes = await fetch(`/api/updater/install-firmware/${id}`, { method: 'POST' });
+                const fwData = await fwRes.json();
+                if (fwData.status !== 'success') {
+                    setInlineStep(id, 5, 'error');
+                    endInlineUpdate(id, false, `❌ Chyba Update Firmware: ${fwData.message}`);
+                    return;
+                }
+                setInlineStep(id, 5, 'done');
+
+                // Step 6 – 20s countdown
+                setInlineStep(id, 6, 'active');
+                await inlineCountdown(id, 6, 20);
+                setInlineStep(id, 6, 'done');
+
+                // Step 7 – Final reboot
+                setInlineStep(id, 7, 'active');
+                setInlineStatus(id, 'Odosielam príkaz na finálny reštart...');
+                const rebootRes = await fetch(`/api/updater/reboot/${id}`, { method: 'POST' });
+                const rebootData = await rebootRes.json();
+                if (rebootData.status !== 'success') {
+                    setInlineStep(id, 7, 'error');
+                    endInlineUpdate(id, false, `❌ Chyba Reštart: ${rebootData.message}`);
+                    return;
+                }
+                setInlineStep(id, 7, 'done');
+                endInlineUpdate(id, true, '✅ Aktualizácia dokončená!');
+
+                // Wait for device to reboot and come back, then refresh the row
+                await waitOnlineThenRefresh(id, isLowMem);
+
+            } catch (err) {
+                endInlineUpdate(id, false, `❌ Neočakávaná chyba: ${err.message}`);
+            }
+        }
+
+        // ─── Bulk update ──────────────────────────────────────────────────────────
+        async function bulkUpdateDevices() {
+            const ids = getCheckedDeviceIds();
+            if (ids.length === 0) return;
+
+            const bulkBtn = document.getElementById('bulkUpdateBtn');
+            bulkBtn.disabled = true;
+
+            // Process devices sequentially – each shows its own inline progress
+            for (let i = 0; i < ids.length; i++) {
+                await fullUpdateDevice(ids[i]);
+                if (i < ids.length - 1) await sleep(2000);
+            }
+
+            // Uncheck all after bulk is done
+            document.querySelectorAll('.device-select-cb').forEach(cb => cb.checked = false);
+            document.getElementById('selectAllCb').checked = false;
+            document.getElementById('selectAllCb').indeterminate = false;
+            bulkBtn.disabled = true;
         }
     </script>
 </body>

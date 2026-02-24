@@ -58,7 +58,7 @@ BOOLEAN_SETTING_KEYS = {
     'notify_device_offline', 'notify_device_online', 'notify_temp_critical',
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
     'notify_version_change', 'notify_failed_login', 'notify_failed_2fa', 'notify_password_recovery_failure', 'quiet_hours_enabled', 'availability_monitoring_enabled',
-    'debug_terminal'
+    'debug_terminal', 'notify_cert_expiry'
 }
 
 SETTING_LABELS = {
@@ -2077,6 +2077,217 @@ def mk_api(device_id, method, endpoint, payload=None, timeout_val=20):
     
     return None, {'status': 'error', 'message': 'Zariadenie nedostupné cez HTTPS ani HTTP.'}, 500
 
+
+def parse_mikrotik_date(date_str):
+    """Parsuje MikroTik formát dátumu napr. 'jan/01/2025 12:34:56' alebo ISO varianty."""
+    if not date_str:
+        return None
+    date_str = date_str.strip()
+    # Normalize: 'jan/01/2025 ...' → 'Jan/01/2025 ...' pre strptime %b
+    if '/' in date_str:
+        parts = date_str.split('/', 1)
+        date_str = parts[0].capitalize() + '/' + parts[1]
+    for fmt in ['%b/%d/%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%SZ']:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+# In-memory tracking to avoid repeated daily auto-renewal per device
+_cert_expiry_notified = {}
+
+
+def _do_renew_certificate(ip, username, password, days):
+    """Obnoví TLS certifikát WebCert na MikroTik zariadení cez HTTP (port 80).
+    Vracia (success: bool, message: str)."""
+
+    def http_api(method, endpoint, payload=None, timeout=20):
+        url = f"http://{ip}/rest/{endpoint.lstrip('/')}"
+        try:
+            r = requests.request(method, url, auth=(username, password), json=payload, timeout=timeout)
+            if r.status_code in [200, 201, 202]:
+                try:
+                    return r.json(), None
+                except Exception:
+                    return r.text, None
+            else:
+                err_msg = r.text
+                try:
+                    ej = r.json()
+                    if 'detail' in ej:
+                        err_msg = ej['detail']
+                except Exception:
+                    pass
+                return None, f'API chyba ({r.status_code}): {err_msg}'
+        except Exception as e:
+            return None, f'Chyba spojenia: {str(e)}'
+
+    # 1. Odstránenie starého certifikátu (ignorujeme chybu ak neexistuje)
+    http_api('POST', 'certificate/remove', {'numbers': 'WebCert'})
+    time.sleep(2)
+
+    # 2. Pridanie nového certifikátu
+    res, err = http_api('POST', 'certificate/add', {
+        'name': 'WebCert',
+        'common-name': 'WebCert',
+        'days-valid': str(days)
+    }, timeout=30)
+    if err:
+        return False, f'Chyba pri pridaní certifikátu: {err}'
+
+    time.sleep(3)
+
+    # 3. Zistenie interného .id certifikátu (REST API vyžaduje .id namiesto mena)
+    cert_id = None
+    for attempt in range(5):
+        res, err = http_api('GET', 'certificate?name=WebCert')
+        if not err and isinstance(res, list) and len(res) > 0:
+            cert_id = res[0].get('.id')
+            if cert_id:
+                break
+        time.sleep(2)
+
+    if not cert_id:
+        return False, 'Nepodarilo sa získať ID certifikátu na podpísanie.'
+
+    # 4. Podpísanie certifikátu
+    http_api('POST', 'certificate/sign', {'number': cert_id}, timeout=30)
+
+    # 5. Overenie, či bol certifikát podpísaný (trusted=true, RouterBOARD môže trvať 5–15s)
+    signed = False
+    for attempt in range(6):
+        time.sleep(3)
+        res, err = http_api('GET', f'certificate/{cert_id}')
+        if isinstance(res, dict) and res.get('trusted') == 'true':
+            signed = True
+            break
+
+    if not signed:
+        return False, 'Certifikát sa nepodarilo podpísať v časovom limite.'
+
+    # 6. Aktivácia certifikátu pre www-ssl službu
+    res, err = http_api('POST', 'ip/service/set', {
+        'numbers': 'www-ssl',
+        'certificate': 'WebCert',
+        'disabled': 'no'
+    })
+
+    if err:
+        return False, f'Chyba pri nastavení služby www-ssl: {err}'
+
+    return True, f'Certifikát úspešne vygenerovaný ({days} dní) a aplikovaný.'
+
+
+def check_certificates_expiry():
+    """Skontroluje certifikáty na všetkých zariadeniach a automaticky obnoví tie, ktorým čoskoro vyprší platnosť."""
+    with app.app_context():
+        try:
+            with get_db_connection() as conn:
+                settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+                devices = conn.execute('SELECT * FROM devices').fetchall()
+
+            if settings.get('notify_cert_expiry', 'false').lower() != 'true':
+                return
+
+            try:
+                warning_days = int(settings.get('cert_expiry_warning_days', 30))
+            except (TypeError, ValueError):
+                warning_days = 30
+
+            try:
+                renewal_days = int(settings.get('cert_auto_renewal_days', 365))
+            except (TypeError, ValueError):
+                renewal_days = 365
+
+            today_str = datetime.now().strftime('%Y-%m-%d')
+
+            for device_row in devices:
+                device = dict(device_row)
+                device_id = device['id']
+                device_name = device['name']
+                ip = device['ip']
+                
+                device_renewal_days = device.get('cert_auto_renewal_days')
+                final_renewal_days = int(device_renewal_days) if device_renewal_days else renewal_days
+
+                # Skip if already processed today for this device
+                if _cert_expiry_notified.get(device_id) == today_str:
+                    continue
+
+                device_dec = get_device_with_decrypted_password(device)
+                username = device_dec['username']
+                password = device_dec['password']
+
+                # Check device reachability (HTTPS verify=False → HTTP fallback)
+                device_reachable = False
+                for scheme in ['https', 'http']:
+                    try:
+                        r = requests.get(
+                            f"{scheme}://{ip}/rest/system/identity",
+                            auth=(username, password),
+                            verify=False,
+                            timeout=3
+                        )
+                        if r.status_code == 200:
+                            device_reachable = True
+                            break
+                    except Exception:
+                        if scheme == 'https':
+                            continue
+                        break
+
+                if not device_reachable:
+                    continue
+
+                # Fetch cert via HTTP (consistent with cert renewal flow)
+                try:
+                    r = requests.get(
+                        f"http://{ip}/rest/certificate",
+                        params={'name': 'WebCert'},
+                        auth=(username, password),
+                        timeout=5
+                    )
+                    if r.status_code != 200:
+                        continue
+                    certs = r.json()
+                    if not isinstance(certs, list) or len(certs) == 0:
+                        continue
+                    cert = certs[0]
+                    invalid_after = cert.get('invalid-after')
+                    if not invalid_after:
+                        continue
+                    expiry_dt = parse_mikrotik_date(invalid_after)
+                    if not expiry_dt:
+                        continue
+                    days_remaining = (expiry_dt - datetime.now()).days
+                except Exception:
+                    continue
+
+                if days_remaining <= warning_days:
+                    logger.info(f"Auto-renewing cert for {device_name} ({ip}), {days_remaining} days remaining.")
+                    success, message = _do_renew_certificate(ip, username, password, final_renewal_days)
+
+                    if success:
+                        add_log('info', f'Certifikát automaticky obnovený ({final_renewal_days} dní). Zostatok bol {days_remaining} dní.', device_ip=ip)
+                        send_pushover_notification(
+                            f"🔐 Certifikát na zariadení {device_name} bol automaticky obnovený ({final_renewal_days} dní).",
+                            notification_key='notify_cert_expiry'
+                        )
+                    else:
+                        add_log('error', f'Chyba pri automatickej obnove certifikátu: {message}', device_ip=ip)
+                        send_pushover_notification(
+                            f"⚠️ Chyba pri automatickej obnove certifikátu na {device_name}: {message}",
+                            notification_key='notify_cert_expiry'
+                        )
+
+                    _cert_expiry_notified[device_id] = today_str
+
+        except Exception as e:
+            logger.error(f"check_certificates_expiry error: {e}")
+
+
 @app.route('/updater.html')
 @login_required
 def updater_page():
@@ -2091,6 +2302,37 @@ def api_updater_rss():
     if data:
         return jsonify({'status': 'success', 'data': data})
     return jsonify({'status': 'error', 'message': 'Nepodarilo sa načítať RSS.'}), 500
+
+@app.route('/api/updater/ping/<int:device_id>')
+@login_required
+def api_updater_ping(device_id):
+    """Rýchla kontrola dostupnosti zariadenia pre polling počas full-update procesu."""
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if not device:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+
+    device_dec = get_device_with_decrypted_password(dict(device))
+    ip = device_dec['ip']
+    username = device_dec['username']
+    password = device_dec['password']
+
+    for scheme in ['https', 'http']:
+        try:
+            r = requests.get(
+                f"{scheme}://{ip}/rest/system/identity",
+                auth=(username, password),
+                verify=False,
+                timeout=2
+            )
+            if r.status_code == 200:
+                return jsonify({'status': 'online'})
+        except Exception:
+            if scheme == 'https':
+                continue
+            break
+
+    return jsonify({'status': 'offline'})
 
 @app.route('/api/updater/device/<int:device_id>')
 @login_required
@@ -2116,6 +2358,7 @@ def api_updater_device(device_id):
     
     # Kontrola HTTPS dostupnosti (či zariadenie má platný certifikát)
     ssl_ok = False
+    cert_expiry = None
     with get_db_connection() as conn:
         device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
     if device:
@@ -2125,12 +2368,53 @@ def api_updater_device(device_id):
                         auth=(device_dec['username'], device_dec['password']),
                         verify=False, timeout=3)
             ssl_ok = True
-        except:
+        except Exception:
             pass
-            
+
+        # Načítanie platnosti certifikátu cez HTTP (konzistentné s cert flow)
+        try:
+            r = requests.get(
+                f"http://{device_dec['ip']}/rest/certificate",
+                params={'name': 'WebCert'},
+                auth=(device_dec['username'], device_dec['password']),
+                timeout=5
+            )
+            if r.status_code == 200:
+                certs = r.json()
+                if isinstance(certs, list) and len(certs) > 0:
+                    invalid_after = certs[0].get('invalid-after')
+                    if invalid_after:
+                        expiry_dt = parse_mikrotik_date(invalid_after)
+                        if expiry_dt:
+                            days_remaining = (expiry_dt - datetime.now()).days
+                            cert_expiry = {
+                                'days_remaining': days_remaining,
+                                'invalid_after': invalid_after
+                            }
+        except Exception:
+            pass
+
+    
+    # Pridanie dynamických nastavení z databázy
+    with get_db_connection() as conn:
+        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+        cert_expiry_warning_days = int(settings.get('cert_expiry_warning_days', 10))
+        cert_auto_renewal_days = int(settings.get('cert_auto_renewal_days', 180))
+
+    if device and dict(device).get('cert_auto_renewal_days'):
+        final_cert_days = int(dict(device)['cert_auto_renewal_days'])
+        is_custom_cert_days = True
+    else:
+        final_cert_days = cert_auto_renewal_days
+        is_custom_cert_days = False
+
     return jsonify({
         'status': 'success',
         'ssl_ok': ssl_ok,
+        'cert_expiry': cert_expiry,
+        'cert_auto_renewal_days': final_cert_days,
+        'is_custom_cert_days': is_custom_cert_days,
+        'cert_expiry_warning_days': cert_expiry_warning_days,
         'os': {
             'installed-version': os_info.get('installed-version', 'N/A'),
             'latest-version': os_info.get('latest-version', 'N/A'),
@@ -2188,102 +2472,48 @@ def api_updater_reboot(device_id):
 @login_required
 def api_updater_certificate(device_id):
     data = request.json or {}
-    days = data.get('days', 365)
-    
+    days = data.get('days', 180)
+
     logger.info(f"[{device_id}] Starting SSL certificate regeneration for {days} days.")
-    
-    # Získanie údajov zariadenia
+
     with get_db_connection() as conn:
         device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
-    
+
     device_dec = get_device_with_decrypted_password(dict(device))
     ip = device_dec['ip']
     username = device_dec['username']
     password = device_dec['password']
-    
-    # Pomocná funkcia - volanie cez HTTP (port 80) namiesto HTTPS
-    # Dôvod: keď odstránime starý certifikát z www-ssl, HTTPS sa úplne rozpadne
-    # a všetky následné HTTPS requesty zlyhajú na SSLZeroReturnError.
-    # HTTP port 80 funguje vždy spoľahlivo.
-    def http_api(method, endpoint, payload=None, timeout=20):
-        url = f"http://{ip}/rest/{endpoint.lstrip('/')}"
-        try:
-            r = requests.request(method, url, auth=(username, password), json=payload, timeout=timeout)
-            if r.status_code in [200, 201, 202]:
-                try:
-                    return r.json(), None
-                except:
-                    return r.text, None
-            else:
-                err_msg = r.text
-                try:
-                    ej = r.json()
-                    if 'detail' in ej:
-                        err_msg = ej['detail']
-                except:
-                    pass
-                return None, f'API chyba ({r.status_code}): {err_msg}'
-        except Exception as e:
-            return None, f'Chyba spojenia: {str(e)}'
-    
-    # 1. Odstránenie starého certifikátu (ignorujeme chybu ak neexistuje)
-    http_api('POST', 'certificate/remove', {'numbers': 'WebCert'})
-    time.sleep(2)
-    
-    # 2. Pridanie nového certifikátu
-    res, err = http_api('POST', 'certificate/add', {
-        'name': 'WebCert',
-        'common-name': 'WebCert',
-        'days-valid': str(days)
-    }, timeout=30)
-    if err:
-        return jsonify({'status': 'error', 'message': f'Chyba pri pridaní certifikátu: {err}'}), 500
-    
-    time.sleep(3)
-    
-    # 3. Zistenie interného .id certifikátu (REST API vyžaduje .id namiesto mena)
-    cert_id = None
-    for attempt in range(5):
-        res, err = http_api('GET', 'certificate?name=WebCert')
-        if not err and isinstance(res, list) and len(res) > 0:
-            cert_id = res[0].get('.id')
-            if cert_id:
-                break
-        time.sleep(2)
-    
-    if not cert_id:
-        return jsonify({'status': 'error', 'message': 'Nepodarilo sa získať ID certifikátu na podpísanie.'}), 500
-    
-    # 4. Podpísanie certifikátu
-    res, err = http_api('POST', 'certificate/sign', {'number': cert_id}, timeout=30)
-    
-    # Overenie, či bol certifikát podpísaný (trusted=true, RouterBOARD môže trvať 5-15s)
-    signed = False
-    for attempt in range(6):
-        time.sleep(3)
-        res, err = http_api('GET', f'certificate/{cert_id}')
-        if isinstance(res, dict) and res.get('trusted') == 'true':
-            signed = True
-            break
-    
-    if not signed:
-        return jsonify({'status': 'error', 'message': 'Certifikát sa nepodarilo podpísať v časovom limite.'}), 500
-    
-    # 5. Aktivácia certifikátu pre www-ssl službu
-    res, err = http_api('POST', 'ip/service/set', {
-        'numbers': 'www-ssl',
-        'certificate': 'WebCert',
-        'disabled': 'no'
-    })
-    
-    if err:
-        return jsonify({'status': 'error', 'message': f'Chyba pri nastavení služby www-ssl: {err}'}), 500
-    
-    add_log('INFO', f'Nový SSL certifikát vygenerovaný ({days} dní) a aplikovaný na www-ssl.', device_ip=ip)
-    return jsonify({'status': 'success', 'message': f'Certifikát úspešne vygenerovaný ({days} dní) a aplikovaný.'})
 
+    success, message = _do_renew_certificate(ip, username, password, days)
+
+    if success:
+        add_log('INFO', f'Nový SSL certifikát vygenerovaný ({days} dní) a aplikovaný na www-ssl.', device_ip=ip)
+        return jsonify({'status': 'success', 'message': message})
+    else:
+        return jsonify({'status': 'error', 'message': message}), 500
+
+
+@app.route('/api/updater/certificate/save_settings/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_certificate_save_settings(device_id):
+    data = request.json or {}
+    days = data.get('days', 180)
+    save_for_device = data.get('save_for_device', False)
+
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        if not device:
+            return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+        
+        if save_for_device:
+            conn.execute('UPDATE devices SET cert_auto_renewal_days = ? WHERE id = ?', (days, device_id))
+        else:
+            conn.execute('UPDATE devices SET cert_auto_renewal_days = NULL WHERE id = ?', (device_id,))
+        conn.commit()
+
+    return jsonify({'status': 'success', 'message': 'Nastavenia uložené.'})
 
 
 @app.route('/')
@@ -3672,6 +3902,7 @@ def setup_scheduler(log_schedule_info=False):
     # SNMP checks are now handled by individual timers - no scheduler needed
     # Only keep essential scheduled tasks
     schedule.every().day.at("03:00").do(scheduled_log_cleanup)  # Čistenie starých logov každý deň o 3:00
+    schedule.every().day.at("09:00").do(check_certificates_expiry)  # Denná kontrola a automatická obnova SSL certifikátov
     
     snmp_health_enabled = settings.get('snmp_health_check_enabled', 'true').lower() == 'true'
     try:

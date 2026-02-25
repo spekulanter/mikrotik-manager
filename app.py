@@ -2509,7 +2509,8 @@ def api_updater_device(device_id):
 @login_required
 def api_updater_install_os(device_id):
     data, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
-    if err:
+    # 500 = connection error – device started updating and rebooted before responding
+    if err and code != 500:
         return jsonify(err), code
     with get_db_connection() as conn:
         device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
@@ -2568,9 +2569,15 @@ def api_updater_certificate(device_id):
     success, message = _do_renew_certificate(ip, username, password, days)
 
     if success:
-        add_log('INFO', f'Nový SSL certifikát vygenerovaný ({days} dní) a aplikovaný na www-ssl.', device_ip=ip)
+        add_log('info', f'Nový TLS certifikát vygenerovaný ({days} dní) a aplikovaný na www-ssl.', device_ip=ip)
         return jsonify({'status': 'success', 'message': message})
     else:
+        add_log('error', f'Chyba pri vytváraní TLS certifikátu: {message}', device_ip=ip)
+        send_pushover_notification(
+            f'⚠️ Chyba pri vytváraní TLS certifikátu na {ip}: {message}',
+            title='MikroTik – Chyba TLS certifikátu',
+            notification_key='notify_cert_expiry'
+        )
         return jsonify({'status': 'error', 'message': message}), 500
 
 
@@ -4132,8 +4139,9 @@ def run_scheduled_update(schedule_id):
             if has_os_update:
                 add_log('info', f'Naplánovaný update [{device_name}]: Inštalujem RouterOS {installed} → {latest}', device_ip)
                 _emit('step_active', step=1, msg=f'Inštalujem RouterOS {installed} → {latest}...')
-                _, err, _ = mk_api(device_id, 'POST', 'system/package/update/install')
-                if err:
+                _, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
+                # 500 = connection error – device started updating and rebooted before responding
+                if err and code != 500:
                     _emit('step_error', step=1)
                     _fail(f'Chyba inštalácie OS: {err}')
                     return

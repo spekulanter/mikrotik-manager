@@ -798,6 +798,12 @@
                     if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
                         startInlineUpdate(id);
                     }
+                    // Remove schedule badge – 7-step progress is sufficient feedback
+                    const statusEl = document.getElementById(`status-${id}`);
+                    if (statusEl) {
+                        const badge = statusEl.querySelector('.schedule-badge');
+                        if (badge) badge.remove();
+                    }
                     if (msg) setInlineStatus(id, msg);
                 } else if (state === 'step_active') {
                     if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
@@ -1268,13 +1274,11 @@
                     body: JSON.stringify({ days })
                 });
                 const json = await res.json();
-                if (json.status === 'success') {
-                    alert('Úspech: ' + json.message);
-                } else {
-                    alert('Chyba: ' + (json.message || 'Neznáma chyba API'));
+                if (json.status !== 'success') {
+                    showToast('Chyba TLS certifikátu: ' + (json.message || 'Neznáma chyba API'), 'error', 6000);
                 }
             } catch (err) {
-                alert('Chyba siete pri obnove SSL certifikátu: ' + err.message);
+                showToast('Chyba siete pri obnove TLS certifikátu: ' + err.message, 'error', 6000);
             } finally {
                 btn.innerHTML = prevHtml;
                 btn.disabled = false;
@@ -1893,6 +1897,9 @@
                 const data = await res.json();
                 if (data.status === 'success') {
                     document.getElementById('scheduleModal').style.display = 'none';
+                    // Close the action dropdown for the device
+                    const dd = document.getElementById(`dropdown-${id}`);
+                    if (dd) dd.style.display = 'none';
                     _scheduleTargetDeviceId = null;
                     showToast('Update naplánovaný.', 'success');
                     await loadSchedules();
@@ -1929,9 +1936,9 @@
                 const res = await fetch('/api/updater/schedules');
                 const schedules = await res.json();
 
-                // Aktualizuj globálnu cache (iba active plány)
+                // Aktualizuj globálnu cache (iba pending – running nemá badge, update prebieha)
                 _deviceSchedules = {};
-                schedules.filter(s => s.status === 'pending' || s.status === 'running')
+                schedules.filter(s => s.status === 'pending')
                     .forEach(s => { _deviceSchedules[s.device_id] = s; });
 
                 // Obnov badges na všetkých riadkoch

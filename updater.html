@@ -303,6 +303,7 @@
             opacity: 0.4;
             cursor: not-allowed;
         }
+
         .update-dropdown .dropdown-item.disabled-item:hover {
             background-color: transparent;
         }
@@ -607,13 +608,28 @@
             pointer-events: none;
         }
 
-        .update-toast.info  { border-color: #3b82f6; }
-        .update-toast.success { border-color: #4ade80; }
-        .update-toast.warning { border-color: #facc15; }
+        .update-toast.info {
+            border-color: #3b82f6;
+        }
+
+        .update-toast.success {
+            border-color: #4ade80;
+        }
+
+        .update-toast.warning {
+            border-color: #facc15;
+        }
 
         @keyframes toastIn {
-            from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
-            to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
         }
     </style>
 </head>
@@ -715,19 +731,24 @@
                 <h2 style="font-size:1.15rem; font-weight:600; color:var(--accent-color);">
                     <i class="fas fa-calendar-plus" style="margin-right:8px;"></i>Naplánovať update
                 </h2>
-                <button onclick="closeScheduleModal()" style="background:none;border:none;color:var(--text-color);font-size:1.5rem;cursor:pointer;">&times;</button>
+                <button onclick="closeScheduleModal()"
+                    style="background:none;border:none;color:var(--text-color);font-size:1.5rem;cursor:pointer;">&times;</button>
             </div>
             <p style="color:var(--text-muted);font-size:13px;margin-bottom:4px;">Zariadenie:</p>
             <p style="font-weight:600;margin-bottom:16px;" id="scheduleDeviceName"></p>
-            <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">Dátum a čas aktualizácie:</label>
+            <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">Dátum a čas
+                aktualizácie:</label>
             <input type="datetime-local" id="scheduleDateTime"
                 style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border-color);background:var(--input-bg,#1f2937);color:var(--text-color);font-size:14px;box-sizing:border-box;margin-bottom:14px;">
             <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
-                <i class="fas fa-info-circle"></i> Vykoná sa automaticky: RouterOS update → Firmware update → Reštart. Zariadenie nemusí byť otvorené v prehliadači.
+                <i class="fas fa-info-circle"></i> Vykoná sa automaticky: RouterOS update → Firmware update → Reštart.
+                Zariadenie nemusí byť otvorené v prehliadači.
             </p>
-            <div id="scheduleModalError" style="display:none;color:var(--danger-color);font-size:13px;margin-bottom:12px;"></div>
+            <div id="scheduleModalError"
+                style="display:none;color:var(--danger-color);font-size:13px;margin-bottom:12px;"></div>
             <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button onclick="closeScheduleModal()" class="action-btn" style="background:var(--border-color);">Zrušiť</button>
+                <button onclick="closeScheduleModal()" class="action-btn"
+                    style="background:var(--border-color);">Zrušiť</button>
                 <button onclick="confirmSchedule()" class="action-btn primary" id="confirmScheduleBtn">
                     <i class="fas fa-calendar-check"></i> Naplánovať
                 </button>
@@ -802,6 +823,8 @@
                     if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
                         startInlineUpdate(id);
                     }
+                    // Mark status/os/fw cells with purple "updating" indicator
+                    setUpdatingCells(id);
                     // Remove schedule badge – 7-step progress is sufficient feedback
                     const statusEl = document.getElementById(`status-${id}`);
                     if (statusEl) {
@@ -812,6 +835,7 @@
                 } else if (state === 'step_active') {
                     if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
                         startInlineUpdate(id);
+                        setUpdatingCells(id);
                     }
                     setInlineStep(id, step, 'active');
                     if (msg) setInlineStatus(id, msg);
@@ -909,7 +933,7 @@
                         fetch(`/api/updater/ping/${d.id}`)
                             .then(r => r.json())
                             .then(j => { if (j.status === 'online') clearUpdateState(d.id); })
-                            .catch(() => {});
+                            .catch(() => { });
                     }
                 });
                 // Restore running updates FIRST (sets active=true) so fetchDeviceDetails skips them
@@ -933,8 +957,11 @@
                     delete _deviceUpdateState[d.id];
                     saveUpdateState();
                 }
-                // Skip loading indicators for devices with active update
-                if (_deviceUpdateState[d.id]?.active) return;
+                // Active update: show purple indicator instead of generic spinner
+                if (_deviceUpdateState[d.id]?.active) {
+                    setUpdatingCells(d.id);
+                    return;
+                }
                 const statusEl = document.getElementById(`status-${d.id}`);
                 const osEl = document.getElementById(`os-${d.id}`);
                 const fwEl = document.getElementById(`fw-${d.id}`);
@@ -952,12 +979,25 @@
             btn.disabled = false;
         }
 
+        // Helper: mark status/os/fw cells as "updating" with purple text
+        function setUpdatingCells(id) {
+            const updatingHtml = `<span style="color:#a78bfa; font-weight:500;">⟳ Aktualizuje sa...</span>`;
+            const statusEl = document.getElementById(`status-${id}`);
+            const osEl = document.getElementById(`os-${id}`);
+            const fwEl = document.getElementById(`fw-${id}`);
+            if (statusEl) statusEl.innerHTML = updatingHtml;
+            if (osEl) osEl.innerHTML = updatingHtml;
+            if (fwEl) fwEl.innerHTML = updatingHtml;
+        }
+
         function renderTableShells() {
             const tbody = document.getElementById('devicesTableBody');
             tbody.innerHTML = '';
             devicesList.forEach(dev => {
                 const tr = document.createElement('tr');
                 tr.id = `row-${dev.id}`;
+
+                const isActiveUpdate = _deviceUpdateState[dev.id]?.active;
 
                 // Restore logic
                 let isRestored = false;
@@ -966,6 +1006,8 @@
                     isRestored = true;
                     restoredHtml = _deviceUpdateState[dev.id].htmlContent || '';
                 }
+
+                const updatingHtml = `<span style="color:#a78bfa; font-weight:500;">⟳ Aktualizuje sa...</span>`;
 
                 tr.innerHTML = `
                     <td class="td-checkbox">
@@ -977,10 +1019,10 @@
                         <div id="model-${dev.id}" style="font-size:11px; color:#9ca3af; margin-top:4px;"></div>
                     </td>
                     <td id="status-${dev.id}" style="text-align: center;">
-                        <span class="loading-spinner" style="width:12px; height:12px; border-width: 2px;"></span> Zisťujem
+                        ${isActiveUpdate ? updatingHtml : '<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px;"></span> Zisťujem'}
                     </td>
-                    <td id="os-${dev.id}" style="text-align: center;">Načítavam...</td>
-                    <td id="fw-${dev.id}" style="text-align: center;">Načítavam...</td>
+                    <td id="os-${dev.id}" style="text-align: center;">${isActiveUpdate ? updatingHtml : 'Načítavam...'}</td>
+                    <td id="fw-${dev.id}" style="text-align: center;">${isActiveUpdate ? updatingHtml : 'Načítavam...'}</td>
                     <td>
                         <div id="actions-${dev.id}" style="display:flex; flex-wrap:wrap; gap:8px; opacity:0.5;">
                             ${isRestored ? restoredHtml : 'Čaká sa na spojenie...'}
@@ -1198,8 +1240,8 @@
             const existing = document.getElementById('updateToast');
             if (existing) existing.remove();
 
-            const icons   = { info: 'fa-info-circle', success: 'fa-check-circle', warning: 'fa-exclamation-triangle' };
-            const colors  = { info: '#3b82f6', success: '#4ade80', warning: '#facc15' };
+            const icons = { info: 'fa-info-circle', success: 'fa-check-circle', warning: 'fa-exclamation-triangle' };
+            const colors = { info: '#3b82f6', success: '#4ade80', warning: '#facc15' };
 
             const toast = document.createElement('div');
             toast.id = 'updateToast';
@@ -1219,7 +1261,7 @@
             const data = deviceDataMap[id];
             if (data && data.os) {
                 const installed = data.os['installed-version'];
-                const latest    = data.os['latest-version'];
+                const latest = data.os['latest-version'];
                 if (installed && latest && installed !== 'N/A' && latest !== 'N/A' && installed === latest) {
                     showToast(`RouterOS je už aktuálny (${installed}) – aktualizácia nebola spustená.`, 'info');
                     return;
@@ -1729,6 +1771,8 @@
             if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
                 startInlineUpdate(id);
             }
+            // Mark status/os/fw cells with purple "updating" indicator immediately
+            setUpdatingCells(id);
             setInlineStep(id, 1, 'active');
             setInlineStatus(id, 'Spúšťam aktualizáciu na serveri...');
 
@@ -1784,6 +1828,9 @@
                     // Skip if SocketIO already started showing progress for this device
                     if (_deviceUpdateState[id] && _deviceUpdateState[id].active) continue;
 
+                    // Mark status/os/fw cells as updating (purple) before rebuilding actions
+                    setUpdatingCells(id);
+
                     startInlineUpdate(id);
                     for (const step of (ru.steps_done || [])) {
                         setInlineStep(id, step, 'done');
@@ -1807,15 +1854,15 @@
             if (!isoStr) return '–';
             const d = new Date(isoStr);
             const pad = n => String(n).padStart(2, '0');
-            return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
         }
 
         function scheduleStatusLabel(status) {
             const map = {
-                pending:   '<span style="color:#a78bfa;">⏳ Čaká</span>',
-                running:   '<span style="color:#fbbf24;"><i class="fas fa-spinner fa-spin"></i> Prebieha</span>',
-                done:      '<span style="color:var(--success-color);">✅ Hotovo</span>',
-                failed:    '<span style="color:var(--danger-color);">❌ Chyba</span>',
+                pending: '<span style="color:#a78bfa;">⏳ Čaká</span>',
+                running: '<span style="color:#fbbf24;"><i class="fas fa-spinner fa-spin"></i> Prebieha</span>',
+                done: '<span style="color:var(--success-color);">✅ Hotovo</span>',
+                failed: '<span style="color:var(--danger-color);">❌ Chyba</span>',
                 cancelled: '<span style="color:#6b7280;">🚫 Zrušený</span>'
             };
             return map[status] || status;
@@ -1858,7 +1905,7 @@
             document.getElementById('scheduleModalError').style.display = 'none';
             const minDt = new Date(Date.now() + 5 * 60000);
             const pad = n => String(n).padStart(2, '0');
-            const minStr = `${minDt.getFullYear()}-${pad(minDt.getMonth()+1)}-${pad(minDt.getDate())}T${pad(minDt.getHours())}:${pad(minDt.getMinutes())}`;
+            const minStr = `${minDt.getFullYear()}-${pad(minDt.getMonth() + 1)}-${pad(minDt.getDate())}T${pad(minDt.getHours())}:${pad(minDt.getMinutes())}`;
             const dtInput = document.getElementById('scheduleDateTime');
             dtInput.min = minStr;
             dtInput.value = '';
@@ -1884,8 +1931,8 @@
             try {
                 const res = await fetch(`/api/updater/schedule/${id}`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({scheduled_time: val})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scheduled_time: val })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -1911,7 +1958,7 @@
         async function cancelSchedule(scheduleId) {
             if (!confirm('Zrušiť naplánovaný update?')) return;
             try {
-                const res = await fetch(`/api/updater/schedule/${scheduleId}`, {method: 'DELETE'});
+                const res = await fetch(`/api/updater/schedule/${scheduleId}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (data.status === 'success') {
                     showToast('Plán zrušený.', 'info');
@@ -1963,7 +2010,7 @@
                 });
                 html += '</tbody></table>';
                 container.innerHTML = html;
-            } catch (e) {}
+            } catch (e) { }
         }
 
         // Auto-refresh schedules every 60s

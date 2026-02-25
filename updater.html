@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MikroTik Aktualizátor</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -296,6 +297,14 @@
 
         .update-dropdown .dropdown-item:hover {
             background-color: rgba(56, 189, 248, 0.1);
+        }
+
+        .update-dropdown .dropdown-item.disabled-item {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .update-dropdown .dropdown-item.disabled-item:hover {
+            background-color: transparent;
         }
 
         .update-dropdown .dropdown-divider {
@@ -687,6 +696,45 @@
         </div>
     </div>
 
+    <!-- Scheduled updates panel -->
+    <div id="scheduledUpdatesPanel" style="display:none; max-width:1100px; margin:0 auto 32px; padding:0 16px;">
+        <div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="font-size:1rem;font-weight:600;color:var(--accent-color);margin:0;">
+                    <i class="fas fa-calendar-clock" style="margin-right:8px;"></i>Naplánované aktualizácie
+                </h3>
+            </div>
+            <div id="scheduledUpdatesTable"></div>
+        </div>
+    </div>
+
+    <!-- Schedule modal -->
+    <div id="scheduleModal" class="modal-overlay" onclick="closeScheduleModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:420px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                <h2 style="font-size:1.15rem; font-weight:600; color:var(--accent-color);">
+                    <i class="fas fa-calendar-plus" style="margin-right:8px;"></i>Naplánovať update
+                </h2>
+                <button onclick="closeScheduleModal()" style="background:none;border:none;color:var(--text-color);font-size:1.5rem;cursor:pointer;">&times;</button>
+            </div>
+            <p style="color:var(--text-muted);font-size:13px;margin-bottom:4px;">Zariadenie:</p>
+            <p style="font-weight:600;margin-bottom:16px;" id="scheduleDeviceName"></p>
+            <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">Dátum a čas aktualizácie:</label>
+            <input type="datetime-local" id="scheduleDateTime"
+                style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border-color);background:var(--input-bg,#1f2937);color:var(--text-color);font-size:14px;box-sizing:border-box;margin-bottom:14px;">
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
+                <i class="fas fa-info-circle"></i> Vykoná sa automaticky: RouterOS update → Firmware update → Reštart. Zariadenie nemusí byť otvorené v prehliadači.
+            </p>
+            <div id="scheduleModalError" style="display:none;color:var(--danger-color);font-size:13px;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button onclick="closeScheduleModal()" class="action-btn" style="background:var(--border-color);">Zrušiť</button>
+                <button onclick="confirmSchedule()" class="action-btn primary" id="confirmScheduleBtn">
+                    <i class="fas fa-calendar-check"></i> Naplánovať
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Changelog modal -->
     <div id="changelogModal" class="modal-overlay" onclick="closeModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
@@ -735,6 +783,51 @@
             document.querySelector('#themeToggle i').className = isLight ? 'fas fa-sun' : 'fas fa-moon';
         }
 
+        // ─── SCHEDULED UPDATE SOCKET PROGRESS ────────────────────────────────────
+        function initScheduledUpdateSocket() {
+            const socket = io();
+
+            socket.on('scheduled_update_progress', function (data) {
+                const id = data.device_id;
+                const state = data.state;
+                const step = data.step;
+                const msg = data.msg || '';
+
+                if (state === 'start') {
+                    // Start inline update UI (replaces action buttons with step list)
+                    if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
+                        startInlineUpdate(id);
+                    }
+                    if (msg) setInlineStatus(id, msg);
+                } else if (state === 'step_active') {
+                    if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
+                        startInlineUpdate(id);
+                    }
+                    setInlineStep(id, step, 'active');
+                    if (msg) setInlineStatus(id, msg);
+                } else if (state === 'step_done') {
+                    setInlineStep(id, step, 'done');
+                    if (msg) setInlineStatus(id, msg);
+                } else if (state === 'step_error') {
+                    setInlineStep(id, step, 'error');
+                } else if (state === 'done') {
+                    // Mark all remaining steps done, show success
+                    endInlineUpdate(id, true, msg || '✅ Naplánovaná aktualizácia dokončená!');
+                    // Refresh schedule data after a short delay
+                    setTimeout(() => {
+                        clearUpdateState(id);
+                        loadSchedules();
+                    }, 4000);
+                } else if (state === 'failed') {
+                    endInlineUpdate(id, false, msg || '❌ Naplánovaná aktualizácia zlyhala.');
+                    setTimeout(() => {
+                        clearUpdateState(id);
+                        loadSchedules();
+                    }, 5000);
+                }
+            });
+        }
+
         // ─── INIT ─────────────────────────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('mikrotik_theme') === 'light') {
@@ -747,6 +840,7 @@
                     document.querySelectorAll('.update-dropdown').forEach(d => d.style.display = 'none');
                 }
             });
+            initScheduledUpdateSocket();
             fetchRssData();
             fetchDevices();
         });
@@ -810,6 +904,7 @@
                     }
                 });
                 devices.forEach(d => fetchDeviceDetails(d.id));
+                loadSchedules();
             } catch (err) {
                 document.getElementById('devicesTableBody').innerHTML =
                     `<tr><td colspan="6" style="text-align:center; color: var(--danger-color);">Chyba pri načítaní databázy zariadení.</td></tr>`;
@@ -833,6 +928,7 @@
             });
 
             await Promise.all(devicesList.map(d => fetchDeviceDetails(d.id)));
+            loadSchedules();
 
             btn.classList.remove('loading');
             btn.disabled = false;
@@ -910,6 +1006,7 @@
                         statusHtml += `<br><span style="color:${certColor}; font-size:11px;">${certText}</span>`;
                     }
                     document.getElementById(`status-${id}`).innerHTML = statusHtml;
+                    appendScheduleBadge(id);
 
                     // OS cell
                     document.getElementById(`os-${id}`).innerHTML = `
@@ -936,7 +1033,7 @@
                             <span style="color: #9ca3af; text-align: center;">Aktuálny:</span>
                             <strong>${fwCurrent}</strong>
                             <span style="color: #9ca3af; text-align: center;">Dostupný:</span>
-                            <strong style="${fwCurrent !== fwAvailable ? 'color:var(--warning-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
+                            <strong style="${fwCurrent !== fwAvailable ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
                         </div>
                     `;
                     document.getElementById(`model-${id}`).innerHTML = data.firmware['model'];
@@ -969,7 +1066,8 @@
             const _fwUpg = data.firmware['upgrade-firmware'];
             const _fwAvail = (_fwCur !== 'N/A' && _fwCur === _fwUpg && hasOsUpdate && data.os['latest-version'] !== 'N/A')
                 ? data.os['latest-version'] : _fwUpg;
-            const hasFwUpdate = _fwCur !== 'N/A' && _fwCur !== _fwAvail;
+            const noFirmware = _fwCur === 'N/A';  // VM/CHR – no routerboard
+            const hasFwUpdate = !noFirmware && _fwCur !== _fwAvail;
             const anyUpdate = hasOsUpdate || hasFwUpdate;
             const noSsl = !data.ssl_ok;
             const certLabel = noSsl ? 'Vytvoriť TLS Cert ⚠️' : 'Obnoviť TLS Cert';
@@ -1003,8 +1101,12 @@
                             <button onclick="installOsWithCheck(${id}, this)" class="action-btn dropdown-item ${hasOsUpdate ? 'primary' : ''}">
                                 <i class="fas fa-download"></i> Update RouterOS
                             </button>
-                            <button onclick="installFirmwareWithCheck(${id}, this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : ''}">
+                            <button onclick="installFirmwareWithCheck(${id}, this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : ''} ${noFirmware ? 'disabled-item' : ''}" title="${noFirmware ? 'Zariadenie nemá routerboard (VM/CHR) – firmware update nie je dostupný' : ''}">
                                 <i class="fas fa-microchip"></i> Update Firmware
+                            </button>
+                            <div class="dropdown-divider"></div>
+                            <button onclick="openScheduleModal(${id}, (devicesList.find(d=>d.id===${id})||{}).name||'', ${anyUpdate})" class="action-btn dropdown-item ${anyUpdate ? '' : 'disabled-item'}" title="${anyUpdate ? 'Naplánovať automatický update' : 'Zariadenie je na aktuálnej verzii'}">
+                                <i class="fas fa-calendar-plus"></i> Naplánovať update
                             </button>
                             <div class="dropdown-divider"></div>
                             <button onclick="rebootDevice(${id}, this)" class="action-btn dropdown-item danger">
@@ -1109,6 +1211,10 @@
             if (data && data.firmware) {
                 const current = data.firmware['current-firmware'];
                 const upgrade = data.firmware['upgrade-firmware'];
+                if (current === 'N/A') {
+                    showToast('Toto zariadenie nemá routerboard (VM/CHR) – firmware update nie je dostupný.', 'warning');
+                    return;
+                }
                 if (current && upgrade && current !== 'N/A' && upgrade !== 'N/A' && current === upgrade) {
                     showToast(`Firmware je už na aktuálnej verzii (${current}) – aktualizácia nebola spustená.`, 'info');
                     return;
@@ -1449,7 +1555,8 @@
                     deviceDataMap[id] = freshData;
                     const cur = freshData.firmware['current-firmware'];
                     const upg = freshData.firmware['upgrade-firmware'];
-                    if (cur !== 'N/A' && cur === upg) fwUpdateNeeded = false;
+                    // cur === 'N/A' means no routerboard (VM/CHR) → skip; cur === upg → already up to date
+                    if (cur === 'N/A' || cur === upg) fwUpdateNeeded = false;
                 }
             } catch (e) { /* keep fwUpdateNeeded = true */ }
 
@@ -1533,6 +1640,19 @@
                             return;
                         }
                         setInlineStep(id, 3, 'done');
+
+                        // VM/CHR (no routerboard) – skip 120s + firmware steps entirely
+                        const _resumeDevData = deviceDataMap[id];
+                        if (_resumeDevData && _resumeDevData.firmware && _resumeDevData.firmware['current-firmware'] === 'N/A') {
+                            setInlineStep(id, 4, 'done');
+                            setInlineStep(id, 5, 'done');
+                            setInlineStep(id, 6, 'done');
+                            setInlineStep(id, 7, 'done');
+                            endInlineUpdate(id, true, '✅ RouterOS aktualizovaný. (VM/CHR – firmware nie je potrebný)');
+                            setTimeout(() => clearUpdateState(id), 3000);
+                            return;
+                        }
+
                         setInlineStep(id, 4, 'active');
                         await inlineCountdown(id, 4, 120);
                         setInlineStep(id, 4, 'done');
@@ -1635,6 +1755,18 @@
                     }
                     setInlineStep(id, 3, 'done');
 
+                    // VM/CHR (no routerboard) – skip 120s + firmware steps entirely
+                    const _devData = deviceDataMap[id];
+                    if (_devData && _devData.firmware && _devData.firmware['current-firmware'] === 'N/A') {
+                        setInlineStep(id, 4, 'done');
+                        setInlineStep(id, 5, 'done');
+                        setInlineStep(id, 6, 'done');
+                        setInlineStep(id, 7, 'done');
+                        endInlineUpdate(id, true, '✅ RouterOS aktualizovaný. (VM/CHR – firmware nie je potrebný)');
+                        setTimeout(() => clearUpdateState(id), 3000);
+                        return;
+                    }
+
                     // Step 4 – 120s countdown
                     setInlineStep(id, 4, 'active');
                     await inlineCountdown(id, 4, 120);
@@ -1668,6 +1800,174 @@
             document.getElementById('selectAllCb').indeterminate = false;
             bulkBtn.disabled = true;
         }
+
+        // ─── Scheduled Updates ──────────────────────────────────────────────────────
+
+        let _scheduleTargetDeviceId = null;
+        let _deviceSchedules = {}; // device_id -> schedule (iba pending/running)
+
+        function formatScheduleTime(isoStr) {
+            if (!isoStr) return '–';
+            const d = new Date(isoStr);
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        function scheduleStatusLabel(status) {
+            const map = {
+                pending:   '<span style="color:#a78bfa;">⏳ Čaká</span>',
+                running:   '<span style="color:#fbbf24;"><i class="fas fa-spinner fa-spin"></i> Prebieha</span>',
+                done:      '<span style="color:var(--success-color);">✅ Hotovo</span>',
+                failed:    '<span style="color:var(--danger-color);">❌ Chyba</span>',
+                cancelled: '<span style="color:#6b7280;">🚫 Zrušený</span>'
+            };
+            return map[status] || status;
+        }
+
+        // Priamo pridá/aktualizuje badge na riadku zariadenia (nemaže status cell)
+        function appendScheduleBadge(deviceId) {
+            const schedule = _deviceSchedules[deviceId];
+            const statusEl = document.getElementById(`status-${deviceId}`);
+            if (!statusEl) return;
+            const existing = statusEl.querySelector('.schedule-badge');
+            if (existing) existing.remove();
+            if (!schedule) return;
+            const badge = document.createElement('div');
+            badge.className = 'schedule-badge';
+            badge.style.cssText = 'margin-top:5px;font-size:11px;color:#a78bfa;display:flex;align-items:center;justify-content:center;gap:4px;';
+            if (schedule.status === 'running') {
+                // Running: show scheduled time centered, no cancel button (7-step progress in actions cell is sufficient)
+                badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`;
+            } else {
+                badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`
+                    + ` <button onclick="cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0;margin-left:2px;" title="Zrušiť plán"><i class="fas fa-times-circle"></i></button>`;
+            }
+            statusEl.appendChild(badge);
+        }
+
+        function openScheduleModal(deviceId, deviceName, hasUpdate) {
+            if (!hasUpdate) {
+                showToast('Zariadenie je na aktuálnej verzii – nie je čo aktualizovať.', 'info');
+                return;
+            }
+            // Zabraniť dvojitému plánovaniu
+            const existing = _deviceSchedules[deviceId];
+            if (existing && existing.status === 'pending') {
+                showToast(`Zariadenie už má naplánovaný update na ${formatScheduleTime(existing.scheduled_time)}. Zrušte ho najprv.`, 'warning');
+                return;
+            }
+            _scheduleTargetDeviceId = deviceId;
+            document.getElementById('scheduleDeviceName').textContent = deviceName || ('ID ' + deviceId);
+            document.getElementById('scheduleModalError').style.display = 'none';
+            const minDt = new Date(Date.now() + 5 * 60000);
+            const pad = n => String(n).padStart(2, '0');
+            const minStr = `${minDt.getFullYear()}-${pad(minDt.getMonth()+1)}-${pad(minDt.getDate())}T${pad(minDt.getHours())}:${pad(minDt.getMinutes())}`;
+            const dtInput = document.getElementById('scheduleDateTime');
+            dtInput.min = minStr;
+            dtInput.value = '';
+            document.getElementById('scheduleModal').style.display = 'flex';
+        }
+
+        function closeScheduleModal(e) {
+            if (e && e.target !== document.getElementById('scheduleModal')) return;
+            document.getElementById('scheduleModal').style.display = 'none';
+            _scheduleTargetDeviceId = null;
+        }
+
+        async function confirmSchedule() {
+            const id = _scheduleTargetDeviceId;
+            if (!id) return;
+            const val = document.getElementById('scheduleDateTime').value;
+            const errEl = document.getElementById('scheduleModalError');
+            if (!val) { errEl.textContent = 'Vyberte dátum a čas.'; errEl.style.display = 'block'; return; }
+            if (new Date(val) <= new Date()) { errEl.textContent = 'Čas musí byť v budúcnosti.'; errEl.style.display = 'block'; return; }
+            errEl.style.display = 'none';
+            const btn = document.getElementById('confirmScheduleBtn');
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/updater/schedule/${id}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({scheduled_time: val})
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    document.getElementById('scheduleModal').style.display = 'none';
+                    _scheduleTargetDeviceId = null;
+                    showToast('Update naplánovaný.', 'success');
+                    await loadSchedules();
+                } else {
+                    errEl.textContent = data.message || 'Chyba pri plánovaní.';
+                    errEl.style.display = 'block';
+                }
+            } catch (e) {
+                errEl.textContent = 'Chyba spojenia.';
+                errEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function cancelSchedule(scheduleId) {
+            if (!confirm('Zrušiť naplánovaný update?')) return;
+            try {
+                const res = await fetch(`/api/updater/schedule/${scheduleId}`, {method: 'DELETE'});
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast('Plán zrušený.', 'info');
+                    await loadSchedules();
+                } else {
+                    showToast(data.message || 'Chyba pri rušení.', 'warning');
+                }
+            } catch (e) {
+                showToast('Chyba spojenia.', 'warning');
+            }
+        }
+
+        async function loadSchedules() {
+            try {
+                const res = await fetch('/api/updater/schedules');
+                const schedules = await res.json();
+
+                // Aktualizuj globálnu cache (iba active plány)
+                _deviceSchedules = {};
+                schedules.filter(s => s.status === 'pending' || s.status === 'running')
+                    .forEach(s => { _deviceSchedules[s.device_id] = s; });
+
+                // Obnov badges na všetkých riadkoch
+                devicesList.forEach(d => appendScheduleBadge(d.id));
+
+                // Renderuj panel
+                const panel = document.getElementById('scheduledUpdatesPanel');
+                const container = document.getElementById('scheduledUpdatesTable');
+                if (!schedules.length) { panel.style.display = 'none'; return; }
+                panel.style.display = 'block';
+                let html = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead><tr style="color:var(--text-muted);border-bottom:1px solid var(--border-color);">
+                        <th style="text-align:left;padding:6px 10px;">Zariadenie</th>
+                        <th style="text-align:left;padding:6px 10px;">Naplánovaný čas</th>
+                        <th style="text-align:left;padding:6px 10px;">Stav</th>
+                        <th style="text-align:left;padding:6px 10px;">Výsledok</th>
+                        <th style="padding:6px 10px;"></th>
+                    </tr></thead><tbody>`;
+                schedules.forEach(s => {
+                    html += `<tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:8px 10px;font-weight:500;">${s.device_name}<br><span style="color:var(--text-muted);font-size:11px;">${s.device_ip}</span></td>
+                        <td style="padding:8px 10px;">${formatScheduleTime(s.scheduled_time)}</td>
+                        <td style="padding:8px 10px;">${scheduleStatusLabel(s.status)}</td>
+                        <td style="padding:8px 10px;color:var(--text-muted);font-size:12px;max-width:260px;word-break:break-word;">${s.result_message || '–'}</td>
+                        <td style="padding:8px 10px;">
+                            ${s.status === 'pending' ? `<button onclick="cancelSchedule(${s.id})" class="action-btn danger" style="font-size:12px;padding:4px 10px;"><i class="fas fa-times"></i> Zrušiť</button>` : ''}
+                        </td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (e) {}
+        }
+
+        // Auto-refresh schedules every 60s
+        setInterval(() => loadSchedules(), 60000);
     </script>
 </body>
 

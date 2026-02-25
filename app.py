@@ -839,6 +839,19 @@ def init_database():
                 FOREIGN KEY (device_id) REFERENCES devices (id)
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS update_schedule (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id INTEGER NOT NULL,
+                scheduled_time TIMESTAMP NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP NOT NULL,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                result_message TEXT,
+                FOREIGN KEY (device_id) REFERENCES devices (id)
+            )
+        ''')
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT 0')
         except sqlite3.OperationalError:
@@ -2334,6 +2347,69 @@ def api_updater_ping(device_id):
 
     return jsonify({'status': 'offline'})
 
+@app.route('/api/updater/schedules', methods=['GET'])
+@login_required
+def api_updater_schedules():
+    """Vráti všetky naplánované updaty s info o zariadení."""
+    with get_db_connection() as conn:
+        rows = conn.execute('''
+            SELECT us.id, us.device_id, us.scheduled_time, us.status,
+                   us.created_at, us.started_at, us.completed_at, us.result_message,
+                   d.name AS device_name, d.ip AS device_ip
+            FROM update_schedule us
+            JOIN devices d ON d.id = us.device_id
+            ORDER BY us.scheduled_time DESC
+        ''').fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/updater/schedule/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_schedule_create(device_id):
+    """Vytvorí nový naplánovaný update pre zariadenie."""
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT id, name FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if not device:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+    data = request.get_json()
+    scheduled_time_str = data.get('scheduled_time', '')
+    try:
+        scheduled_time = datetime.fromisoformat(scheduled_time_str)
+    except (ValueError, TypeError):
+        return jsonify({'status': 'error', 'message': 'Neplatný formát dátumu a času.'}), 400
+    if scheduled_time <= datetime.now():
+        return jsonify({'status': 'error', 'message': 'Čas musí byť v budúcnosti.'}), 400
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at) VALUES (?, ?, ?, ?)',
+            (device_id, scheduled_time, 'pending', datetime.now())
+        )
+        new_id = cursor.lastrowid
+        conn.commit()
+    add_log('info', f"Naplánovaný update zariadenia {device['name']}: {scheduled_time.strftime('%d.%m.%Y %H:%M')}")
+    return jsonify({'status': 'success', 'id': new_id})
+
+@app.route('/api/updater/schedule/<int:schedule_id>', methods=['DELETE'])
+@login_required
+def api_updater_schedule_delete(schedule_id):
+    """Zruší pending naplánovaný update."""
+    with get_db_connection() as conn:
+        row = conn.execute(
+            'SELECT us.id, us.status, d.name FROM update_schedule us JOIN devices d ON d.id = us.device_id WHERE us.id = ?',
+            (schedule_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({'status': 'error', 'message': 'Plán nenájdený.'}), 404
+    if row['status'] not in ('pending',):
+        return jsonify({'status': 'error', 'message': 'Zrušiť možno iba čakajúce plány.'}), 400
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE update_schedule SET status='cancelled', completed_at=? WHERE id=?",
+            (datetime.now(), schedule_id)
+        )
+        conn.commit()
+    add_log('info', f"Naplánovaný update zariadenia {row['name']} zrušený.")
+    return jsonify({'status': 'success'})
+
 @app.route('/api/updater/device/<int:device_id>')
 @login_required
 def api_updater_device(device_id):
@@ -2459,13 +2535,16 @@ def api_updater_install_firmware(device_id):
 @login_required
 def api_updater_reboot(device_id):
     data, err, code = mk_api(device_id, 'POST', 'system/reboot')
-    if err: return jsonify(err), code
-    
+    # 4xx = device rejected the command (real error)
+    # 500 = connection error – device started rebooting before responding, treat as success
+    if err and code != 500:
+        return jsonify(err), code
+
     with get_db_connection() as conn:
         device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
     if device:
         add_log('INFO', 'Príkaz na reštart úspešne odoslaný.', device_ip=device['ip'])
-        
+
     return jsonify({'status': 'success', 'message': 'Príkaz na reštart úspešne odoslaný.'})
 
 @app.route('/api/updater/certificate/<int:device_id>', methods=['POST'])
@@ -3969,9 +4048,241 @@ def get_schedule_info():
 
 # SNMP checks sú spracované centrálnym schedulerom (pozri funkcie vyššie)
 
+def _wait_device_offline(device_id, timeout=240, interval=10):
+    """Čaká kým zariadenie prestane odpovedať (reboot). Vracia True ak offline, False ak timeout."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        data, err, _ = mk_api(device_id, 'GET', 'system/identity', timeout_val=2)
+        if err:
+            return True
+        time.sleep(interval)
+    return False
+
+def _wait_device_online(device_id, timeout=300, interval=15):
+    """Čaká kým zariadenie začne znova odpovedať po reboote. Vracia True ak online, False ak timeout."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        data, err, _ = mk_api(device_id, 'GET', 'system/identity', timeout_val=3)
+        if not err:
+            return True
+        time.sleep(interval)
+    return False
+
+def run_scheduled_update(schedule_id):
+    """Vykoná naplánovaný full update (OS + Firmware + Reboot) pre zariadenie."""
+    with app.app_context():
+        device_id = None
+        try:
+            with get_db_connection() as conn:
+                row = conn.execute(
+                    'SELECT us.*, d.ip, d.name FROM update_schedule us JOIN devices d ON d.id = us.device_id WHERE us.id = ?',
+                    (schedule_id,)
+                ).fetchone()
+            if not row:
+                return
+            device_id = row['device_id']
+            device_ip = row['ip']
+            device_name = row['name']
+
+            def _emit(state, step=0, msg=''):
+                socketio.emit('scheduled_update_progress', {
+                    'device_id': device_id,
+                    'schedule_id': schedule_id,
+                    'state': state,
+                    'step': step,
+                    'msg': msg
+                })
+
+            def _fail(msg):
+                add_log('error', f'Naplánovaný update [{device_name}]: {msg}', device_ip)
+                _emit('failed', msg=f'❌ {msg}')
+                with get_db_connection() as c:
+                    c.execute(
+                        'UPDATE update_schedule SET status=?, completed_at=?, result_message=? WHERE id=?',
+                        ('failed', datetime.now(), msg, schedule_id)
+                    )
+                    c.commit()
+                send_pushover_notification(
+                    f'Naplánovaný update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
+                    title='MikroTik Update – Chyba',
+                    notification_key='notify_backup_failure'
+                )
+
+            add_log('info', f'Naplánovaný update [{device_name}]: Spúšťam...', device_ip)
+            _emit('start', msg=f'Naplánovaný update: {device_name}')
+
+            # Krok 1: Zisti dostupnosť OS update
+            _emit('step_active', step=1, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
+            os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
+            if err:
+                _emit('step_error', step=1)
+                _fail(f'Zariadenie nedostupné: {err}')
+                return
+
+            os_info = {}
+            if isinstance(os_data, list) and os_data:
+                os_info = os_data[-1]
+            elif isinstance(os_data, dict):
+                os_info = os_data
+
+            installed = os_info.get('installed-version', '')
+            latest = os_info.get('latest-version', '')
+            has_os_update = installed and latest and installed != latest
+
+            if has_os_update:
+                add_log('info', f'Naplánovaný update [{device_name}]: Inštalujem RouterOS {installed} → {latest}', device_ip)
+                _emit('step_active', step=1, msg=f'Inštalujem RouterOS {installed} → {latest}...')
+                _, err, _ = mk_api(device_id, 'POST', 'system/package/update/install')
+                if err:
+                    _emit('step_error', step=1)
+                    _fail(f'Chyba inštalácie OS: {err}')
+                    return
+                _emit('step_done', step=1)
+
+                # Krok 2: Čakaj offline
+                add_log('info', f'Naplánovaný update [{device_name}]: Čakám na reštart...', device_ip)
+                _emit('step_active', step=2, msg='Čakám na reštart zariadenia...')
+                if not _wait_device_offline(device_id, timeout=240):
+                    _emit('step_error', step=2)
+                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
+                    return
+                _emit('step_done', step=2)
+
+                # Krok 3: Čakaj online
+                add_log('info', f'Naplánovaný update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
+                _emit('step_active', step=3, msg='Čakám kým zariadenie nabootuje...')
+                if not _wait_device_online(device_id, timeout=300):
+                    _emit('step_error', step=3)
+                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    return
+                _emit('step_done', step=3)
+
+                # Krok 4: 120s stabilizácia
+                add_log('info', f'Naplánovaný update [{device_name}]: Online, čakám 120s stabilizáciu...', device_ip)
+                _emit('step_active', step=4, msg='Čakám 120s na stabilizáciu služieb...')
+                time.sleep(120)
+                _emit('step_done', step=4)
+            else:
+                add_log('info', f'Naplánovaný update [{device_name}]: RouterOS {installed} je aktuálny, preskakujem.', device_ip)
+                _emit('step_done', step=1, msg=f'RouterOS {installed} je aktuálny.')
+                _emit('step_done', step=2)
+                _emit('step_done', step=3)
+                _emit('step_done', step=4)
+
+            # Krok 5: Zisti dostupnosť firmware update
+            _emit('step_active', step=5, msg='Kontrolujem verzie firmware...')
+            fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
+            fw_info = {}
+            if not err:
+                if isinstance(fw_data, list) and fw_data:
+                    fw_info = fw_data[0]
+                elif isinstance(fw_data, dict):
+                    fw_info = fw_data
+
+            fw_current = fw_info.get('current-firmware', '')
+            fw_upgrade = fw_info.get('upgrade-firmware', '')
+            has_fw_update = fw_current and fw_upgrade and fw_current != fw_upgrade
+
+            if has_fw_update:
+                add_log('info', f'Naplánovaný update [{device_name}]: Inštalujem Firmware {fw_current} → {fw_upgrade}', device_ip)
+                _emit('step_active', step=5, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
+                _, err, _ = mk_api(device_id, 'POST', 'system/routerboard/upgrade')
+                if err:
+                    _emit('step_error', step=5)
+                    _fail(f'Chyba inštalácie firmware: {err}')
+                    return
+                _emit('step_done', step=5)
+
+                # Krok 6: 20s čakanie pred finálnym reštartom
+                _emit('step_active', step=6, msg='Čakám 20s pred finálnym reštartom...')
+                time.sleep(20)
+                _emit('step_done', step=6)
+
+                # Krok 7: Finálny reštart
+                add_log('info', f'Naplánovaný update [{device_name}]: Finálny reštart...', device_ip)
+                _emit('step_active', step=7, msg='Odosielam príkaz na finálny reštart...')
+                mk_api(device_id, 'POST', 'system/reboot')
+                _wait_device_offline(device_id, timeout=120)
+                if not _wait_device_online(device_id, timeout=300):
+                    _emit('step_error', step=7)
+                    _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
+                    return
+                _emit('step_done', step=7)
+            else:
+                add_log('info', f'Naplánovaný update [{device_name}]: Firmware je aktuálny alebo nie je podporovaný, preskakujem.', device_ip)
+                _emit('step_done', step=5, msg='Firmware je aktuálny.')
+                _emit('step_done', step=6)
+                _emit('step_done', step=7)
+
+            # Hotovo
+            if not fw_current:
+                fw_summary = 'bez routerboardu (VM/CHR)'
+            elif has_fw_update:
+                fw_summary = f'{fw_current} → {fw_upgrade}'
+            else:
+                fw_summary = f'{fw_current} (aktuálny)'
+            msg = f'RouterOS: {installed} → {latest if has_os_update else installed} | Firmware: {fw_summary}'
+            add_log('info', f'Naplánovaný update [{device_name}]: Dokončený. {msg}', device_ip)
+            with get_db_connection() as c:
+                c.execute(
+                    'UPDATE update_schedule SET status=?, completed_at=?, result_message=? WHERE id=?',
+                    ('done', datetime.now(), msg, schedule_id)
+                )
+                c.commit()
+            _emit('done', msg=f'✅ Naplánovaná aktualizácia dokončená! {msg}')
+            send_pushover_notification(
+                f'Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                title='MikroTik Update – Hotovo',
+                notification_key='notify_backup_success'
+            )
+
+        except Exception as e:
+            add_log('error', f'Naplánovaný update [schedule_id={schedule_id}]: Neočakávaná chyba: {e}')
+            try:
+                socketio.emit('scheduled_update_progress', {
+                    'device_id': device_id or 0,
+                    'schedule_id': schedule_id,
+                    'state': 'failed',
+                    'step': 0,
+                    'msg': f'❌ Neočakávaná chyba: {e}'
+                })
+            except Exception:
+                pass
+            try:
+                with get_db_connection() as c:
+                    c.execute(
+                        'UPDATE update_schedule SET status=?, completed_at=?, result_message=? WHERE id=?',
+                        ('failed', datetime.now(), str(e), schedule_id)
+                    )
+                    c.commit()
+            except Exception:
+                pass
+
+def check_update_schedules():
+    """Skontroluje DB na splatné naplánované updaty a spustí ich."""
+    try:
+        now = datetime.now()
+        with get_db_connection() as conn:
+            due = conn.execute(
+                "SELECT id, device_id FROM update_schedule WHERE status='pending' AND scheduled_time <= ?",
+                (now,)
+            ).fetchall()
+        for row in due:
+            with get_db_connection() as conn:
+                updated = conn.execute(
+                    "UPDATE update_schedule SET status='running', started_at=? WHERE id=? AND status='pending'",
+                    (now, row['id'])
+                ).rowcount
+                conn.commit()
+            if updated:
+                threading.Thread(target=run_scheduled_update, args=(row['id'],), daemon=True).start()
+    except Exception as e:
+        pass  # Scheduler thread nesmie crashnúť
+
 def run_scheduler():
     while True:
         schedule.run_pending()
+        check_update_schedules()
         time.sleep(60)
 
 def scheduled_log_cleanup():

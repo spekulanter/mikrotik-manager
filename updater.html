@@ -758,6 +758,9 @@
         // Per-device inline update state
         let _deviceUpdateState = JSON.parse(localStorage.getItem('mikrotik_updater_state') || '{}');
 
+        // Module-level Socket.IO instance (shared by SocketIO handler and other functions)
+        let _socket = null;
+
         // Setup clear storage on logout if needed, but not here
         function saveUpdateState() {
             // Nemôžeme serializovať funkcie ako decideResolve
@@ -783,12 +786,13 @@
             document.querySelector('#themeToggle i').className = isLight ? 'fas fa-sun' : 'fas fa-moon';
         }
 
-        // ─── SCHEDULED UPDATE SOCKET PROGRESS ────────────────────────────────────
+        // ─── UPDATE SOCKET PROGRESS (manual + scheduled) ─────────────────────────
         function initScheduledUpdateSocket() {
-            const socket = io();
+            _socket = io();
 
-            socket.on('scheduled_update_progress', function (data) {
+            _socket.on('scheduled_update_progress', function (data) {
                 const id = data.device_id;
+                const isScheduled = data.schedule_id !== 0;
                 const state = data.state;
                 const step = data.step;
                 const msg = data.msg || '';
@@ -817,18 +821,16 @@
                 } else if (state === 'step_error') {
                     setInlineStep(id, step, 'error');
                 } else if (state === 'done') {
-                    // Mark all remaining steps done, show success
-                    endInlineUpdate(id, true, msg || '✅ Naplánovaná aktualizácia dokončená!');
-                    // Refresh schedule data after a short delay
+                    endInlineUpdate(id, true, msg || '✅ Aktualizácia dokončená!');
                     setTimeout(() => {
                         clearUpdateState(id);
-                        loadSchedules();
+                        if (isScheduled) loadSchedules();
                     }, 4000);
                 } else if (state === 'failed') {
-                    endInlineUpdate(id, false, msg || '❌ Naplánovaná aktualizácia zlyhala.');
+                    endInlineUpdate(id, false, msg || '❌ Aktualizácia zlyhala.');
                     setTimeout(() => {
                         clearUpdateState(id);
-                        loadSchedules();
+                        if (isScheduled) loadSchedules();
                     }, 5000);
                 }
             });
@@ -894,21 +896,24 @@
                 devicesList = devices;
                 originalOrder = [...devices];
                 renderTableShells();
-                // Resume or clean up update states interrupted by navigation/reload
+                // Clean up stale localStorage states – updates are now server-side
                 devices.forEach(d => {
                     const st = _deviceUpdateState[d.id];
                     if (!st) return;
                     if (st.active) {
-                        resumeUpdateAfterReload(d.id);
+                        // Clear stale active state – restoreRunningUpdates() will rebuild UI from server
+                        delete _deviceUpdateState[d.id];
+                        saveUpdateState();
                     } else if (st.persistedResult) {
-                        // Update ended (all steps ✓) but waitOnlineThenRefresh was interrupted –
-                        // ping the device; if it's back online just clean up the frozen status.
+                        // Completed result shown – ping to check if device is back, then clear
                         fetch(`/api/updater/ping/${d.id}`)
                             .then(r => r.json())
                             .then(j => { if (j.status === 'online') clearUpdateState(d.id); })
                             .catch(() => {});
                     }
                 });
+                // Restore running updates FIRST (sets active=true) so fetchDeviceDetails skips them
+                await restoreRunningUpdates();
                 devices.forEach(d => fetchDeviceDetails(d.id));
                 loadSchedules();
             } catch (err) {
@@ -923,7 +928,12 @@
             btn.disabled = true;
 
             devicesList.forEach(d => {
-                // Skip devices with active update in progress
+                // Clear finished (non-active) update state so fetchDeviceDetails can render normal actions
+                if (_deviceUpdateState[d.id] && !_deviceUpdateState[d.id].active) {
+                    delete _deviceUpdateState[d.id];
+                    saveUpdateState();
+                }
+                // Skip loading indicators for devices with active update
                 if (_deviceUpdateState[d.id]?.active) return;
                 const statusEl = document.getElementById(`status-${d.id}`);
                 const osEl = document.getElementById(`os-${d.id}`);
@@ -933,6 +943,8 @@
                 if (fwEl) fwEl.innerHTML = `<span style="color:#9ca3af">...</span>`;
             });
 
+            // Restore running updates FIRST (sets active=true) so fetchDeviceDetails skips them
+            await restoreRunningUpdates();
             await Promise.all(devicesList.map(d => fetchDeviceDetails(d.id)));
             loadSchedules();
 
@@ -1051,6 +1063,8 @@
                         document.getElementById(`actions-${id}`).style.opacity = '1';
                     }
                 } else {
+                    // Don't overwrite cells if an update is actively running on this device
+                    if (_deviceUpdateState[id]?.active) return;
                     document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
                     document.getElementById(`os-${id}`).innerHTML = `Chyba spojenia API`;
                     document.getElementById(`fw-${id}`).innerHTML = `N/A`;
@@ -1058,6 +1072,8 @@
                     document.getElementById(`actions-${id}`).style.opacity = '1';
                 }
             } catch (err) {
+                // Don't overwrite cells if an update is actively running on this device
+                if (_deviceUpdateState[id]?.active) return;
                 document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
                 document.getElementById(`os-${id}`).innerHTML = `N/A`;
                 document.getElementById(`fw-${id}`).innerHTML = `N/A`;
@@ -1685,11 +1701,8 @@
             }
         }
 
-        // ─── Full update sequence ─────────────────────────────────────────────────
+        // ─── Full update sequence (server-side, F5-resilient) ────────────────────
         async function fullUpdateDevice(id) {
-            const dev = devicesList.find(d => d.id === id);
-            const isLowMem = dev && dev.low_memory;
-
             // Pre-check: skip if both OS and Firmware are already up to date
             const data = deviceDataMap[id];
             if (data) {
@@ -1712,75 +1725,29 @@
                 }
             }
 
-            startInlineUpdate(id);
+            // Show inline progress UI immediately for instant feedback
+            if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
+                startInlineUpdate(id);
+            }
+            setInlineStep(id, 1, 'active');
+            setInlineStatus(id, 'Spúšťam aktualizáciu na serveri...');
 
             try {
-                // Step 1 – Update OS
-                setInlineStep(id, 1, 'active');
-                setInlineStatus(id, 'Odosielam príkaz na aktualizáciu RouterOS...');
-                const osRes = await fetch(`/api/updater/install-os/${id}`, { method: 'POST' });
-                const osData = await osRes.json();
-                if (osData.status !== 'success') {
-                    setInlineStep(id, 1, 'error');
-                    endInlineUpdate(id, false, `❌ Chyba Update OS: ${osData.message}`);
+                const res = await fetch(`/api/updater/run-update/${id}`, { method: 'POST' });
+                const json = await res.json();
+
+                if (res.status === 409) {
+                    // Already running – keep showing the UI (SocketIO events will update it)
+                    setInlineStatus(id, 'Aktualizácia pre toto zariadenie už prebieha...');
                     return;
                 }
-                setInlineStep(id, 1, 'done');
-
-                // Step 2 – Wait for offline (reboot confirmation)
-                setInlineStep(id, 2, 'active');
-                setInlineStatus(id, 'Čakám na reštart zariadenia...');
-                const offlineTimeout = isLowMem ? 240000 : 90000;
-                const wentOffline = await pollOffline(id, offlineTimeout, 2000);
-
-                if (!wentOffline) {
-                    setInlineStep(id, 2, 'error');
-                    setInlineStatus(id, '⚠️ Zariadenie sa nereštartovalo – OS bol pravdepodobne aktuálny. Pokračovať s Firmware?', 'var(--warning-color)');
-                    const decision = await waitInlineDecision(id);
-                    if (decision === 'stop') {
-                        endInlineUpdate(id, true, '⏹ Zastavené.');
-                        return;
-                    }
-                    setInlineStep(id, 2, 'done');
-                    setInlineStep(id, 3, 'done');
-                    setInlineStep(id, 4, 'done');
-                } else {
-                    setInlineStep(id, 2, 'done');
-
-                    // Step 3 – Wait online
-                    setInlineStep(id, 3, 'active');
-                    setInlineStatus(id, 'Čakám kým zariadenie nabootuje...');
-                    const onlineTimeout = isLowMem ? 300000 : 180000;
-                    const cameOnline = await pollOnline(id, onlineTimeout, 5000);
-                    if (!cameOnline) {
-                        setInlineStep(id, 3, 'error');
-                        endInlineUpdate(id, false, `❌ Zariadenie sa nevrátilo online v časovom limite (${onlineTimeout / 1000}s).`);
-                        return;
-                    }
-                    setInlineStep(id, 3, 'done');
-
-                    // VM/CHR (no routerboard) – skip 120s + firmware steps entirely
-                    const _devData = deviceDataMap[id];
-                    if (_devData && _devData.firmware && _devData.firmware['current-firmware'] === 'N/A') {
-                        setInlineStep(id, 4, 'done');
-                        setInlineStep(id, 5, 'done');
-                        setInlineStep(id, 6, 'done');
-                        setInlineStep(id, 7, 'done');
-                        endInlineUpdate(id, true, '✅ RouterOS aktualizovaný. (VM/CHR – firmware nie je potrebný)');
-                        setTimeout(() => clearUpdateState(id), 3000);
-                        return;
-                    }
-
-                    // Step 4 – 120s countdown
-                    setInlineStep(id, 4, 'active');
-                    await inlineCountdown(id, 4, 120);
-                    setInlineStep(id, 4, 'done');
+                if (json.status !== 'success') {
+                    endInlineUpdate(id, false, `❌ Chyba pri spustení aktualizácie: ${json.message}`);
+                    return;
                 }
-
-                await _doFirmwareAndReboot(id, isLowMem);
-
+                // Backend started – SocketIO events drive the rest of the UI
             } catch (err) {
-                endInlineUpdate(id, false, `❌ Neočakávaná chyba: ${err.message}`);
+                endInlineUpdate(id, false, `❌ Chyba pri spustení: ${err.message}`);
             }
         }
 
@@ -1792,17 +1759,43 @@
             const bulkBtn = document.getElementById('bulkUpdateBtn');
             bulkBtn.disabled = true;
 
-            // Process devices sequentially – each shows its own inline progress
+            // Fire all updates – each runs independently server-side, returns quickly
             for (let i = 0; i < ids.length; i++) {
                 await fullUpdateDevice(ids[i]);
-                if (i < ids.length - 1) await sleep(2000);
+                if (i < ids.length - 1) await sleep(300);
             }
 
-            // Uncheck all after bulk is done
+            // Uncheck all after all requests are fired
             document.querySelectorAll('.device-select-cb').forEach(cb => cb.checked = false);
             document.getElementById('selectAllCb').checked = false;
             document.getElementById('selectAllCb').indeterminate = false;
             bulkBtn.disabled = true;
+        }
+
+        // ─── Restore running manual updates after F5 ─────────────────────────────
+        async function restoreRunningUpdates() {
+            try {
+                const res = await fetch('/api/updater/running-updates');
+                const data = await res.json();
+                if (!data.running || data.running.length === 0) return;
+
+                for (const ru of data.running) {
+                    const id = ru.device_id;
+                    // Skip if SocketIO already started showing progress for this device
+                    if (_deviceUpdateState[id] && _deviceUpdateState[id].active) continue;
+
+                    startInlineUpdate(id);
+                    for (const step of (ru.steps_done || [])) {
+                        setInlineStep(id, step, 'done');
+                    }
+                    if (ru.current_step > 0) {
+                        setInlineStep(id, ru.current_step, 'active');
+                    }
+                    if (ru.current_msg) setInlineStatus(id, ru.current_msg);
+                }
+            } catch (e) {
+                // Silently ignore – updates are still running server-side
+            }
         }
 
         // ─── Scheduled Updates ──────────────────────────────────────────────────────

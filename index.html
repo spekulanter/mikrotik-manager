@@ -3795,7 +3795,7 @@
 
                     let valA, valB;
                     if (window.currentSortColumn === 'name') {
-                        valA = getStr(a.name); valB = getStr(b.name);
+                        valA = getStr(a.name?.trim()); valB = getStr(b.name?.trim());
                     } else if (window.currentSortColumn === 'ip') {
                         const ipPad = (ip) => ip ? ip.split('.').map(n => n.padStart(3, '0')).join('') : null;
                         valA = ipPad(a.ip); valB = ipPad(b.ip);
@@ -4689,7 +4689,7 @@
 
                 const body = {
                     id: document.getElementById('deviceId').value,
-                    name: document.getElementById('deviceName').value,
+                    name: document.getElementById('deviceName').value.trim(),
                     ip: document.getElementById('deviceIp').value,
                     username: document.getElementById('deviceUsername').value,
                     password: document.getElementById('devicePassword').value,

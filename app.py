@@ -2983,7 +2983,7 @@ def handle_devices():
         if request.method == 'GET':
             # Include all necessary fields including status and last_snmp_data
             devices = []
-            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY name').fetchall():
+            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY LOWER(name)').fetchall():
                 device = get_device_with_decrypted_password(dict(row))
                 # Convert last_backup to ISO format with UTC timezone for consistent parsing across browsers
                 if device.get('last_backup'):
@@ -3011,18 +3011,19 @@ def handle_devices():
                     encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
                     
                     # Pri editácii zachováme pôvodné heslo ak nie je zadané nové
+                    device_name = data['name'].strip()
                     if data.get('password'):
                         # Ak je zadané nové heslo, aktualizujeme všetko vrátane hesla
                         encrypted_password = encrypt_password(data['password'])
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
-                                   (data['name'], data['ip'], data['username'], encrypted_password, data.get('low_memory', False), 
-                                    encrypted_snmp_community, new_snmp_interval, 
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?",
+                                   (device_name, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
+                                    encrypted_snmp_community, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?", 
-                                   (data['name'], data['ip'], data['username'], data.get('low_memory', False), 
-                                    encrypted_snmp_community, new_snmp_interval, 
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?",
+                                   (device_name, data['ip'], data['username'], data.get('low_memory', False),
+                                    encrypted_snmp_community, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval, data['id']))
                     conn.commit()
                     
@@ -3045,9 +3046,9 @@ def handle_devices():
                     cursor = conn.cursor()
                     encrypted_password = encrypt_password(data['password'])
                     encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
-                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-                                 (data['name'], data['ip'], data['username'], encrypted_password, data.get('low_memory', False), 
-                                  encrypted_snmp_community, data.get('snmp_interval_minutes', 0), 
+                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                 (data['name'].strip(), data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
+                                  encrypted_snmp_community, data.get('snmp_interval_minutes', 0),
                                   data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0)))
                     device_id = cursor.lastrowid
                     conn.commit()

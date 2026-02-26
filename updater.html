@@ -774,7 +774,7 @@
         let devicesList = [];
         let deviceDataMap = {};
         let originalOrder = [];
-        let sortState = { column: null, direction: 'asc' };
+        let sortState = { column: 1, direction: 'asc' };
 
         // Per-device inline update state
         let _deviceUpdateState = JSON.parse(localStorage.getItem('mikrotik_updater_state') || '{}');
@@ -924,6 +924,7 @@
                 devicesList = devices;
                 originalOrder = [...devices];
                 renderTableShells();
+                sortTable();
                 // Clean up stale localStorage states – updates are now server-side
                 devices.forEach(d => {
                     const st = _deviceUpdateState[d.id];
@@ -1429,7 +1430,7 @@
             const dev = devicesList.find(d => d.id === devId);
             const dd = deviceDataMap[devId];
             switch (col) {
-                case 1: return (dev ? dev.name.toLowerCase() : '');
+                case 1: return (dev ? dev.name.trim().toLowerCase() : '');
                 case 2: return (dd && dd.status === 'success') ? 0 : 1;
                 case 3: return (dd && dd.os) ? dd.os['installed-version'] || '' : '';
                 case 4: return (dd && dd.firmware) ? dd.firmware['current-firmware'] || '' : '';

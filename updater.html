@@ -1451,7 +1451,12 @@
                 } else {
                     cmp = ak < bk ? -1 : ak > bk ? 1 : 0;
                 }
-                return sortState.direction === 'asc' ? cmp : -cmp;
+                const result = sortState.direction === 'asc' ? cmp : -cmp;
+                if (result !== 0) return result;
+                // Sekundárne zoradenie podľa mena A-Z pri zhode primárneho kľúča
+                const na = getSortKey(a.id, 1);
+                const nb = getSortKey(b.id, 1);
+                return na < nb ? -1 : na > nb ? 1 : 0;
             });
             ordered.forEach(dev => {
                 const row = document.getElementById(`row-${dev.id}`);

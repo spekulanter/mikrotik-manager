@@ -974,9 +974,11 @@
                     delete _deviceUpdateState[d.id];
                     saveUpdateState();
                 }
-                // Active update: show purple indicator instead of generic spinner
+                // Active update: clear state so restoreRunningUpdates() rebuilds the 7-step inline UI
+                // (renderTableShells already rendered ⟳ Prebieha... cells using the active flag above)
                 if (_deviceUpdateState[d.id]?.active) {
-                    setUpdatingCells(d.id);
+                    delete _deviceUpdateState[d.id];
+                    saveUpdateState();
                     return;
                 }
                 // Waiting in bulk queue: keep ⟳ Čaká... (loadSchedules will re-confirm)
@@ -1884,16 +1886,47 @@
             bulkBtn.disabled = true;
 
             if (ids.length === 1) {
-                // Single device – start immediately
+                // Single device – start immediately (unchanged)
                 await fullUpdateDevice(ids[0]);
             } else {
-                // Multiple devices – start first, queue the rest
-                _bulkQueue = ids.slice(1);
-                _bulkQueueRunning = true;
-                // Mark queued devices as waiting immediately
-                _bulkQueue.forEach(qid => setWaitingCell(qid));
-                showToast(`Sekvenčná hromadná aktualizácia: spustilo sa ${ids.length} zariadení s ${_bulkUpdateDelaySec}s oneskorením.`, 'info', 6000);
-                await fullUpdateDevice(ids[0]);
+                // Multiple devices – delegate full sequence to backend (F5-resilient)
+                // Pre-show inline UI for first device (instant feedback)
+                if (!(_deviceUpdateState[ids[0]] && _deviceUpdateState[ids[0]].active)) {
+                    startInlineUpdate(ids[0]);
+                }
+                setUpdatingCells(ids[0]);
+                setInlineStep(ids[0], 1, 'active');
+                setInlineStatus(ids[0], 'Spúšťam hromadnú aktualizáciu na serveri...');
+                // Mark remaining devices as waiting
+                ids.slice(1).forEach(qid => setWaitingCell(qid));
+
+                try {
+                    const res = await fetch('/api/updater/run-bulk-update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ device_ids: ids })
+                    });
+                    const data = await res.json();
+                    if (res.status === 409 || data.status !== 'success') {
+                        endInlineUpdate(ids[0], false, `❌ Chyba pri spustení: ${data.message || 'Neznáma chyba'}`);
+                        ids.slice(1).forEach(qid => {
+                            _bulkWaitingDeviceIds.delete(qid);
+                            fetchDeviceDetails(qid);
+                        });
+                        bulkBtn.disabled = false;
+                        return;
+                    }
+                    showToast(`Sekvenčná hromadná aktualizácia: spustilo sa ${ids.length} zariadení s ${_bulkUpdateDelaySec}s oneskorením.`, 'info', 6000);
+                    // Backend drives the sequence – SocketIO events update the UI
+                } catch (err) {
+                    endInlineUpdate(ids[0], false, `❌ Chyba pri spustení: ${err.message}`);
+                    ids.slice(1).forEach(qid => {
+                        _bulkWaitingDeviceIds.delete(qid);
+                        fetchDeviceDetails(qid);
+                    });
+                    bulkBtn.disabled = false;
+                    return;
+                }
             }
 
             // Uncheck all
@@ -1938,6 +1971,7 @@
                     if (ru.current_msg) setInlineStatus(id, ru.current_msg);
                 }
             } catch (e) { /* Silently ignore */ }
+
         }
 
         // ─── Scheduled Updates ──────────────────────────────────────────────────────
@@ -2220,6 +2254,17 @@
                             setWaitingCell(s.device_id);
                         }
                     });
+
+                // Obnovíme waiting pre zariadenia čakajúce v manuálnom bulk fronte (server-side, F5-odolné)
+                try {
+                    const bqRes = await fetch('/api/updater/running-bulk-queue');
+                    const bqData = await bqRes.json();
+                    for (const group of (bqData.groups || [])) {
+                        for (const qid of (group.remaining_ids || [])) {
+                            if (!(_deviceUpdateState[qid]?.active)) setWaitingCell(qid);
+                        }
+                    }
+                } catch (e) { /* Silently ignore */ }
 
                 // Renderuj panel
                 const panel = document.getElementById('scheduledUpdatesPanel');

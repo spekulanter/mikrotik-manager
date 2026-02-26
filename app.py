@@ -2129,6 +2129,10 @@ _running_manual_updates = {}
 # device_id -> {device_name, device_ip, schedule_id, started_at, current_step, steps_done, current_msg}
 _running_scheduled_updates = {}
 
+# In-memory tracking of manual bulk update groups (for F5 restore of waiting devices)
+# bulk_group_id -> {device_ids, remaining_ids, current_device_id}
+_manual_bulk_groups = {}
+
 
 def _do_renew_certificate(ip, username, password, days):
     """Obnoví TLS certifikát WebCert na MikroTik zariadení cez HTTP (port 80).
@@ -2733,6 +2737,45 @@ def api_updater_running_scheduled_updates():
             'started_at': info.get('started_at', '')
         })
     return jsonify({'running': result})
+
+
+@app.route('/api/updater/run-bulk-update', methods=['POST'])
+@login_required
+def api_updater_run_bulk_update():
+    """Spustí sekvenčnú hromadnú manuálnu aktualizáciu viacerých zariadení (server-side, F5-odolné)."""
+    import uuid
+    data = request.json or {}
+    try:
+        device_ids = [int(x) for x in data.get('device_ids', [])]
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Neplatné ID zariadení.'}), 400
+    if not device_ids:
+        return jsonify({'status': 'error', 'message': 'Žiadne zariadenia.'}), 400
+    for did in device_ids:
+        if did in _running_manual_updates:
+            return jsonify({'status': 'error', 'message': f'Zariadenie ID {did} sa už aktualizuje.'}), 409
+    bulk_group_id = str(uuid.uuid4())
+    _manual_bulk_groups[bulk_group_id] = {
+        'device_ids': device_ids,
+        'remaining_ids': device_ids[1:],
+        'current_device_id': device_ids[0]
+    }
+    threading.Thread(target=run_manual_bulk_update, args=(device_ids, bulk_group_id), daemon=True).start()
+    return jsonify({'status': 'success', 'bulk_group_id': bulk_group_id, 'queued_ids': device_ids[1:]})
+
+
+@app.route('/api/updater/running-bulk-queue')
+@login_required
+def api_updater_running_bulk_queue():
+    """Vráti čakajúce zariadenia v manuálnych hromadných skupinách (pre obnovu ⟳ Čaká... po F5)."""
+    groups = []
+    for group_id, group in list(_manual_bulk_groups.items()):
+        groups.append({
+            'bulk_group_id': group_id,
+            'remaining_ids': list(group.get('remaining_ids', [])),
+            'current_device_id': group.get('current_device_id')
+        })
+    return jsonify({'groups': groups})
 
 
 @app.route('/')
@@ -4708,6 +4751,27 @@ def run_device_update(device_id):
                 pass
         finally:
             _running_manual_updates.pop(device_id, None)
+
+
+def run_manual_bulk_update(device_ids, bulk_group_id):
+    """Vykoná sekvenčnú hromadnú manuálnu aktualizáciu – rovnaký vzor ako run_scheduled_update_bulk.
+    Beží ako daemon thread, volá run_device_update() blokujúco pre každé zariadenie."""
+    with app.app_context():
+        try:
+            with get_db_connection() as conn:
+                settings = {r['key']: r['value'] for r in conn.execute('SELECT key, value FROM settings').fetchall()}
+            delay = int(settings.get('bulk_update_delay_seconds', 60))
+        except Exception:
+            delay = 60
+        try:
+            for i, device_id in enumerate(device_ids):
+                _manual_bulk_groups[bulk_group_id]['current_device_id'] = device_id
+                _manual_bulk_groups[bulk_group_id]['remaining_ids'] = device_ids[i + 1:]
+                run_device_update(device_id)
+                if i < len(device_ids) - 1:
+                    time.sleep(delay)
+        finally:
+            _manual_bulk_groups.pop(bulk_group_id, None)
 
 
 def check_update_schedules():

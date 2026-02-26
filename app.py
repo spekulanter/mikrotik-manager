@@ -856,6 +856,15 @@ def init_database():
             cursor.execute('ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT 0')
         except sqlite3.OperationalError:
             pass
+        # Bulk schedule support
+        try:
+            cursor.execute('ALTER TABLE update_schedule ADD COLUMN bulk_group_id TEXT DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE update_schedule ADD COLUMN bulk_sequence INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
         
         # ODSTRÁNENÉ: Automatické mazanie logov o zálohovani - logy si budú pamätať aj po reštarte
@@ -877,6 +886,7 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_monitor_enabled', 'true'))  # Povoliť/zakázať ping monitoring
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('debug_terminal', 'false'))  # Pridané: debug terminál v monitoringu
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retry_interval', '20'))  # Retry interval pri výpadku v sekundách
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('bulk_update_delay_seconds', '60'))  # Oneskorenie medzi zariadeniami pri hromadnej aktualizácii
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retries', '3'))  # Počet neúspešných pokusov pred označením offline
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_timeout', '5'))  # Timeout pre jeden ping
         additional_defaults = {
@@ -2115,6 +2125,10 @@ _cert_expiry_notified = {}
 # device_id -> {device_name, device_ip, started_at, current_step, steps_done, current_msg}
 _running_manual_updates = {}
 
+# In-memory tracking of scheduled updates currently running (for F5 restore)
+# device_id -> {device_name, device_ip, schedule_id, started_at, current_step, steps_done, current_msg}
+_running_scheduled_updates = {}
+
 
 def _do_renew_certificate(ip, username, password, days):
     """Obnoví TLS certifikát WebCert na MikroTik zariadení cez HTTP (port 80).
@@ -2359,12 +2373,38 @@ def api_updater_schedules():
         rows = conn.execute('''
             SELECT us.id, us.device_id, us.scheduled_time, us.status,
                    us.created_at, us.started_at, us.completed_at, us.result_message,
+                   us.bulk_group_id,
                    d.name AS device_name, d.ip AS device_ip
             FROM update_schedule us
             JOIN devices d ON d.id = us.device_id
             ORDER BY us.scheduled_time DESC
         ''').fetchall()
-    return jsonify([dict(r) for r in rows])
+        result = [dict(r) for r in rows]
+
+    # Determine which bulk groups are still "active":
+    # A group is active if it has a 'running' entry, OR if it has both a finished
+    # entry ('done'/'failed'/'cancelled') AND a still-pending entry (= delay between devices).
+    from collections import defaultdict
+    group_statuses = defaultdict(set)
+    for r in result:
+        gid = r.get('bulk_group_id')
+        if gid:
+            group_statuses[gid].add(r['status'])
+
+    FINISHED_STATUSES = {'done', 'failed', 'completed', 'cancelled'}
+    active_groups = set()
+    for gid, statuses in group_statuses.items():
+        if 'running' in statuses:
+            active_groups.add(gid)
+        elif 'pending' in statuses and (statuses & FINISHED_STATUSES):
+            # Between devices: previous one finished, next one not yet started
+            active_groups.add(gid)
+
+    for r in result:
+        gid = r.get('bulk_group_id')
+        r['bulk_group_active'] = bool(gid and gid in active_groups)
+
+    return jsonify(result)
 
 @app.route('/api/updater/schedule/<int:device_id>', methods=['POST'])
 @login_required
@@ -2376,6 +2416,8 @@ def api_updater_schedule_create(device_id):
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
     data = request.get_json()
     scheduled_time_str = data.get('scheduled_time', '')
+    bulk_group_id = data.get('bulk_group_id', None)
+    bulk_sequence = data.get('bulk_sequence', 0)
     try:
         scheduled_time = datetime.fromisoformat(scheduled_time_str)
     except (ValueError, TypeError):
@@ -2384,13 +2426,51 @@ def api_updater_schedule_create(device_id):
         return jsonify({'status': 'error', 'message': 'Čas musí byť v budúcnosti.'}), 400
     with get_db_connection() as conn:
         cursor = conn.execute(
-            'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at) VALUES (?, ?, ?, ?)',
-            (device_id, scheduled_time, 'pending', datetime.now())
+            'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence) VALUES (?, ?, ?, ?, ?, ?)',
+            (device_id, scheduled_time, 'pending', datetime.now(), bulk_group_id, bulk_sequence)
         )
         new_id = cursor.lastrowid
         conn.commit()
     add_log('info', f"Naplánovaný update zariadenia {device['name']}: {scheduled_time.strftime('%d.%m.%Y %H:%M')}")
     return jsonify({'status': 'success', 'id': new_id})
+
+
+@app.route('/api/updater/schedule/bulk', methods=['POST'])
+@login_required
+def api_updater_schedule_bulk():
+    """Vytvorí naplánované updaty pre viac zariadení naraz (sekvenčné spúšťanie)."""
+    data = request.get_json()
+    device_ids = data.get('device_ids', [])
+    scheduled_time_str = data.get('scheduled_time', '')
+    if not device_ids:
+        return jsonify({'status': 'error', 'message': 'Žiadne zariadenia.'}), 400
+    try:
+        scheduled_time = datetime.fromisoformat(scheduled_time_str)
+    except (ValueError, TypeError):
+        return jsonify({'status': 'error', 'message': 'Neplatný formát dátumu a času.'}), 400
+    if scheduled_time <= datetime.now():
+        return jsonify({'status': 'error', 'message': 'Čas musí byť v budúcnosti.'}), 400
+
+    import uuid
+    bulk_group_id = str(uuid.uuid4())
+    created_ids = []
+    with get_db_connection() as conn:
+        devices = {row['id']: row['name'] for row in conn.execute(
+            f"SELECT id, name FROM devices WHERE id IN ({','.join('?' * len(device_ids))})",
+            device_ids
+        ).fetchall()}
+        for seq, dev_id in enumerate(device_ids):
+            if dev_id not in devices:
+                continue
+            cursor = conn.execute(
+                'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence) VALUES (?, ?, ?, ?, ?, ?)',
+                (dev_id, scheduled_time, 'pending', datetime.now(), bulk_group_id, seq)
+            )
+            created_ids.append(cursor.lastrowid)
+        conn.commit()
+    names = ', '.join(devices[d] for d in device_ids if d in devices)
+    add_log('info', f"Hromadný naplánovaný update ({len(created_ids)} zariadení): {names}")
+    return jsonify({'status': 'success', 'ids': created_ids, 'bulk_group_id': bulk_group_id})
 
 @app.route('/api/updater/schedule/<int:schedule_id>', methods=['DELETE'])
 @login_required
@@ -2629,6 +2709,24 @@ def api_updater_running_updates():
         result.append({
             'device_id': dev_id,
             'device_name': info.get('device_name', ''),
+            'current_step': info.get('current_step', 0),
+            'steps_done': info.get('steps_done', []),
+            'current_msg': info.get('current_msg', ''),
+            'started_at': info.get('started_at', '')
+        })
+    return jsonify({'running': result})
+
+
+@app.route('/api/updater/running-scheduled-updates')
+@login_required
+def api_updater_running_scheduled_updates():
+    """Vráti zoznam naplánovaných aktualizácií práve bežiacich na serveri (pre obnovu UI po F5)."""
+    result = []
+    for dev_id, info in list(_running_scheduled_updates.items()):
+        result.append({
+            'device_id': dev_id,
+            'device_name': info.get('device_name', ''),
+            'schedule_id': info.get('schedule_id', 0),
             'current_step': info.get('current_step', 0),
             'steps_done': info.get('steps_done', []),
             'current_msg': info.get('current_msg', ''),
@@ -4126,7 +4224,26 @@ def run_scheduled_update(schedule_id):
             device_ip = row['ip']
             device_name = row['name']
 
+            def _upd_sched(step=None, msg=None, steps_done_add=None):
+                entry = _running_scheduled_updates.get(device_id, {})
+                if step is not None:
+                    entry['current_step'] = step
+                if msg is not None:
+                    entry['current_msg'] = msg
+                if steps_done_add is not None:
+                    steps = entry.get('steps_done', [])
+                    if steps_done_add not in steps:
+                        steps.append(steps_done_add)
+                    entry['steps_done'] = steps
+                _running_scheduled_updates[device_id] = entry
+
             def _emit(state, step=0, msg=''):
+                if state in ('step_active',):
+                    _upd_sched(step=step, msg=msg)
+                elif state in ('step_done',):
+                    _upd_sched(steps_done_add=step, msg=msg)
+                elif state in ('done', 'failed'):
+                    _running_scheduled_updates.pop(device_id, None)
                 socketio.emit('scheduled_update_progress', {
                     'device_id': device_id,
                     'schedule_id': schedule_id,
@@ -4150,8 +4267,30 @@ def run_scheduled_update(schedule_id):
                     notification_key='notify_backup_failure'
                 )
 
+            # Init tracking state
+            _running_scheduled_updates[device_id] = {
+                'device_name': device_name,
+                'device_ip': device_ip,
+                'schedule_id': schedule_id,
+                'started_at': datetime.now().isoformat(),
+                'current_step': 0,
+                'steps_done': [],
+                'current_msg': ''
+            }
+
             add_log('info', f'Naplánovaný update [{device_name}]: Spúšťam...', device_ip)
             _emit('start', msg=f'Naplánovaný update: {device_name}')
+
+            # Pre-check: zisti či zariadenie má routerboard (VM/CHR nemá firmware)
+            fw_probe, fw_probe_err, _ = mk_api(device_id, 'GET', 'system/routerboard')
+            fw_probe_info = {}
+            if not fw_probe_err:
+                if isinstance(fw_probe, list) and fw_probe:
+                    fw_probe_info = fw_probe[0]
+                elif isinstance(fw_probe, dict):
+                    fw_probe_info = fw_probe
+            _probe_fw_val = fw_probe_info.get('current-firmware', '')
+            is_vm = bool(fw_probe_err) or not _probe_fw_val or _probe_fw_val == 'N/A'
 
             # Krok 1: Zisti dostupnosť OS update
             _emit('step_active', step=1, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
@@ -4200,7 +4339,31 @@ def run_scheduled_update(schedule_id):
                     return
                 _emit('step_done', step=3)
 
-                # Krok 4: 120s stabilizácia
+                # VM/CHR – žiadny routerboard, preskočiť kroky 4-5-6-7
+                if is_vm:
+                    add_log('info', f'Naplánovaný update [{device_name}]: VM/CHR – firmware nie je potrebný, končím.', device_ip)
+                    _emit('step_done', step=4, msg='VM/CHR – firmware preskočený.')
+                    _emit('step_done', step=5)
+                    _emit('step_done', step=6)
+                    _emit('step_done', step=7)
+                    fw_summary = 'bez routerboardu (VM/CHR)'
+                    msg = f'RouterOS: {installed} → {latest} | Firmware: {fw_summary}'
+                    add_log('info', f'Naplánovaný update [{device_name}]: Dokončený. {msg}', device_ip)
+                    with get_db_connection() as c:
+                        c.execute(
+                            'UPDATE update_schedule SET status=?, completed_at=?, result_message=? WHERE id=?',
+                            ('done', datetime.now(), msg, schedule_id)
+                        )
+                        c.commit()
+                    _emit('done', msg=f'✅ Naplánovaná aktualizácia dokončená! {msg}')
+                    send_pushover_notification(
+                        f'Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                        title='MikroTik Update – Hotovo',
+                        notification_key='notify_backup_success'
+                    )
+                    return
+
+                # Krok 4: 120s stabilizácia (iba pre zariadenia s routerboardom)
                 add_log('info', f'Naplánovaný update [{device_name}]: Online, čakám 120s stabilizáciu...', device_ip)
                 _emit('step_active', step=4, msg='Čakám 120s na stabilizáciu služieb...')
                 time.sleep(120)
@@ -4211,6 +4374,29 @@ def run_scheduled_update(schedule_id):
                 _emit('step_done', step=2)
                 _emit('step_done', step=3)
                 _emit('step_done', step=4)
+
+            # VM/CHR bez OS update – preskočiť firmware kroky
+            if is_vm:
+                add_log('info', f'Naplánovaný update [{device_name}]: VM/CHR – firmware kroky preskočené.', device_ip)
+                _emit('step_done', step=5, msg='VM/CHR – firmware nie je dostupný.')
+                _emit('step_done', step=6)
+                _emit('step_done', step=7)
+                fw_summary = 'bez routerboardu (VM/CHR)'
+                msg = f'RouterOS: {installed} ({"aktualizovaný" if has_os_update else "aktuálny"}) | Firmware: {fw_summary}'
+                add_log('info', f'Naplánovaný update [{device_name}]: Dokončený. {msg}', device_ip)
+                with get_db_connection() as c:
+                    c.execute(
+                        'UPDATE update_schedule SET status=?, completed_at=?, result_message=? WHERE id=?',
+                        ('done', datetime.now(), msg, schedule_id)
+                    )
+                    c.commit()
+                _emit('done', msg=f'✅ Naplánovaná aktualizácia dokončená! {msg}')
+                send_pushover_notification(
+                    f'Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                    title='MikroTik Update – Hotovo',
+                    notification_key='notify_backup_success'
+                )
+                return
 
             # Krok 5: Zisti dostupnosť firmware update
             _emit('step_active', step=5, msg='Kontrolujem verzie firmware...')
@@ -4371,7 +4557,8 @@ def run_device_update(device_id):
                     fw_probe_info = fw_probe[0]
                 elif isinstance(fw_probe, dict):
                     fw_probe_info = fw_probe
-            is_vm = bool(fw_probe_err) or not fw_probe_info.get('current-firmware')
+            _probe_fw_val = fw_probe_info.get('current-firmware', '')
+            is_vm = bool(fw_probe_err) or not _probe_fw_val or _probe_fw_val == 'N/A'
 
             # Krok 1: Zisti dostupnosť OS update
             _emit('step_active', step=1, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
@@ -4523,15 +4710,26 @@ def run_device_update(device_id):
 
 
 def check_update_schedules():
-    """Skontroluje DB na splatné naplánované updaty a spustí ich."""
+    """Skontroluje DB na splatné naplánované updaty a spustí ich (bulk skupiny sekvenčne)."""
     try:
         now = datetime.now()
         with get_db_connection() as conn:
             due = conn.execute(
-                "SELECT id, device_id FROM update_schedule WHERE status='pending' AND scheduled_time <= ?",
+                "SELECT id, device_id, bulk_group_id, bulk_sequence FROM update_schedule WHERE status='pending' AND scheduled_time <= ? ORDER BY bulk_sequence ASC",
                 (now,)
             ).fetchall()
+
+        # Separate individual and bulk-group items
+        bulk_groups = {}  # bulk_group_id -> sorted list of rows
+        individual = []
         for row in due:
+            if row['bulk_group_id']:
+                bulk_groups.setdefault(row['bulk_group_id'], []).append(dict(row))
+            else:
+                individual.append(dict(row))
+
+        # Start individual schedules immediately
+        for row in individual:
             with get_db_connection() as conn:
                 updated = conn.execute(
                     "UPDATE update_schedule SET status='running', started_at=? WHERE id=? AND status='pending'",
@@ -4540,8 +4738,70 @@ def check_update_schedules():
                 conn.commit()
             if updated:
                 threading.Thread(target=run_scheduled_update, args=(row['id'],), daemon=True).start()
+
+        # Start bulk groups sequentially (one thread per group)
+        for group_id, rows in bulk_groups.items():
+            rows_sorted = sorted(rows, key=lambda r: r['bulk_sequence'])
+            # Only start a group if no device in it is already running
+            with get_db_connection() as conn:
+                running_in_group = conn.execute(
+                    "SELECT COUNT(*) FROM update_schedule WHERE bulk_group_id=? AND status='running'",
+                    (group_id,)
+                ).fetchone()[0]
+            if running_in_group == 0:
+                # Start the first pending item in the group
+                first = next((r for r in rows_sorted if r['id'] in [d['id'] for d in due]), None)
+                if first:
+                    with get_db_connection() as conn:
+                        updated = conn.execute(
+                            "UPDATE update_schedule SET status='running', started_at=? WHERE id=? AND status='pending'",
+                            (now, first['id'])
+                        ).rowcount
+                        conn.commit()
+                    if updated:
+                        threading.Thread(
+                            target=run_scheduled_update_bulk,
+                            args=(first['id'], group_id, rows_sorted),
+                            daemon=True
+                        ).start()
     except Exception as e:
-        pass  # Scheduler thread nesmie crashnúť
+        logger.error(f"check_update_schedules error: {e}")
+
+
+def run_scheduled_update_bulk(schedule_id, group_id, all_rows_sorted):
+    """Spustí sekvenčný bulk scheduled update – po každom zariadení čaká na delay a potom spustí ďalšie."""
+    with app.app_context():
+        try:
+            with get_db_connection() as conn:
+                settings = {r['key']: r['value'] for r in conn.execute('SELECT key, value FROM settings').fetchall()}
+            delay = int(settings.get('bulk_update_delay_seconds', 60))
+        except Exception:
+            delay = 60
+
+        # Run the first item
+        run_scheduled_update(schedule_id)
+
+        # After completing, find the next pending item in the group
+        for row in all_rows_sorted:
+            if row['id'] == schedule_id:
+                continue
+            with get_db_connection() as conn:
+                status = conn.execute(
+                    "SELECT status FROM update_schedule WHERE id=?", (row['id'],)
+                ).fetchone()
+            if status and status['status'] == 'pending':
+                # Wait the configured delay
+                logger.info(f"Bulk update skupiny {group_id}: čakám {delay}s pred ďalším zariadením (schedule {row['id']})")
+                time.sleep(delay)
+                now2 = datetime.now()
+                with get_db_connection() as conn:
+                    updated = conn.execute(
+                        "UPDATE update_schedule SET status='running', started_at=? WHERE id=? AND status='pending'",
+                        (now2, row['id'])
+                    ).rowcount
+                    conn.commit()
+                if updated:
+                    run_scheduled_update(row['id'])
 
 def run_scheduler():
     while True:

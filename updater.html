@@ -832,6 +832,8 @@
                         if (badge) badge.remove();
                     }
                     if (msg) setInlineStatus(id, msg);
+                    // Immediately refresh schedules so sibling devices in bulk group get ⟳ Čaká...
+                    loadSchedules();
                 } else if (state === 'step_active') {
                     if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
                         startInlineUpdate(id);
@@ -846,15 +848,17 @@
                     setInlineStep(id, step, 'error');
                 } else if (state === 'done') {
                     endInlineUpdate(id, true, msg || '✅ Aktualizácia dokončená!');
+                    _onUpdateFinished(id);
                     setTimeout(() => {
                         clearUpdateState(id);
-                        if (isScheduled) loadSchedules();
+                        loadSchedules(); // always refresh – keeps bulk waiting states accurate
                     }, 4000);
                 } else if (state === 'failed') {
                     endInlineUpdate(id, false, msg || '❌ Aktualizácia zlyhala.');
+                    _onUpdateFinished(id);
                     setTimeout(() => {
                         clearUpdateState(id);
-                        if (isScheduled) loadSchedules();
+                        loadSchedules(); // always refresh – keeps bulk waiting states accurate
                     }, 5000);
                 }
             });
@@ -938,8 +942,9 @@
                 });
                 // Restore running updates FIRST (sets active=true) so fetchDeviceDetails skips them
                 await restoreRunningUpdates();
+                // Load schedules FIRST so _bulkWaitingDeviceIds is populated before fetchDeviceDetails runs
+                await loadSchedules();
                 devices.forEach(d => fetchDeviceDetails(d.id));
-                loadSchedules();
             } catch (err) {
                 document.getElementById('devicesTableBody').innerHTML =
                     `<tr><td colspan="6" style="text-align:center; color: var(--danger-color);">Chyba pri načítaní databázy zariadení.</td></tr>`;
@@ -950,6 +955,17 @@
             const btn = document.getElementById('refreshDevicesBtn');
             btn.classList.add('loading');
             btn.disabled = true;
+
+            // Re-fetch device list so newly added devices appear and sorting works
+            try {
+                const res = await fetch('/api/devices');
+                const devices = await res.json();
+                devicesList = devices;
+                originalOrder = [...devices];
+                renderTableShells();
+                // Restore active sort order after re-rendering shells
+                if (sortState.column !== null) sortTable();
+            } catch (e) { /* keep existing list on error */ }
 
             devicesList.forEach(d => {
                 // Clear finished (non-active) update state so fetchDeviceDetails can render normal actions
@@ -962,6 +978,10 @@
                     setUpdatingCells(d.id);
                     return;
                 }
+                // Waiting in bulk queue: keep ⟳ Čaká... (loadSchedules will re-confirm)
+                if (_bulkWaitingDeviceIds.has(d.id)) {
+                    return;
+                }
                 const statusEl = document.getElementById(`status-${d.id}`);
                 const osEl = document.getElementById(`os-${d.id}`);
                 const fwEl = document.getElementById(`fw-${d.id}`);
@@ -972,22 +992,37 @@
 
             // Restore running updates FIRST (sets active=true) so fetchDeviceDetails skips them
             await restoreRunningUpdates();
+            // Load schedules FIRST so _bulkWaitingDeviceIds is populated before fetchDeviceDetails runs
+            await loadSchedules();
             await Promise.all(devicesList.map(d => fetchDeviceDetails(d.id)));
+            // Re-confirm schedule badges and waiting states after details loaded
             loadSchedules();
 
             btn.classList.remove('loading');
             btn.disabled = false;
         }
 
-        // Helper: mark status/os/fw cells as "updating" with purple text
+        // Set of device IDs currently waiting in a scheduled bulk queue
+        // fetchDeviceDetails respects this set and will not overwrite the ⟳ Čaká... status
+        const _bulkWaitingDeviceIds = new Set();
+
+        // Helper: mark status cell as "updating" (⟳ Prebieha...) and os/fw cells with purple spinner
         function setUpdatingCells(id) {
-            const updatingHtml = `<span style="color:#a78bfa; font-weight:500;">⟳ Aktualizuje sa...</span>`;
+            _bulkWaitingDeviceIds.delete(id); // no longer waiting – now actually updating
             const statusEl = document.getElementById(`status-${id}`);
             const osEl = document.getElementById(`os-${id}`);
             const fwEl = document.getElementById(`fw-${id}`);
-            if (statusEl) statusEl.innerHTML = updatingHtml;
-            if (osEl) osEl.innerHTML = updatingHtml;
-            if (fwEl) fwEl.innerHTML = updatingHtml;
+            if (statusEl) statusEl.innerHTML = `<span style="color:#a78bfa; font-weight:500;">⟳ Prebieha...</span>`;
+            const spinHtml = `<span style="color:#a78bfa; font-weight:500;">⟳ Aktualizuje sa...</span>`;
+            if (osEl) osEl.innerHTML = spinHtml;
+            if (fwEl) fwEl.innerHTML = spinHtml;
+        }
+
+        // Helper: mark status cell as waiting in bulk queue (⟳ Čaká...)
+        function setWaitingCell(id) {
+            _bulkWaitingDeviceIds.add(id);
+            const statusEl = document.getElementById(`status-${id}`);
+            if (statusEl) statusEl.innerHTML = `<span style="color:#a78bfa; opacity:0.75;">⟳ Čaká...</span>`;
         }
 
         function renderTableShells() {
@@ -1007,7 +1042,9 @@
                     restoredHtml = _deviceUpdateState[dev.id].htmlContent || '';
                 }
 
-                const updatingHtml = `<span style="color:#a78bfa; font-weight:500;">⟳ Aktualizuje sa...</span>`;
+                const updatingHtml = `<span style="color:#a78bfa; font-weight:500;">⟳ Prebieha...</span>`;
+                const waitingHtml = `<span style="color:#a78bfa; opacity:0.75;">⟳ Čaká...</span>`;
+                const isWaiting = _bulkWaitingDeviceIds.has(dev.id);
 
                 tr.innerHTML = `
                     <td class="td-checkbox">
@@ -1019,7 +1056,7 @@
                         <div id="model-${dev.id}" style="font-size:11px; color:#9ca3af; margin-top:4px;"></div>
                     </td>
                     <td id="status-${dev.id}" style="text-align: center;">
-                        ${isActiveUpdate ? updatingHtml : '<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px;"></span> Zisťujem'}
+                        ${isActiveUpdate ? updatingHtml : isWaiting ? waitingHtml : '<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px;"></span> Zisťujem'}
                     </td>
                     <td id="os-${dev.id}" style="text-align: center;">${isActiveUpdate ? updatingHtml : 'Načítavam...'}</td>
                     <td id="fw-${dev.id}" style="text-align: center;">${isActiveUpdate ? updatingHtml : 'Načítavam...'}</td>
@@ -1065,8 +1102,14 @@
                         const certText = d <= 0 ? `${certIcon} Cert: vypršaný` : `${certIcon} Cert: ${d}d`;
                         statusHtml += `<br><span style="color:${certColor}; font-size:11px;">${certText}</span>`;
                     }
-                    document.getElementById(`status-${id}`).innerHTML = statusHtml;
-                    appendScheduleBadge(id);
+                    // If device is waiting in a bulk scheduled queue, keep the ⟳ Čaká... status
+                    // (fetchDeviceDetails may run after loadSchedules sets it)
+                    if (_bulkWaitingDeviceIds.has(id)) {
+                        setWaitingCell(id);
+                    } else {
+                        document.getElementById(`status-${id}`).innerHTML = statusHtml;
+                        appendScheduleBadge(id);
+                    }
 
                     // OS cell
                     document.getElementById(`os-${id}`).innerHTML = `
@@ -1162,10 +1205,10 @@
                             </button>
                         </div>
                         <div class="update-dropdown" id="dropdown-${id}" onclick="event.stopPropagation()">
-                            <button onclick="installOsWithCheck(${id}, this)" class="action-btn dropdown-item ${hasOsUpdate ? 'primary' : ''}">
+                            <button onclick="installOsWithCheck(${id}, this)" class="action-btn dropdown-item ${hasOsUpdate ? 'primary' : 'disabled-item'}" title="${hasOsUpdate ? 'Nainštalovať aktualizáciu RouterOS' : 'RouterOS je na aktuálnej verzii'}">
                                 <i class="fas fa-download"></i> Update RouterOS
                             </button>
-                            <button onclick="installFirmwareWithCheck(${id}, this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : ''} ${noFirmware ? 'disabled-item' : ''}" title="${noFirmware ? 'Zariadenie nemá routerboard (VM/CHR) – firmware update nie je dostupný' : ''}">
+                            <button onclick="installFirmwareWithCheck(${id}, this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : 'disabled-item'} ${noFirmware ? 'disabled-item' : ''}" title="${noFirmware ? 'Zariadenie nemá routerboard (VM/CHR) – firmware update nie je dostupný' : hasFwUpdate ? 'Nainštalovať aktualizáciu firmware' : 'Firmware je na aktuálnej verzii'}">
                                 <i class="fas fa-microchip"></i> Update Firmware
                             </button>
                             <div class="dropdown-divider"></div>
@@ -1796,58 +1839,105 @@
         }
 
         // ─── Bulk update ──────────────────────────────────────────────────────────
+        // Bulk delay cached from server settings (seconds)
+        let _bulkUpdateDelaySec = 60;
+        async function _loadBulkDelay() {
+            try {
+                const res = await fetch('/api/settings');
+                const s = await res.json();
+                _bulkUpdateDelaySec = parseInt(s.bulk_update_delay_seconds || 60);
+            } catch (e) { /* keep default */ }
+        }
+        _loadBulkDelay();
+
+        // Queue for sequential bulk update
+        let _bulkQueue = [];
+        let _bulkQueueRunning = false;
+
+        // Called by SocketIO handler when update finishes (done/failed)
+        function _onUpdateFinished(id) {
+            if (!_bulkQueueRunning) return;
+            // Process next in queue after delay
+            setTimeout(async () => {
+                if (_bulkQueue.length === 0) {
+                    _bulkQueueRunning = false;
+                    return;
+                }
+                const nextId = _bulkQueue.shift();
+                await fullUpdateDevice(nextId);
+            }, _bulkUpdateDelaySec * 1000);
+        }
+
         async function bulkUpdateDevices() {
             const ids = getCheckedDeviceIds();
             if (ids.length === 0) return;
 
+            await _loadBulkDelay();
+
             const bulkBtn = document.getElementById('bulkUpdateBtn');
             bulkBtn.disabled = true;
 
-            // Fire all updates – each runs independently server-side, returns quickly
-            for (let i = 0; i < ids.length; i++) {
-                await fullUpdateDevice(ids[i]);
-                if (i < ids.length - 1) await sleep(300);
+            if (ids.length === 1) {
+                // Single device – start immediately
+                await fullUpdateDevice(ids[0]);
+            } else {
+                // Multiple devices – start first, queue the rest
+                _bulkQueue = ids.slice(1);
+                _bulkQueueRunning = true;
+                // Mark queued devices as waiting immediately
+                _bulkQueue.forEach(qid => setWaitingCell(qid));
+                showToast(`Sekvenčná hromadná aktualizácia: spustilo sa ${ids.length} zariadení s ${_bulkUpdateDelaySec}s oneskorením.`, 'info', 6000);
+                await fullUpdateDevice(ids[0]);
             }
 
-            // Uncheck all after all requests are fired
+            // Uncheck all
             document.querySelectorAll('.device-select-cb').forEach(cb => cb.checked = false);
             document.getElementById('selectAllCb').checked = false;
             document.getElementById('selectAllCb').indeterminate = false;
             bulkBtn.disabled = true;
         }
 
-        // ─── Restore running manual updates after F5 ─────────────────────────────
+        // ─── Restore running manual + scheduled updates after F5 ─────────────────
         async function restoreRunningUpdates() {
+            // 1. Manual updates
             try {
                 const res = await fetch('/api/updater/running-updates');
                 const data = await res.json();
-                if (!data.running || data.running.length === 0) return;
-
-                for (const ru of data.running) {
+                for (const ru of (data.running || [])) {
                     const id = ru.device_id;
-                    // Skip if SocketIO already started showing progress for this device
                     if (_deviceUpdateState[id] && _deviceUpdateState[id].active) continue;
-
-                    // Mark status/os/fw cells as updating (purple) before rebuilding actions
                     setUpdatingCells(id);
-
                     startInlineUpdate(id);
                     for (const step of (ru.steps_done || [])) {
                         setInlineStep(id, step, 'done');
                     }
-                    if (ru.current_step > 0) {
-                        setInlineStep(id, ru.current_step, 'active');
-                    }
+                    if (ru.current_step > 0) setInlineStep(id, ru.current_step, 'active');
                     if (ru.current_msg) setInlineStatus(id, ru.current_msg);
                 }
-            } catch (e) {
-                // Silently ignore – updates are still running server-side
-            }
+            } catch (e) { /* Silently ignore */ }
+
+            // 2. Scheduled updates (same UI rebuild)
+            try {
+                const res = await fetch('/api/updater/running-scheduled-updates');
+                const data = await res.json();
+                for (const ru of (data.running || [])) {
+                    const id = ru.device_id;
+                    if (_deviceUpdateState[id] && _deviceUpdateState[id].active) continue;
+                    setUpdatingCells(id);
+                    startInlineUpdate(id);
+                    for (const step of (ru.steps_done || [])) {
+                        setInlineStep(id, step, 'done');
+                    }
+                    if (ru.current_step > 0) setInlineStep(id, ru.current_step, 'active');
+                    if (ru.current_msg) setInlineStatus(id, ru.current_msg);
+                }
+            } catch (e) { /* Silently ignore */ }
         }
 
         // ─── Scheduled Updates ──────────────────────────────────────────────────────
 
         let _scheduleTargetDeviceId = null;
+        let _scheduleTargetDeviceIds = []; // multiple devices for bulk schedule
         let _deviceSchedules = {}; // device_id -> schedule (iba pending/running)
 
         function formatScheduleTime(isoStr) {
@@ -1889,6 +1979,21 @@
             statusEl.appendChild(badge);
         }
 
+        // Helper: returns true if device has any pending OS or firmware update
+        function deviceHasUpdate(id) {
+            const data = deviceDataMap[id];
+            if (!data || data.status !== 'success') return false;
+            const hasOsUpdate = data.os &&
+                data.os['installed-version'] !== 'N/A' &&
+                data.os['installed-version'] !== data.os['latest-version'];
+            const _fwCur = data.firmware && data.firmware['current-firmware'];
+            const _fwUpg = data.firmware && data.firmware['upgrade-firmware'];
+            const _fwAvail = (_fwCur !== 'N/A' && _fwCur === _fwUpg && hasOsUpdate && data.os['latest-version'] !== 'N/A')
+                ? data.os['latest-version'] : _fwUpg;
+            const hasFwUpdate = _fwCur && _fwCur !== 'N/A' && _fwCur !== _fwAvail;
+            return !!(hasOsUpdate || hasFwUpdate);
+        }
+
         function openScheduleModal(deviceId, deviceName, hasUpdate) {
             if (!hasUpdate) {
                 showToast('Zariadenie je na aktuálnej verzii – nie je čo aktualizovať.', 'info');
@@ -1900,8 +2005,42 @@
                 showToast(`Zariadenie už má naplánovaný update na ${formatScheduleTime(existing.scheduled_time)}. Zrušte ho najprv.`, 'warning');
                 return;
             }
-            _scheduleTargetDeviceId = deviceId;
-            document.getElementById('scheduleDeviceName').textContent = deviceName || ('ID ' + deviceId);
+
+            // Check if this device is among the checked devices
+            const checkedIds = getCheckedDeviceIds();
+            if (checkedIds.length > 1 && checkedIds.includes(deviceId)) {
+                // Bulk schedule – filter only devices that actually need an update
+                const updatableIds = checkedIds.filter(id => deviceHasUpdate(id));
+                const skippedIds = checkedIds.filter(id => !deviceHasUpdate(id));
+
+                if (updatableIds.length === 0) {
+                    showToast('Žiadne z označených zariadení nemá dostupný update – naplánovaný update nebol vytvorený.', 'info', 5000);
+                    return;
+                }
+
+                if (skippedIds.length > 0) {
+                    const skippedNames = skippedIds.map(id => {
+                        const d = devicesList.find(x => x.id === id);
+                        return d ? d.name : `ID ${id}`;
+                    }).join(', ');
+                    showToast(`${skippedIds.length} zariadení preskočených (sú na aktuálnej verzii): ${skippedNames}`, 'info', 6000);
+                }
+
+                _scheduleTargetDeviceIds = updatableIds;
+                _scheduleTargetDeviceId = null;
+                const names = updatableIds.map(id => {
+                    const d = devicesList.find(x => x.id === id);
+                    return d ? d.name : `ID ${id}`;
+                }).join(', ');
+                document.getElementById('scheduleDeviceName').innerHTML =
+                    `<span style="color:#a78bfa;"><i class="fas fa-layer-group" style="margin-right:5px;"></i>${updatableIds.length} zariadení na aktualizáciu</span><br><span style="font-size:11px;color:#9ca3af;">${names}</span>`;
+            } else {
+                // Single device
+                _scheduleTargetDeviceIds = [];
+                _scheduleTargetDeviceId = deviceId;
+                document.getElementById('scheduleDeviceName').textContent = deviceName || ('ID ' + deviceId);
+            }
+
             document.getElementById('scheduleModalError').style.display = 'none';
             const minDt = new Date(Date.now() + 5 * 60000);
             const pad = n => String(n).padStart(2, '0');
@@ -1916,11 +2055,13 @@
             if (e && e.target !== document.getElementById('scheduleModal')) return;
             document.getElementById('scheduleModal').style.display = 'none';
             _scheduleTargetDeviceId = null;
+            _scheduleTargetDeviceIds = [];
         }
 
         async function confirmSchedule() {
+            const isBulk = _scheduleTargetDeviceIds.length > 1;
             const id = _scheduleTargetDeviceId;
-            if (!id) return;
+            if (!isBulk && !id) return;
             const val = document.getElementById('scheduleDateTime').value;
             const errEl = document.getElementById('scheduleModalError');
             if (!val) { errEl.textContent = 'Vyberte dátum a čas.'; errEl.style.display = 'block'; return; }
@@ -1929,19 +2070,38 @@
             const btn = document.getElementById('confirmScheduleBtn');
             btn.disabled = true;
             try {
-                const res = await fetch(`/api/updater/schedule/${id}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ scheduled_time: val })
-                });
-                const data = await res.json();
+                let res, data;
+                if (isBulk) {
+                    // Bulk schedule – one request for all selected devices
+                    res = await fetch('/api/updater/schedule/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ device_ids: _scheduleTargetDeviceIds, scheduled_time: val })
+                    });
+                } else {
+                    res = await fetch(`/api/updater/schedule/${id}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ scheduled_time: val })
+                    });
+                }
+                data = await res.json();
                 if (data.status === 'success') {
                     document.getElementById('scheduleModal').style.display = 'none';
-                    // Close the action dropdown for the device
-                    const dd = document.getElementById(`dropdown-${id}`);
-                    if (dd) dd.style.display = 'none';
+                    if (isBulk) {
+                        // Close all open dropdowns for selected devices
+                        _scheduleTargetDeviceIds.forEach(devId => {
+                            const dd = document.getElementById(`dropdown-${devId}`);
+                            if (dd) dd.style.display = 'none';
+                        });
+                    } else {
+                        const dd = document.getElementById(`dropdown-${id}`);
+                        if (dd) dd.style.display = 'none';
+                    }
+                    const bulkCount = _scheduleTargetDeviceIds.length;
                     _scheduleTargetDeviceId = null;
-                    showToast('Update naplánovaný.', 'success');
+                    _scheduleTargetDeviceIds = [];
+                    showToast(isBulk ? `Hromadný update naplánovaný pre ${bulkCount} zariadení. Spustí sa sekvenčne.` : 'Update naplánovaný.', 'success');
                     await loadSchedules();
                 } else {
                     errEl.textContent = data.message || 'Chyba pri plánovaní.';
@@ -1956,6 +2116,45 @@
         }
 
         async function cancelSchedule(scheduleId) {
+            // Bulk cancel: if multiple devices are checked, cancel all their pending schedules
+            const checkedIds = getCheckedDeviceIds();
+            if (checkedIds.length > 1) {
+                // Collect schedule IDs for all checked devices that have a pending plan
+                const scheduleIds = checkedIds
+                    .map(devId => _deviceSchedules[devId])
+                    .filter(s => s && s.status === 'pending')
+                    .map(s => s.id);
+
+                if (scheduleIds.length === 0) {
+                    showToast('Žiadne z označených zariadení nemá čakajúci plán.', 'info');
+                    return;
+                }
+
+                const deviceCount = scheduleIds.length;
+                if (!confirm(`Zrušiť naplánovaný update pre ${deviceCount} označených zariadení?`)) return;
+
+                let cancelled = 0, failed = 0;
+                for (const sid of scheduleIds) {
+                    try {
+                        const res = await fetch(`/api/updater/schedule/${sid}`, { method: 'DELETE' });
+                        const data = await res.json();
+                        if (data.status === 'success') cancelled++;
+                        else failed++;
+                    } catch (e) {
+                        failed++;
+                    }
+                }
+
+                if (failed === 0) {
+                    showToast(`${cancelled} plán${cancelled > 1 ? 'y' : ''} zrušen${cancelled > 1 ? 'é' : 'ý'}.`, 'info');
+                } else {
+                    showToast(`Zrušených: ${cancelled}, chýb: ${failed}.`, 'warning');
+                }
+                await loadSchedules();
+                return;
+            }
+
+            // Standard single-device cancel
             if (!confirm('Zrušiť naplánovaný update?')) return;
             try {
                 const res = await fetch(`/api/updater/schedule/${scheduleId}`, { method: 'DELETE' });
@@ -1981,8 +2180,40 @@
                 schedules.filter(s => s.status === 'pending')
                     .forEach(s => { _deviceSchedules[s.device_id] = s; });
 
-                // Obnov badges na všetkých riadkoch
-                devicesList.forEach(d => appendScheduleBadge(d.id));
+                // Obnov badges na všetkých riadkoch – preskočíme zariadenia čakajúce v bulk fronte
+                devicesList.forEach(d => {
+                    if (!_bulkWaitingDeviceIds.has(d.id)) appendScheduleBadge(d.id);
+                });
+
+                // Pre zariadenia s aktívnym updateom: ⟳ Prebieha... v status bunke
+                schedules.filter(s => s.status === 'running').forEach(s => {
+                    if (!(_deviceUpdateState[s.device_id]?.active)) {
+                        const statusEl = document.getElementById(`status-${s.device_id}`);
+                        if (statusEl && !statusEl.querySelector('.schedule-badge')) {
+                            statusEl.innerHTML = `<span style="color:#a78bfa; font-weight:500;">⟳ Prebieha...</span>`;
+                        }
+                    }
+                });
+
+                // Pre zariadenia čakajúce vo fronte bulk plánovania: ⟳ Čaká... v status bunke
+                // Server flag bulk_group_active=true ak skupina je running ALEBO v 60s oneskorení medzi zariadeniami
+                // Prestavíme _bulkWaitingDeviceIds podľa aktuálneho stavu zo servera
+                // ALE zachováme zariadenia, ktoré sú stále v okamžitom _bulkQueue
+                // (okamžitý bulk update nepoužíva DB, takže bulk_group_active bude false počas oneskorenia)
+                _bulkWaitingDeviceIds.clear();
+                // Obnovíme waiting pre zariadenia v aktívnom okamžitom fronte
+                _bulkQueue.forEach(qid => {
+                    if (!(_deviceUpdateState[qid]?.active)) {
+                        setWaitingCell(qid);
+                    }
+                });
+                // Obnovíme waiting pre zariadenia čakajúce v DB (plánovaný bulk) – použijeme server flag
+                schedules.filter(s => s.status === 'pending' && s.bulk_group_active)
+                    .forEach(s => {
+                        if (!(_deviceUpdateState[s.device_id]?.active)) {
+                            setWaitingCell(s.device_id);
+                        }
+                    });
 
                 // Renderuj panel
                 const panel = document.getElementById('scheduledUpdatesPanel');

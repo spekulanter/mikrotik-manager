@@ -339,9 +339,24 @@
         }
 
         /* Inline progress in Akcie cell */
+        .inline-progress-window {
+            height: 63px;
+            /* 3 rows of 21px */
+            overflow: hidden;
+            position: relative;
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+        }
+
+        .inline-progress-track {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 21px 0;
+            margin: 0;
+        }
+
         .inline-progress {
             font-size: 12px;
-            line-height: 1.75;
+            line-height: 21px;
         }
 
         .inline-step {
@@ -349,6 +364,20 @@
             align-items: center;
             gap: 5px;
             color: #6b7280;
+            height: 21px;
+            opacity: 0.3;
+            transition: opacity 0.4s ease, color 0.4s ease;
+        }
+
+        .inline-step.final-step {
+            height: auto;
+            min-height: 21px;
+            line-height: 1.4;
+            align-items: flex-start;
+        }
+
+        .inline-step.carousel-active {
+            opacity: 1;
         }
 
         .inline-step.active {
@@ -709,18 +738,6 @@
                     </tr>
                 </tbody>
             </table>
-        </div>
-    </div>
-
-    <!-- Scheduled updates panel -->
-    <div id="scheduledUpdatesPanel" style="display:none; max-width:1100px; margin:0 auto 32px; padding:0 16px;">
-        <div style="background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:20px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                <h3 style="font-size:1rem;font-weight:600;color:var(--accent-color);margin:0;">
-                    <i class="fas fa-calendar-clock" style="margin-right:8px;"></i>Naplánované aktualizácie
-                </h3>
-            </div>
-            <div id="scheduledUpdatesTable"></div>
         </div>
     </div>
 
@@ -1094,15 +1111,20 @@
                         const d = data.cert_expiry.days_remaining;
                         const warnDays = data.cert_expiry_warning_days || 10;
                         const effectiveWarn = warnDays + 3; // Zobraziť žltú farbu 3 dni pred naplánovanou automatickou obnovou
-                        let certColor, certIcon;
-                        if (d <= 0) {
+                        let certColor, certIcon, certText;
+                        if (d < 0) {
                             certColor = 'var(--danger-color)'; certIcon = '⛔';
+                            certText = `${certIcon} Cert: vypršaný`;
+                        } else if (d === 0) {
+                            certColor = 'var(--warning-color)'; certIcon = '⚠️';
+                            certText = `${certIcon} Cert: < 1d`;
                         } else if (d <= effectiveWarn) {
                             certColor = 'var(--warning-color)'; certIcon = '⚠️';
+                            certText = `${certIcon} Cert: ${d}d`;
                         } else {
                             certColor = 'var(--success-color)'; certIcon = '';
+                            certText = `Cert: ${d}d`;
                         }
-                        const certText = d <= 0 ? `${certIcon} Cert: vypršaný` : `${certIcon} Cert: ${d}d`;
                         statusHtml += `<br><span style="color:${certColor}; font-size:11px;">${certText}</span>`;
                     }
                     // If device is waiting in a bulk scheduled queue, keep the ⟳ Čaká... status
@@ -1270,8 +1292,18 @@
             if (!isOpen) {
                 dd.style.display = 'block';
                 const rect = dd.getBoundingClientRect();
-                const spaceBelow = window.innerHeight - rect.bottom;
-                if (spaceBelow < 0) {
+
+                const spaceBelowWindow = window.innerHeight - rect.bottom;
+
+                const tableContainer = dd.closest('.table-container');
+                let spaceBelowContainer = 9999;
+                if (tableContainer) {
+                    const containerRect = tableContainer.getBoundingClientRect();
+                    // Include some scrollbar tolerance by subtracting a few pixels if needed, but standard rect bottom is fine
+                    spaceBelowContainer = containerRect.bottom - rect.bottom;
+                }
+
+                if (spaceBelowWindow < 0 || spaceBelowContainer < 0) {
                     dd.style.top = 'auto';
                     dd.style.bottom = 'calc(100% + 4px)';
                 } else {
@@ -1501,11 +1533,16 @@
             for (let i = 1; i <= 7; i++) {
                 stepsHtml += `<div id="istep-${id}-${i}" class="inline-step">○ ${STEP_LABELS[i]}</div>`;
             }
+            stepsHtml += `<div id="istep-${id}-8" class="inline-step final-step"></div>`;
 
             actionsEl.innerHTML = `
                 <div>
-                    <div class="inline-progress">${stepsHtml}</div>
-                    <div id="istatus-${id}" class="inline-status"></div>
+                    <div class="inline-progress-window">
+                        <div id="itrack-${id}" class="inline-progress-track inline-progress">
+                            ${stepsHtml}
+                        </div>
+                    </div>
+                    <div id="istatus-${id}" class="inline-status" style="display:none;"></div>
                     <div id="idecision-${id}" class="inline-decision">
                         <button onclick="inlineDecisionAnswer(${id}, 'continue')" class="action-btn primary" style="font-size:12px; padding:4px 10px;">
                             <i class="fas fa-forward"></i> Pokračovať
@@ -1533,10 +1570,24 @@
                 _deviceUpdateState[id].active = false;
                 _deviceUpdateState[id].persistedResult = true;
             }
+
+            const finalStepEl = document.getElementById(`istep-${id}-8`);
+            if (finalStepEl) {
+                const icon = success ? STEP_ICONS['done'] : STEP_ICONS['error'];
+                const color = success ? 'var(--success-color)' : 'var(--danger-color)';
+                finalStepEl.innerHTML = `
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size: 11px;">
+                        <span style="color:${color}; font-weight:600;">${icon} ${message}</span>
+                        <button onclick="clearUpdateState(${id})" style="background:none; border:none; color:var(--accent-color); cursor:pointer; font-size:11px; text-decoration:underline; padding:0; white-space:nowrap;">Zatvoriť</button>
+                    </div>
+                `;
+            }
+
+            setInlineStep(id, 8, success ? 'done' : 'error');
+
             const statusEl = document.getElementById(`istatus-${id}`);
             if (statusEl) {
-                statusEl.style.color = success ? 'var(--success-color)' : 'var(--danger-color)';
-                statusEl.innerHTML = `${message} <button onclick="clearUpdateState(${id})" style="background:none; border:none; color:var(--accent-color); cursor:pointer; font-size:12px; text-decoration:underline; padding:0; margin-left:4px;">Zatvoriť</button>`;
+                statusEl.style.display = 'none';
             }
             saveUpdateState();
         }
@@ -1544,11 +1595,35 @@
         function setInlineStep(id, stepNum, state) {
             const el = document.getElementById(`istep-${id}-${stepNum}`);
             if (!el) return;
-            el.className = 'inline-step' + (state ? ` ${state}` : '');
-            el.textContent = `${STEP_ICONS[state] || '○'} ${STEP_LABELS[stepNum]}`;
+            const isFinal = el.classList.contains('final-step');
+            el.className = 'inline-step' + (isFinal ? ' final-step' : '') + (state ? ` ${state}` : '');
+
+            if (stepNum <= 7) {
+                el.textContent = `${STEP_ICONS[state] || '○'} ${STEP_LABELS[stepNum]}`;
+            }
+
             if (state === 'active' && _deviceUpdateState[id]) {
                 _deviceUpdateState[id].currentStep = stepNum;
             }
+
+            for (let i = 1; i <= 8; i++) {
+                const sEl = document.getElementById(`istep-${id}-${i}`);
+                if (sEl) sEl.classList.remove('carousel-active');
+            }
+            if (state !== 'done') {
+                el.classList.add('carousel-active');
+            } else if (stepNum < 8) {
+                el.classList.add('carousel-active');
+            } else {
+                el.classList.add('carousel-active');
+            }
+
+            const track = document.getElementById(`itrack-${id}`);
+            if (track) {
+                const offset = -(stepNum - 1) * 21;
+                track.style.transform = `translateY(${offset}px)`;
+            }
+
             saveUpdateState();
         }
 
@@ -1987,16 +2062,7 @@
             return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
         }
 
-        function scheduleStatusLabel(status) {
-            const map = {
-                pending: '<span style="color:#a78bfa;">⏳ Čaká</span>',
-                running: '<span style="color:#fbbf24;"><i class="fas fa-spinner fa-spin"></i> Prebieha</span>',
-                done: '<span style="color:var(--success-color);">✅ Hotovo</span>',
-                failed: '<span style="color:var(--danger-color);">❌ Chyba</span>',
-                cancelled: '<span style="color:#6b7280;">🚫 Zrušený</span>'
-            };
-            return map[status] || status;
-        }
+
 
         // Priamo pridá/aktualizuje badge na riadku zariadenia (nemaže status cell)
         function appendScheduleBadge(deviceId) {
@@ -2265,33 +2331,6 @@
                         }
                     }
                 } catch (e) { /* Silently ignore */ }
-
-                // Renderuj panel
-                const panel = document.getElementById('scheduledUpdatesPanel');
-                const container = document.getElementById('scheduledUpdatesTable');
-                if (!schedules.length) { panel.style.display = 'none'; return; }
-                panel.style.display = 'block';
-                let html = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-                    <thead><tr style="color:var(--text-muted);border-bottom:1px solid var(--border-color);">
-                        <th style="text-align:left;padding:6px 10px;">Zariadenie</th>
-                        <th style="text-align:left;padding:6px 10px;">Naplánovaný čas</th>
-                        <th style="text-align:left;padding:6px 10px;">Stav</th>
-                        <th style="text-align:left;padding:6px 10px;">Výsledok</th>
-                        <th style="padding:6px 10px;"></th>
-                    </tr></thead><tbody>`;
-                schedules.forEach(s => {
-                    html += `<tr style="border-bottom:1px solid var(--border-color);">
-                        <td style="padding:8px 10px;font-weight:500;">${s.device_name}<br><span style="color:var(--text-muted);font-size:11px;">${s.device_ip}</span></td>
-                        <td style="padding:8px 10px;">${formatScheduleTime(s.scheduled_time)}</td>
-                        <td style="padding:8px 10px;">${scheduleStatusLabel(s.status)}</td>
-                        <td style="padding:8px 10px;color:var(--text-muted);font-size:12px;max-width:260px;word-break:break-word;">${s.result_message || '–'}</td>
-                        <td style="padding:8px 10px;">
-                            ${s.status === 'pending' ? `<button onclick="cancelSchedule(${s.id})" class="action-btn danger" style="font-size:12px;padding:4px 10px;"><i class="fas fa-times"></i> Zrušiť</button>` : ''}
-                        </td>
-                    </tr>`;
-                });
-                html += '</tbody></table>';
-                container.innerHTML = html;
             } catch (e) { }
         }
 

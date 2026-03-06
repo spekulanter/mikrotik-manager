@@ -675,7 +675,7 @@
                 <i class="fas fa-cog"></i> <span>Nastavenia</span>
             </button>
             <button id="themeToggle" class="btn-back" onclick="toggleTheme()" title="Prepnúť tému">
-                <i class="fas fa-moon"></i>
+                <i class="fas fa-sun"></i>
             </button>
             <a href="/" class="btn-back">
                 <i class="fas fa-arrow-left"></i>
@@ -821,7 +821,7 @@
             document.body.classList.toggle('light-theme');
             const isLight = document.body.classList.contains('light-theme');
             localStorage.setItem('mikrotik_theme', isLight ? 'light' : 'dark');
-            document.querySelector('#themeToggle i').className = isLight ? 'fas fa-sun' : 'fas fa-moon';
+            document.querySelector('#themeToggle i').className = isLight ? 'fas fa-moon' : 'fas fa-sun';
         }
 
         // ─── UPDATE SOCKET PROGRESS (manual + scheduled) ─────────────────────────
@@ -885,7 +885,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('mikrotik_theme') === 'light') {
                 document.body.classList.add('light-theme');
-                document.querySelector('#themeToggle i').className = 'fas fa-sun';
+                document.querySelector('#themeToggle i').className = 'fas fa-moon';
             }
             // Close all dropdowns on outside click
             document.addEventListener('click', function (e) {

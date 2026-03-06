@@ -78,6 +78,22 @@
             line-height: 1;
         }
 
+        .device-ip {
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .device-model {
+            color: #9ca3af;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        .version-label {
+            color: #9ca3af;
+            text-align: center;
+        }
+
         .header-buttons {
             display: flex;
             align-items: stretch;
@@ -184,6 +200,48 @@
             cursor: not-allowed;
         }
 
+        .btn-changelog {
+            background: linear-gradient(135deg, #0d9488, #0f766e);
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            color: white;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-changelog:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.4);
+        }
+
+        body.light-theme .btn-changelog {
+            background: linear-gradient(135deg, #2dd4bf, #14b8a6) !important;
+            color: #fff !important;
+            box-shadow: 0 4px 10px rgba(20, 184, 166, 0.35) !important;
+        }
+
+        body.light-theme .btn-changelog:hover {
+            background: linear-gradient(135deg, #14b8a6, #0d9488) !important;
+            box-shadow: 0 6px 14px rgba(20, 184, 166, 0.4) !important;
+        }
+
+        body.light-theme .btn-bulk-update {
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6) !important;
+            color: #fff !important;
+            box-shadow: 0 4px 10px rgba(139, 92, 246, 0.35) !important;
+        }
+
+        body.light-theme .btn-bulk-update:hover:not(:disabled) {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+            box-shadow: 0 6px 14px rgba(139, 92, 246, 0.4) !important;
+        }
+
         @keyframes spin {
             from {
                 transform: rotate(0deg);
@@ -219,7 +277,7 @@
             width: 100%;
             border-collapse: collapse;
             margin: 0;
-            min-width: 1050px;
+            min-width: 1150px;
         }
 
         .table thead th {
@@ -506,8 +564,8 @@
             --text-color: #1f2937;
             --accent-color: #0369a1;
             --accent-color-hover: #0284c7;
-            --success-color: #059669;
-            --danger-color: #dc2626;
+            --success-color: #15803d;
+            --danger-color: #b91c1c;
         }
 
         body.light-theme .table-container,
@@ -517,6 +575,116 @@
 
         body.light-theme .update-dropdown {
             background-color: #deeafa;
+        }
+
+        /* Light theme – subtitle */
+        body.light-theme .page-subtitle {
+            color: #4b5563;
+        }
+
+        /* Light theme – header buttons */
+        body.light-theme .btn-back {
+            background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
+            color: #1f2937 !important;
+            border: 1px solid #b8c9e6 !important;
+        }
+
+        body.light-theme .btn-back:hover {
+            background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
+            color: #1f2937 !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.light-theme .btn-refresh {
+            background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
+            color: #f8fafc !important;
+            border: 1px solid rgba(14, 165, 233, 0.4) !important;
+            box-shadow: 0 4px 10px rgba(14, 165, 233, 0.25) !important;
+        }
+
+        body.light-theme .btn-refresh:hover {
+            background: linear-gradient(135deg, #0284c7, #0ea5e9) !important;
+            box-shadow: 0 6px 14px rgba(14, 165, 233, 0.3) !important;
+        }
+
+        /* Light theme – info card (RSS / bulk update) */
+        body.light-theme .info-card {
+            background-color: rgba(3, 105, 161, 0.07);
+            border-color: rgba(3, 105, 161, 0.25);
+        }
+
+        body.light-theme .info-card p {
+            color: #374151;
+        }
+
+        /* Light theme – table */
+        body.light-theme .table-container {
+            background-color: #deeafa;
+            border-color: #b8c9e6;
+        }
+
+        body.light-theme .table thead th {
+            background-color: #deeafa;
+            color: #0369a1;
+            border-bottom-color: #b8c9e6;
+        }
+
+        body.light-theme .table tbody tr {
+            background: linear-gradient(145deg, #f9fbff 0%, #eaf2fd 65%, #deeafa 100%);
+            border-bottom: 1px solid #c3d4eb;
+        }
+
+        body.light-theme .table tbody tr:hover {
+            background: linear-gradient(145deg, #f4f8ff 0%, #e6f0fc 70%, #dce8fa 100%);
+        }
+
+        body.light-theme .table tbody td {
+            color: #1f2937;
+        }
+
+        /* Light theme – device IP, model, version labels */
+        body.light-theme .device-ip,
+        body.light-theme .device-model {
+            color: #4b5563 !important;
+        }
+
+        body.light-theme .version-label {
+            color: #4b5563 !important;
+        }
+
+        /* Light theme – action buttons */
+        body.light-theme .action-btn {
+            background-color: #e3edfa;
+            border-color: #b8c9e6;
+            color: #1f2937;
+        }
+
+        body.light-theme .action-btn:hover {
+            background-color: rgba(3, 105, 161, 0.12);
+            border-color: var(--accent-color);
+            color: #0369a1;
+        }
+
+        body.light-theme .action-btn.primary {
+            background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+            color: white;
+            border-color: #38bdf8;
+            box-shadow: 0 4px 10px rgba(14, 165, 233, 0.3);
+        }
+
+        body.light-theme .action-btn.primary:hover {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            box-shadow: 0 6px 14px rgba(14, 165, 233, 0.38);
+        }
+
+        body.light-theme .action-btn.danger {
+            background-color: transparent;
+            color: #dc2626;
+            border-color: #dc2626;
+        }
+
+        body.light-theme .action-btn.danger:hover {
+            background-color: rgba(220, 38, 38, 0.08);
         }
 
         .loading-spinner {
@@ -547,8 +715,14 @@
         .table thead th.th-checkbox,
         .table tbody td.td-checkbox {
             width: 36px;
-            padding: 12px 8px 12px 16px;
+            padding: 12px 4px 12px 0;
             text-align: center;
+        }
+
+        /* Zariadenie/IP column – tight left padding */
+        .table thead th:nth-child(2),
+        .table tbody td:nth-child(2) {
+            padding-left: 2px;
         }
 
         /* ── Table row checkboxes (device list + select-all) ──────────────────── */
@@ -770,7 +944,7 @@
                     <i class="fas fa-download"></i>
                     <span>Aktualizovať vybrané</span>
                 </button>
-                <button onclick="openChangelogModal()" class="action-btn primary" id="btnShowChangelog"
+                <button onclick="openChangelogModal()" class="btn-changelog" id="btnShowChangelog"
                     style="display:none;">
                     <i class="fas fa-list-alt"></i> Zobraziť Changelog
                 </button>
@@ -785,15 +959,15 @@
                             <input type="checkbox" id="selectAllCb" title="Vybrať všetky"
                                 onchange="toggleSelectAll(this)">
                         </th>
-                        <th class="th-sortable" onclick="handleThClick(1)" style="text-align: center;">Zariadenie / IP
+                        <th class="th-sortable" onclick="handleThClick(1)" width="16%" style="text-align: left;">Zariadenie / IP
                         </th>
                         <th class="th-sortable" onclick="handleThClick(2)" width="10%" style="text-align: center;">
                             Status</th>
-                        <th class="th-sortable" onclick="handleThClick(3)" width="20%" style="text-align: center;">
+                        <th class="th-sortable" onclick="handleThClick(3)" width="16%" style="text-align: center;">
                             RouterOS verzia</th>
-                        <th class="th-sortable" onclick="handleThClick(4)" width="20%" style="text-align: center;">
+                        <th class="th-sortable" onclick="handleThClick(4)" width="16%" style="text-align: center;">
                             Firmware (RouterBOARD)</th>
-                        <th width="35%" style="text-align: center;">Akcie</th>
+                        <th width="36%" style="text-align: center;">Akcie</th>
                     </tr>
                 </thead>
                 <tbody id="devicesTableBody">
@@ -887,7 +1061,7 @@
         function toggleTheme() {
             document.body.classList.toggle('light-theme');
             const isLight = document.body.classList.contains('light-theme');
-            localStorage.setItem('mikrotik_theme', isLight ? 'light' : 'dark');
+            localStorage.setItem('mikrotik-theme', isLight ? 'light' : 'dark');
             document.querySelector('#themeToggle i').className = isLight ? 'fas fa-moon' : 'fas fa-sun';
         }
 
@@ -950,7 +1124,7 @@
 
         // ─── INIT ─────────────────────────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', () => {
-            if (localStorage.getItem('mikrotik_theme') === 'light') {
+            if (localStorage.getItem('mikrotik-theme') === 'light') {
                 document.body.classList.add('light-theme');
                 document.querySelector('#themeToggle i').className = 'fas fa-moon';
             }
@@ -1138,9 +1312,9 @@
                         <input type="checkbox" class="device-select-cb" data-id="${dev.id}" onchange="onCbChange()">
                     </td>
                     <td>
-                        <strong>${dev.name}</strong><br>
-                        <span style="color:#9ca3af; font-size:12px;">${dev.ip}</span>
-                        <div id="model-${dev.id}" style="font-size:11px; color:#9ca3af; margin-top:4px;"></div>
+                        <strong style="font-size:15px;">${dev.name}</strong><br>
+                        <span class="device-ip">${dev.ip}</span>
+                        <div id="model-${dev.id}" class="device-model"></div>
                     </td>
                     <td id="status-${dev.id}" style="text-align: center;">
                         ${isActiveUpdate ? updatingHtml : isWaiting ? waitingHtml : '<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px;"></span> Zisťujem'}
@@ -1148,7 +1322,7 @@
                     <td id="os-${dev.id}" style="text-align: center;">${isActiveUpdate ? updatingHtml : 'Načítavam...'}</td>
                     <td id="fw-${dev.id}" style="text-align: center;">${isActiveUpdate ? updatingHtml : 'Načítavam...'}</td>
                     <td>
-                        <div id="actions-${dev.id}" style="display:flex; flex-wrap:wrap; gap:8px; opacity:0.5;">
+                        <div id="actions-${dev.id}" style="display:flex; flex-wrap:wrap; gap:8px; opacity:0.5; justify-content:center;">
                             ${isRestored ? restoredHtml : 'Čaká sa na spojenie...'}
                         </div>
                     </td>
@@ -1206,9 +1380,9 @@
                     // OS cell
                     document.getElementById(`os-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
-                            <span style="color: #9ca3af; text-align: center;">Aktuálna:</span> 
+                            <span class="version-label">Aktuálna:</span>
                             <strong>${data.os['installed-version']}</strong>
-                            <span style="color: #9ca3af; text-align: center;">Dostupná:</span> 
+                            <span class="version-label">Dostupná:</span>
                             <strong style="${data.os['installed-version'] !== data.os['latest-version'] ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${data.os['latest-version']}</strong>
                         </div>
                     `;
@@ -1225,9 +1399,9 @@
                         : fwUpgrade;
                     document.getElementById(`fw-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
-                            <span style="color: #9ca3af; text-align: center;">Aktuálny:</span>
+                            <span class="version-label">Aktuálny:</span>
                             <strong>${fwCurrent}</strong>
-                            <span style="color: #9ca3af; text-align: center;">Dostupný:</span>
+                            <span class="version-label">Dostupný:</span>
                             <strong style="${fwCurrent !== fwAvailable ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
                         </div>
                     `;

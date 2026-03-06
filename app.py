@@ -58,7 +58,7 @@ BOOLEAN_SETTING_KEYS = {
     'notify_device_offline', 'notify_device_online', 'notify_temp_critical',
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
     'notify_version_change', 'notify_failed_login', 'notify_failed_2fa', 'notify_password_recovery_failure', 'quiet_hours_enabled', 'availability_monitoring_enabled',
-    'debug_terminal', 'notify_cert_expiry'
+    'debug_terminal', 'notify_cert_expiry', 'notify_new_routeros_version'
 }
 
 SETTING_LABELS = {
@@ -109,6 +109,7 @@ SETTING_LABELS = {
     'notify_failed_login': 'Notifikácia: neúspešné prihlásenie do aplikácie',
     'notify_failed_2fa': 'Notifikácia: neúspešné 2FA overenie',
     'notify_password_recovery_failure': 'Notifikácia: neúspešná obnova hesla',
+    'notify_new_routeros_version': 'Notifikácia: nová verzia RouterOS (RSS)',
     'viewport': 'Režim zobrazenia'
 }
 
@@ -900,6 +901,7 @@ def init_database():
             'notify_failed_login': 'true',
             'notify_failed_2fa': 'true',
             'notify_password_recovery_failure': 'true',
+            'notify_new_routeros_version': 'true',
             'temp_critical_threshold': '75',
             'cpu_critical_threshold': '85',
             'memory_critical_threshold': '90',
@@ -2051,6 +2053,27 @@ def fetch_mikrotik_rss():
         result = {'items': items, 'latest': latest}
         RSS_CACHE['data'] = result
         RSS_CACHE['timestamp'] = now
+        
+        # Oznámenie cez Pushover ak je nová verzia
+        if latest and latest.get('version'):
+            current_latest = latest['version']
+            with get_db_connection() as conn:
+                setting_row = conn.execute("SELECT value FROM settings WHERE key = 'last_seen_routeros_version'").fetchone()
+                last_seen = setting_row['value'] if setting_row else None
+                
+                if last_seen != current_latest:
+                    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ('last_seen_routeros_version', current_latest))
+                    conn.commit()
+                    
+                    if last_seen is not None:
+                        settings_dict = {row['key']: row['value'] for row in conn.execute("SELECT key, value FROM settings WHERE key = 'notify_new_routeros_version'").fetchall()}
+                        if settings_dict.get('notify_new_routeros_version', 'false').lower() == 'true':
+                            add_log('info', f"Nová verzia RouterOS z RSS feedu: {current_latest}")
+                            send_pushover_notification(
+                                f"📣 Nová verzia RouterOS!\nVerzia: {current_latest}\nDátum: {latest.get('pubDate', '')}",
+                                notification_key='notify_new_routeros_version'
+                            )
+
         return result
     except Exception as e:
         logger.error(f"Failed to fetch MikroTik RSS: {e}")

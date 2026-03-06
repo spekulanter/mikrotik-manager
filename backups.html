@@ -38,22 +38,51 @@
             padding: 30px;
         }
         
-        .page-header {
-            text-align: center;
-            margin-bottom: 30px;
-            color: var(--text-color);
+        .header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
         }
-        
+
+        .header-buttons {
+            display: flex;
+            align-items: stretch;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0;
+        }
+
         .page-header h1 {
-            font-size: 2.5rem;
-            font-weight: 600;
-            margin-bottom: 10px;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 0;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .page-header h1 i {
             color: var(--accent-color);
         }
-        
-        .page-header p {
+
+        .page-subtitle {
             color: #9ca3af;
-            font-size: 1.1rem;
+            font-size: 0.85rem;
+            line-height: 1;
+        }
+
+        body.light-theme .page-header h1 {
+            color: #1f2937;
         }
         
         .controls-row {
@@ -241,13 +270,14 @@
             vertical-align: middle;
             color: var(--text-color);
             line-height: 1.4;
+            font-size: 15px;
         }
-        
+
         .btn-download {
             background: linear-gradient(135deg, var(--success-color), #22c55e);
             border: none;
             border-radius: 6px;
-            padding: 7px 14px;
+            padding: 6px 12px;
             color: #000;
             text-decoration: none;
             transition: all 0.3s ease;
@@ -269,7 +299,7 @@
             background: linear-gradient(135deg, #ef4444, #dc2626);
             border: none;
             border-radius: 6px;
-            padding: 7px 14px;
+            padding: 6px 12px;
             color: white;
             text-decoration: none;
             transition: all 0.3s ease;
@@ -288,10 +318,10 @@
         }
         
         .btn-delete-compact {
-            padding: 8px;
+            padding: 7px;
             min-width: auto;
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             border-radius: 8px;
             display: inline-flex;
             align-items: center;
@@ -308,19 +338,18 @@
             background: linear-gradient(135deg, #6b7280, #4b5563);
             border: none;
             border-radius: 6px;
-            padding: 8px 16px;
+            padding: 7px 14px;
             color: white;
             text-decoration: none;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            margin-bottom: 20px;
             font-weight: 500;
-            font-size: 14px;
-            float: right;
+            font-size: 13px;
+            cursor: pointer;
         }
-        
+
         .btn-back:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
@@ -431,19 +460,16 @@
         
         .theme-toggle {
             background: linear-gradient(135deg, #6b7280, #4b5563);
-            border: 1px solid var(--border-color);
+            border: none;
             border-radius: 6px;
-            padding: 8px;
+            padding: 7px 12px;
             color: white;
             cursor: pointer;
             transition: all 0.3s ease;
-            font-size: 14px;
-            display: flex;
+            font-size: 13px;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 36px;
-            height: 36px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
         }
         
         .theme-toggle:hover {
@@ -649,20 +675,31 @@
             /* Predvolený poriadok pre všetky sekcie – tieto tri nastavíme vyššie, ostatné pôjdu nižšie */
             .main-container > * { order: 4; }
             
-            /* Header s tlačidlami – mobil: centrovať a umiestniť pod titulok */
+            /* Header – mobil: stĺpcové rozloženie, titulok hore, tlačidlá dole */
             .header-actions {
-                display: flex !important;
-                justify-content: center !important;
+                flex-direction: column !important;
                 align-items: center !important;
-                gap: 8px !important;
-                margin-bottom: 15px !important;
-                flex-wrap: wrap;
-                order: 2 !important;
+                gap: 12px !important;
+                order: 1 !important;
             }
-            
-            /* Usporiadanie: 1. titulok, 2. tlačidlá, 3. umiestnenie záloh */
-            .page-header { order: 1 !important; margin-bottom: 12px; }
-            .path-info { order: 3 !important; }
+
+            .header-actions .page-header {
+                text-align: center;
+                order: -1;
+                margin-bottom: 4px;
+            }
+
+            .page-subtitle {
+                display: none;
+            }
+
+            .header-buttons {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            /* Usporiadanie v main-container: 1. header (titulok+tlačidlá), 2. umiestnenie záloh */
+            .path-info { order: 2 !important; }
             
             /* Menšie tlačidlá – stále pohodlné na dotyk */
             .btn-back {
@@ -694,6 +731,7 @@
             .path-info {
                 font-size: 0.9rem !important;
                 padding: 8px 12px !important;
+                order: 2 !important;
             }
 
             /* Mobil: zobraz len názov súboru + akcie; skry stĺpce 2 (Veľkosť) a 3 (Dátum) */
@@ -862,23 +900,24 @@
 </head>
 <body>
     <div class="main-container">
-        <!-- Header s tlačidlami -->
-        <div class="header-actions" style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 20px;">
-            <button onclick="window.location.href='/settings.html'" class="btn-back" style="float: none; margin-bottom: 0;" title="Nastavenia">
-                <i class="fas fa-cog"></i> <span>Nastavenia</span>
-            </button>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Prepnúť tému">
-                <i class="fas fa-sun" id="theme-icon"></i>
-            </button>
-            <a href="/" class="btn-back" style="float: none; margin-bottom: 0;">
-                <i class="fas fa-arrow-left"></i>
-                <span>Späť</span>
-            </a>
-        </div>
-        
-        <div class="page-header">
-            <h1><i class="fas fa-archive"></i> Zálohy MikroTik</h1>
-            <p>Zoznam všetkých uložených záloh zariadení</p>
+        <!-- Header: titulok vľavo, tlačidlá vpravo -->
+        <div class="header-actions">
+            <div class="page-header">
+                <h1><i class="fas fa-archive"></i> Zálohy MikroTik</h1>
+                <span class="page-subtitle">Zoznam všetkých uložených záloh zariadení</span>
+            </div>
+            <div class="header-buttons">
+                <button onclick="window.location.href='/settings.html'" class="btn-back" title="Nastavenia">
+                    <i class="fas fa-cog"></i> <span>Nastavenia</span>
+                </button>
+                <button class="theme-toggle" onclick="toggleTheme()" title="Prepnúť tému">
+                    <i class="fas fa-sun" id="theme-icon"></i>
+                </button>
+                <a href="/" class="btn-back">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Späť</span>
+                </a>
+            </div>
         </div>
         
         <!-- Informácia o ceste k zálohám -->

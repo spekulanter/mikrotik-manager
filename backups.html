@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="sk">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,24 +11,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { 
-            --main-bg: #111827; 
-            --card-bg: #1f2937; 
-            --border-color: #374151; 
-            --text-color: #d1d5db; 
-            --accent-color: #38bdf8; 
+        :root {
+            --main-bg: #111827;
+            --card-bg: #1f2937;
+            --border-color: #374151;
+            --text-color: #d1d5db;
+            --accent-color: #38bdf8;
             --accent-color-hover: #0ea5e9;
             --success-color: #4ade80;
             --warning-color: #facc15;
         }
-        
-        body { 
-            background-color: var(--main-bg); 
-            color: var(--text-color); 
-            font-family: 'Inter', sans-serif; 
+
+        body {
+            background-color: var(--main-bg);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
             min-height: 100vh;
         }
-        
+
         .main-container {
             margin: 20px auto;
             max-width: 1400px;
@@ -37,7 +38,7 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
             padding: 30px;
         }
-        
+
         .header-actions {
             display: flex;
             justify-content: space-between;
@@ -84,7 +85,7 @@
         body.light-theme .page-header h1 {
             color: #1f2937;
         }
-        
+
         .controls-row {
             display: flex;
             flex-wrap: wrap;
@@ -93,7 +94,7 @@
             align-items: center;
             justify-content: space-between;
         }
-        
+
         .search-sort-container {
             display: flex;
             flex-wrap: wrap;
@@ -101,12 +102,12 @@
             align-items: center;
             flex-grow: 1;
         }
-        
+
         .search-box {
             flex-grow: 1;
             min-width: 250px;
         }
-        
+
         .search-box input {
             width: 100%;
             padding: 12px 20px;
@@ -117,27 +118,27 @@
             font-size: 14px;
             transition: all 0.3s ease;
         }
-        
+
         .search-box input:focus {
             outline: none;
             border-color: var(--accent-color);
             box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
         }
-        
+
         .sort-container {
             display: flex;
             gap: 10px;
             align-items: center;
             flex-wrap: wrap;
         }
-        
+
         .filter-container {
             display: flex;
             gap: 8px;
             align-items: center;
             flex-wrap: wrap;
         }
-        
+
         .filter-btn {
             padding: 6px 12px;
             border: 1px solid var(--border-color);
@@ -151,31 +152,31 @@
             align-items: center;
             gap: 4px;
         }
-        
+
         .filter-btn:hover {
             border-color: var(--accent-color);
             background-color: rgba(56, 189, 248, 0.1);
         }
-        
+
         .filter-btn.active {
             border-color: var(--success-color);
             background-color: var(--success-color);
             color: #000;
         }
-        
+
         .table-container {
             background-color: #111827;
             border: 1px solid var(--border-color);
             border-radius: 10px;
             overflow: hidden;
         }
-        
+
         .table {
             width: 100%;
             border-collapse: collapse;
             margin: 0;
         }
-        
+
         .table thead th {
             background-color: var(--card-bg);
             color: var(--accent-color);
@@ -246,25 +247,25 @@
             text-align: center;
             flex-shrink: 0;
         }
-        
+
         .mobile-date-toggle:hover .mobile-sort-icon,
         .mobile-date-toggle.active .mobile-sort-icon {
             opacity: 1;
         }
-        
+
         .table tbody tr {
             transition: all 0.3s ease;
             border-bottom: 1px solid var(--border-color);
         }
-        
+
         .table tbody tr:hover {
             background-color: rgba(56, 189, 248, 0.05);
         }
-        
+
         .table tbody tr:last-child {
             border-bottom: none;
         }
-        
+
         .table tbody td {
             padding: 8px 14px;
             vertical-align: middle;
@@ -287,14 +288,14 @@
             font-weight: 500;
             font-size: 13px;
         }
-        
+
         .btn-download:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(74, 222, 128, 0.3);
             color: #000;
             text-decoration: none;
         }
-        
+
         .btn-delete {
             background: linear-gradient(135deg, #ef4444, #dc2626);
             border: none;
@@ -310,13 +311,13 @@
             font-size: 13px;
             cursor: pointer;
         }
-        
+
         .btn-delete:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
             background: linear-gradient(135deg, #dc2626, #b91c1c);
         }
-        
+
         .btn-delete-compact {
             padding: 7px;
             min-width: auto;
@@ -327,13 +328,13 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .action-buttons {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
         }
-        
+
         .btn-back {
             background: linear-gradient(135deg, #6b7280, #4b5563);
             border: none;
@@ -356,7 +357,7 @@
             color: white;
             text-decoration: none;
         }
-        
+
         .file-icon {
             font-size: 1.2rem;
             margin-right: 10px;
@@ -365,33 +366,33 @@
             text-align: center;
             flex-shrink: 0;
         }
-        
+
         .file-backup {
             color: var(--accent-color);
         }
-        
+
         .file-rsc {
             color: var(--success-color);
         }
-        
+
         .file-size {
             font-family: 'JetBrains Mono', 'Courier New', monospace;
             color: #9ca3af;
             font-size: 14px;
         }
-        
+
         .empty-state {
             text-align: center;
             padding: 80px 20px;
             color: #6b7280;
         }
-        
+
         .empty-state i {
             font-size: 4rem;
             margin-bottom: 20px;
             color: #374151;
         }
-        
+
         .info-badge {
             background-color: rgba(56, 189, 248, 0.1);
             border: 1px solid rgba(56, 189, 248, 0.3);
@@ -401,7 +402,7 @@
             color: var(--text-color);
             font-size: 14px;
         }
-        
+
         .path-info {
             background-color: #111827;
             border: 1px solid var(--border-color);
@@ -415,7 +416,7 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .pagination {
             display: flex;
             justify-content: center;
@@ -424,7 +425,7 @@
             margin-top: 20px;
             flex-wrap: wrap;
         }
-        
+
         .pagination button {
             padding: 8px 12px;
             border: 1px solid var(--border-color);
@@ -435,29 +436,29 @@
             transition: all 0.3s ease;
             font-size: 14px;
         }
-        
+
         .pagination button:hover:not(:disabled) {
             border-color: var(--accent-color);
             background-color: rgba(56, 189, 248, 0.1);
         }
-        
+
         .pagination button.active {
             border-color: var(--accent-color);
             background-color: var(--accent-color);
             color: #000;
         }
-        
+
         .pagination button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
-        
+
         .pagination-info {
             color: #9ca3af;
             font-size: 14px;
             margin: 0 15px;
         }
-        
+
         .theme-toggle {
             background: linear-gradient(135deg, #6b7280, #4b5563);
             border: none;
@@ -471,29 +472,29 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .theme-toggle:hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
         }
-        
+
         .table thead th.sortable {
             cursor: pointer;
             user-select: none;
             transition: all 0.3s ease;
             position: relative;
         }
-        
+
         .table thead th.sortable:hover {
             background-color: rgba(56, 189, 248, 0.1);
             color: var(--accent-color);
         }
-        
+
         .table thead th.sortable.active {
             background-color: rgba(56, 189, 248, 0.2);
             color: var(--accent-color);
         }
-        
+
         .table thead th.sortable .sort-icon {
             margin-left: 8px;
             opacity: 0.5;
@@ -503,7 +504,7 @@
             text-align: center;
             flex-shrink: 0;
         }
-        
+
         .table thead th.sortable:hover .sort-icon,
         .table thead th.sortable.active .sort-icon {
             opacity: 1;
@@ -520,7 +521,7 @@
             --success-color: #059669;
             --warning-color: #d97706;
         }
-        
+
         body.light-theme .table-container {
             background-color: #deeafa;
             border: none;
@@ -533,7 +534,7 @@
             border-spacing: 0 4px;
             width: 100%;
         }
-        
+
         body.light-theme .table thead th {
             background: transparent;
             color: #0f172a;
@@ -572,14 +573,14 @@
             border-top-right-radius: 12px;
             border-bottom-right-radius: 12px;
         }
-        
+
         body.light-theme .search-box input,
         body.light-theme .filter-btn,
         body.light-theme .pagination button {
             background-color: #e3edfa;
             border-color: #b8c9e6;
         }
-        
+
         body.light-theme .filter-btn {
             color: #0f172a;
         }
@@ -590,24 +591,24 @@
             color: var(--accent-color);
             box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
         }
-        
+
         body.light-theme .path-info {
             background-color: #cddbf2;
         }
-        
+
         /* Tlačidlo "Späť" v svetlej téme */
         body.light-theme .btn-back {
             background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
             color: var(--text-color) !important;
             border: 1px solid var(--border-color) !important;
         }
-        
+
         body.light-theme .btn-back:hover {
             background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
             color: var(--text-color) !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }
-        
+
         /* Theme toggle v svetlej téme */
         body.light-theme .theme-toggle {
             background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
@@ -615,13 +616,13 @@
             border: 1px solid #b8c9e6 !important;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12) !important;
         }
-        
+
         body.light-theme .theme-toggle:hover {
             background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
             color: var(--text-color) !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }
-        
+
         /* Svetlejšie akčné tlačidlá len v svetlej téme */
         body.light-theme .btn-download {
             background: linear-gradient(135deg, #0ea5e9, #38bdf8);
@@ -646,25 +647,26 @@
             background: linear-gradient(135deg, #ef4444, #dc2626);
             box-shadow: 0 8px 18px rgba(239, 68, 68, 0.26);
         }
-        
+
         @media (max-width: 768px) {
             .controls-row {
                 flex-direction: column;
                 align-items: stretch;
             }
-            
+
             .search-sort-container {
                 flex-direction: column;
                 align-items: stretch;
             }
-            
+
             .sort-container {
                 justify-content: center;
             }
         }
-        
+
         /* Mobilné prispôsobenie headeru */
         @media (max-width: 768px) {
+
             /* Menší hlavný container */
             .main-container {
                 margin: 10px;
@@ -672,21 +674,23 @@
                 display: flex;
                 flex-direction: column;
             }
+
             /* Predvolený poriadok pre všetky sekcie – tieto tri nastavíme vyššie, ostatné pôjdu nižšie */
-            .main-container > * { order: 4; }
-            
+            .main-container>* {
+                order: 4;
+            }
+
             /* Header – mobil: stĺpcové rozloženie, titulok hore, tlačidlá dole */
             .header-actions {
                 flex-direction: column !important;
                 align-items: center !important;
-                gap: 12px !important;
+                gap: 6px !important;
                 order: 1 !important;
             }
 
             .header-actions .page-header {
                 text-align: center;
                 order: -1;
-                margin-bottom: 4px;
             }
 
             .page-subtitle {
@@ -695,38 +699,15 @@
 
             .header-buttons {
                 justify-content: center;
-                flex-wrap: wrap;
+                flex-wrap: nowrap;
             }
 
-            /* Usporiadanie v main-container: 1. header (titulok+tlačidlá), 2. umiestnenie záloh */
-            .path-info { order: 2 !important; }
-            
-            /* Menšie tlačidlá – stále pohodlné na dotyk */
-            .btn-back {
-                padding: 8px 12px !important;
-                font-size: 13px !important;
-                gap: 6px !important;
-                margin-bottom: 0 !important;
-                min-height: 40px;
-            }
-            
-            .theme-toggle {
-                width: 40px !important;
-                height: 40px !important;
-                padding: 6px !important;
-                font-size: 14px !important;
-            }
-            
             /* Menší page header */
             .page-header h1 {
-                font-size: 1.75rem !important; /* Menší z 2.5rem */
-                margin-bottom: 6px !important;
+                font-size: 1.4rem !important;
+                margin-bottom: 10px !important;
             }
-            
-            .page-header p {
-                font-size: 0.95rem !important; /* Menší z 1.1rem */
-            }
-            
+
             /* Menšia path-info */
             .path-info {
                 font-size: 0.9rem !important;
@@ -742,6 +723,7 @@
             .table tbody td:nth-child(3) {
                 display: none;
             }
+
             .table thead th#sort-name {
                 display: flex;
                 flex-direction: row;
@@ -752,13 +734,13 @@
                 font-size: 11px;
                 background-color: rgba(56, 189, 248, 0.08);
             }
-            
+
             /* Zruš hover/active zmenu pozadia - nech je stále rovnaké */
             .table thead th#sort-name:hover,
             .table thead th#sort-name.active {
                 background-color: rgba(56, 189, 248, 0.08) !important;
             }
-            
+
             .table thead th#sort-name .header-label-main {
                 font-size: 11px;
                 gap: 6px;
@@ -767,45 +749,52 @@
                 justify-content: center;
                 text-align: center;
             }
-            
+
             .table thead th#sort-name .mobile-date-toggle {
                 flex: 1;
                 min-width: 0;
                 justify-content: center;
                 text-align: center;
             }
-            
+
             /* Šípky v neaktívnom stave majú menšiu opacity */
             .table thead th#sort-name .header-label-main .sort-icon {
                 opacity: 0.5;
             }
-            
+
             /* Len aktívne tlačidlo "NÁZOV SÚBORU" má plnú opacity pre šípky */
             .table thead th#sort-name .header-label-main.active .sort-icon {
                 opacity: 1;
             }
+
             /* Riadok v mobile: 2 stĺpce (1: názov, 2: akcie) */
             .table tbody tr {
                 display: grid;
                 grid-template-columns: 1fr auto;
-                align-items: center; /* akcie na stred výšky názvu (aj keď je na 2 riadky) */
+                align-items: center;
+                /* akcie na stred výšky názvu (aj keď je na 2 riadky) */
                 column-gap: 8px;
             }
+
             .table tbody td {
                 padding: 10px 12px;
             }
+
             .mobile-date-toggle {
                 display: inline-flex;
             }
+
             /* Akcie v rovnakom riadku vpravo */
             .table tbody td:nth-child(4) {
                 display: flex;
                 grid-column: 2;
                 justify-content: flex-end;
                 align-items: center;
-                padding: 0 10px 0 0; /* pridaj miesto pre ikony od okraja */
+                padding: 0 10px 0 0;
+                /* pridaj miesto pre ikony od okraja */
                 border: 0;
             }
+
             .table tbody td:nth-child(4) .action-buttons {
                 display: flex;
                 gap: 6px;
@@ -813,8 +802,10 @@
                 align-items: center;
                 justify-content: flex-end;
             }
+
             .table tbody td:nth-child(4) .btn-download {
-                padding: 0; /* ikonové tlačidlo na mobile */
+                padding: 0;
+                /* ikonové tlačidlo na mobile */
                 width: 28px;
                 height: 28px;
                 display: inline-flex;
@@ -823,11 +814,13 @@
                 font-size: 13px;
                 border-radius: 8px;
             }
+
             .table tbody td:nth-child(4) .btn-delete-compact {
                 width: 28px;
                 height: 28px;
                 border-radius: 8px;
             }
+
             /* Skryť text v tlačidle Stiahnuť na mobile – ikonový režim */
             .table tbody td:nth-child(4) .btn-download .btn-text {
                 display: none;
@@ -836,26 +829,38 @@
             /* Lepšia čitateľnosť dlhých názvov súborov (ikonka + text) v prvom stĺpci */
             .table tbody td:first-child {
                 display: grid;
-                grid-template-columns: auto 1fr; /* 1: ikonka, 2: text */
+                grid-template-columns: auto 1fr;
+                /* 1: ikonka, 2: text */
                 align-items: center;
                 gap: 8px;
-                padding: 15px; /* Zjednotený padding pre lepšie vertikálne centrovanie */
-                grid-column: 1; /* prvý stĺpec gridu riadku */
+                padding: 15px;
+                /* Zjednotený padding pre lepšie vertikálne centrovanie */
+                grid-column: 1;
+                /* prvý stĺpec gridu riadku */
             }
+
             .table tbody td:first-child .file-icon {
-                margin: 0; /* riadi sa gridom */
-                font-size: 1rem; /* trošku menšia ikonka na mobile */
+                margin: 0;
+                /* riadi sa gridom */
+                font-size: 1rem;
+                /* trošku menšia ikonka na mobile */
                 align-self: center;
-                width: 20px; /* Fixná šírka pre ikonu */
-                text-align: center; /* Centrovanie ikony v jej priestore */
+                width: 20px;
+                /* Fixná šírka pre ikonu */
+                text-align: center;
+                /* Centrovanie ikony v jej priestore */
                 flex-shrink: 0;
             }
+
             .table tbody td:first-child .filename {
-                min-width: 0; /* umožní skutočné skracovanie v grid kontejnery */
+                min-width: 0;
+                /* umožní skutočné skracovanie v grid kontejnery */
                 display: -webkit-box;
                 -webkit-box-orient: vertical;
-                -webkit-line-clamp: 3; /* max 3 riadky na mobile */
-                line-clamp: 3; /* štandardná vlastnosť pre budúcu kompatibilitu */
+                -webkit-line-clamp: 3;
+                /* max 3 riadky na mobile */
+                line-clamp: 3;
+                /* štandardná vlastnosť pre budúcu kompatibilitu */
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: normal;
@@ -863,41 +868,31 @@
                 overflow-wrap: anywhere;
                 font-size: 0.9rem;
                 line-height: 1.3;
-                align-self: center; /* Vycentruj text vertikálne */
+                align-self: center;
+                /* Vycentruj text vertikálne */
             }
         }
-        
+
         @media (max-width: 480px) {
+
             /* Pre veľmi malé obrazovky */
             .main-container {
                 margin: 5px;
                 padding: 12px;
             }
-            
+
             .page-header h1 {
-                font-size: 1.5rem !important;
+                font-size: 1.3rem !important;
             }
-            
+
             .page-header p {
                 font-size: 0.875rem !important;
             }
-            
-            /* Udrž optimálnu veľkosť aj na veľmi malých obrazovkách */
-            .btn-back {
-                padding: 6px 12px !important;
-                font-size: 12px !important;
-                min-height: 40px;
-            }
-            
-            .theme-toggle {
-                width: 40px !important;
-                height: 40px !important;
-                padding: 6px !important;
-                font-size: 14px !important;
-            }
+
         }
     </style>
 </head>
+
 <body>
     <div class="main-container">
         <!-- Header: titulok vľavo, tlačidlá vpravo -->
@@ -919,13 +914,13 @@
                 </a>
             </div>
         </div>
-        
+
         <!-- Informácia o ceste k zálohám -->
         <div class="path-info">
             <i class="fas fa-folder"></i>
             <span>Umiestnenie záloh: <strong>/var/lib/mikrotik-manager/data/backups</strong></span>
         </div>
-        
+
         {% if files %}
         <!-- Ovládacie prvky - vyhľadávanie, filtrovanie a zoraďovanie -->
         <div class="controls-row">
@@ -933,7 +928,7 @@
                 <div class="search-box">
                     <input type="text" id="searchInput" placeholder="🔍 Hľadať súbory..." onkeyup="filterAndPaginate()">
                 </div>
-                
+
                 <div class="filter-container">
                     <span style="color: #9ca3af; font-weight: 500;">Filter:</span>
                     <button class="filter-btn active" onclick="filterByType('all')" id="filter-all">
@@ -948,7 +943,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="table-container">
             <table class="table" id="filesTable">
                 <thead>
@@ -958,7 +953,9 @@
                                 <i class="fas fa-file"></i> Názov súboru
                                 <i class="fas fa-sort sort-icon"></i>
                             </div>
-                            <button type="button" class="mobile-date-toggle" id="mobile-sort-date" onclick="handleMobileDateHeader(event)" aria-label="Zoradiť podľa dátumu vytvorenia" aria-pressed="false">
+                            <button type="button" class="mobile-date-toggle" id="mobile-sort-date"
+                                onclick="handleMobileDateHeader(event)" aria-label="Zoradiť podľa dátumu vytvorenia"
+                                aria-pressed="false">
                                 <i class="fas fa-calendar"></i>
                                 <span>Dátum vytvorenia</span>
                                 <i class="fas fa-sort mobile-sort-icon"></i>
@@ -977,14 +974,15 @@
                 </thead>
                 <tbody id="filesTableBody">
                     {% for file in files %}
-                    <tr data-filename="{{ file.name }}" data-size="{{ file.size }}" data-date="{{ file.modified.timestamp() }}">
+                    <tr data-filename="{{ file.name }}" data-size="{{ file.size }}"
+                        data-date="{{ file.modified.timestamp() }}">
                         <td>
                             {% if file.name.endswith('.backup') %}
-                                <i class="fas fa-database file-icon file-backup"></i>
+                            <i class="fas fa-database file-icon file-backup"></i>
                             {% elif file.name.endswith('.rsc') %}
-                                <i class="fas fa-code file-icon file-rsc"></i>
+                            <i class="fas fa-code file-icon file-rsc"></i>
                             {% else %}
-                                <i class="fas fa-file file-icon"></i>
+                            <i class="fas fa-file file-icon"></i>
                             {% endif %}
                             <span class="filename">{{ file.name }}</span>
                         </td>
@@ -992,11 +990,13 @@
                         <td>{{ file.modified.strftime('%d.%m.%Y %H:%M') }}</td>
                         <td>
                             <div class="action-buttons">
-                                <a href="/download_backup/{{ file.name }}" class="btn-download" onclick="triggerNativeDownload(event, '/download_backup/{{ file.name }}')">
+                                <a href="/download_backup/{{ file.name }}" class="btn-download"
+                                    onclick="triggerNativeDownload(event, '/download_backup/{{ file.name }}')">
                                     <i class="fas fa-download"></i>
                                     <span class="btn-text">Stiahnuť</span>
                                 </a>
-                                <button onclick="triggerNativeDeleteConfirmation('{{ file.name }}')" class="btn-delete btn-delete-compact" title="Vymazať zálohu">
+                                <button onclick="triggerNativeDeleteConfirmation('{{ file.name }}')"
+                                    class="btn-delete btn-delete-compact" title="Vymazať zálohu">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -1006,26 +1006,26 @@
                 </tbody>
             </table>
         </div>
-        
+
         <!-- Stránkovanie -->
         <div class="pagination" id="pagination">
             <!-- Bude generované JavaScriptom -->
         </div>
-        
+
         <div class="info-badge">
             <i class="fas fa-info-circle"></i>
-            <strong>Celkom súborov:</strong> <span id="totalFiles">{{ files|length }}</span> | 
-            <strong>Zobrazených:</strong> <span id="visibleFiles">0</span> | 
+            <strong>Celkom súborov:</strong> <span id="totalFiles">{{ files|length }}</span> |
+            <strong>Zobrazených:</strong> <span id="visibleFiles">0</span> |
             <span class="file-backup">■</span> .backup súbory (binárne zálohy) |
             <span class="file-rsc">■</span> .rsc súbory (textové konfigurácie)
         </div>
-        
+
         {% else %}
         <div class="path-info">
             <i class="fas fa-folder"></i>
             <span>Umiestnenie záloh: <strong>/var/lib/mikrotik-manager/data/backups</strong></span>
         </div>
-        
+
         <div class="empty-state">
             <i class="fas fa-folder-open"></i>
             <h3 style="color: var(--text-color);">Žiadne zálohy</h3>
@@ -1037,24 +1037,24 @@
         </div>
         {% endif %}
     </div>
-    
+
     <script>
-    // Predvolené zoradenie: podľa dátumu (najnovšie hore)
-    let currentSort = 'date';
-    let sortDirection = 'desc';
+        // Predvolené zoradenie: podľa dátumu (najnovšie hore)
+        let currentSort = 'date';
+        let sortDirection = 'desc';
         let currentFilter = 'all';
         let currentPage = 1;
         const itemsPerPage = 50;
         let allRows = [];
         let filteredRows = [];
-        
+
         // Inicializácia témy
         function initTheme() {
             const savedTheme = localStorage.getItem('mikrotik-theme') || 'dark';
             document.body.className = savedTheme === 'light' ? 'light-theme' : '';
             updateThemeIcon();
         }
-        
+
         function toggleTheme() {
             const isLight = document.body.classList.contains('light-theme');
             document.body.classList.toggle('light-theme');
@@ -1062,24 +1062,24 @@
             localStorage.setItem('mikrotik-theme', newTheme);
             updateThemeIcon();
         }
-        
+
         function updateThemeIcon() {
             const icon = document.getElementById('theme-icon');
             const isLight = document.body.classList.contains('light-theme');
             icon.className = isLight ? 'fas fa-moon' : 'fas fa-sun';
         }
-        
+
         function filterByType(type) {
             currentFilter = type;
             currentPage = 1;
-            
+
             // Aktualizuj filter tlačidlá
             document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`filter-${type}`).classList.add('active');
-            
+
             filterAndPaginate();
         }
-        
+
         function normalizeSearchTerm(str) {
             return str
                 .toLowerCase()
@@ -1095,7 +1095,7 @@
 
         function filterAndPaginate() {
             const searchInput = document.getElementById('searchInput').value;
-            
+
             // Filtruj riadky podľa typu a vyhľadávania
             filteredRows = allRows.filter(row => {
                 const filename = row.querySelector('.filename').textContent.toLowerCase();
@@ -1109,17 +1109,17 @@
                     (normalizedSearchNoSpaces && normalizedFilename.includes(normalizedSearchNoSpaces)) ||
                     (normalizedSearch && normalizedFilenameNoSpaces.includes(normalizedSearch)) ||
                     (normalizedSearchNoSpaces && normalizedFilenameNoSpaces.includes(normalizedSearchNoSpaces));
-                
+
                 let matchesType = true;
                 if (currentFilter === 'backup') {
                     matchesType = filename.endsWith('.backup');
                 } else if (currentFilter === 'rsc') {
                     matchesType = filename.endsWith('.rsc');
                 }
-                
+
                 return matchesSearch && matchesType;
             });
-            
+
             // Stránkovanie
             const totalFiltered = filteredRows.length;
             const totalPages = Math.ceil(totalFiltered / itemsPerPage);
@@ -1133,10 +1133,10 @@
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = startIndex + itemsPerPage;
             const rowsToDisplay = filteredRows.slice(startIndex, endIndex);
-            
+
             // Skry všetky riadky
             allRows.forEach(row => row.style.display = 'none');
-            
+
             // Zobraz len aktuálnu stránku
             rowsToDisplay.forEach(row => {
                 row.style.display = '';
@@ -1145,35 +1145,35 @@
             updateFileCounts(rowsToDisplay.length);
             updatePagination(totalPages);
         }
-        
+
         function updatePagination(totalPages) {
             const pagination = document.getElementById('pagination');
-            
+
             if (totalPages <= 1) {
                 pagination.style.display = 'none';
                 return;
             }
-            
+
             pagination.style.display = 'flex';
             pagination.innerHTML = '';
-            
+
             // Predchádzajúca stránka
             const prevBtn = document.createElement('button');
             prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
             prevBtn.disabled = currentPage === 1;
             prevBtn.onclick = () => changePage(currentPage - 1);
             pagination.appendChild(prevBtn);
-            
+
             // Čísla stránok
             const startPage = Math.max(1, currentPage - 2);
             const endPage = Math.min(totalPages, currentPage + 2);
-            
+
             if (startPage > 1) {
                 const firstBtn = document.createElement('button');
                 firstBtn.textContent = '1';
                 firstBtn.onclick = () => changePage(1);
                 pagination.appendChild(firstBtn);
-                
+
                 if (startPage > 2) {
                     const dots = document.createElement('span');
                     dots.textContent = '...';
@@ -1181,7 +1181,7 @@
                     pagination.appendChild(dots);
                 }
             }
-            
+
             for (let i = startPage; i <= endPage; i++) {
                 const pageBtn = document.createElement('button');
                 pageBtn.textContent = i;
@@ -1189,7 +1189,7 @@
                 pageBtn.onclick = () => changePage(i);
                 pagination.appendChild(pageBtn);
             }
-            
+
             if (endPage < totalPages) {
                 if (endPage < totalPages - 1) {
                     const dots = document.createElement('span');
@@ -1197,32 +1197,32 @@
                     dots.className = 'pagination-info';
                     pagination.appendChild(dots);
                 }
-                
+
                 const lastBtn = document.createElement('button');
                 lastBtn.textContent = totalPages;
                 lastBtn.onclick = () => changePage(totalPages);
                 pagination.appendChild(lastBtn);
             }
-            
+
             // Nasledujúca stránka
             const nextBtn = document.createElement('button');
             nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
             nextBtn.disabled = currentPage === totalPages;
             nextBtn.onclick = () => changePage(currentPage + 1);
             pagination.appendChild(nextBtn);
-            
+
             // Info o stránkach
             const info = document.createElement('span');
             info.className = 'pagination-info';
             info.textContent = `Stránka ${currentPage} z ${totalPages}`;
             pagination.appendChild(info);
         }
-        
+
         function changePage(newPage) {
             currentPage = newPage;
             filterAndPaginate();
         }
-        
+
         function sortTable(sortBy) {
             // Aktualizuj stav zoradenia
             if (currentSort === sortBy) {
@@ -1231,17 +1231,17 @@
                 currentSort = sortBy;
                 sortDirection = 'asc';
             }
-            
+
             currentPage = 1; // Reset na prvú stránku po zoradení
-            
+
             // Aktualizuj vizuálny stav hlavičiek
             updateSortHeaders();
-            
+
             // Zoradi všetky riadky
             const tbody = document.getElementById('filesTableBody');
             allRows.sort((a, b) => {
                 let valA, valB;
-                
+
                 switch (sortBy) {
                     case 'name':
                         valA = a.querySelector('.filename').textContent.toLowerCase();
@@ -1256,22 +1256,22 @@
                         valB = parseFloat(b.getAttribute('data-date'));
                         break;
                 }
-                
+
                 if (sortDirection === 'asc') {
                     return valA > valB ? 1 : valA < valB ? -1 : 0;
                 } else {
                     return valA < valB ? 1 : valA > valB ? -1 : 0;
                 }
             });
-            
+
             // Vyčisti tbody a pridaj zoradené riadky
             tbody.innerHTML = '';
             allRows.forEach(row => tbody.appendChild(row));
-            
+
             filterAndPaginate();
             updateMobileDateToggle();
         }
-        
+
         function updateSortHeaders() {
             // Odstráň aktívny stav zo všetkých hlavičiek
             document.querySelectorAll('.sortable').forEach(th => {
@@ -1279,17 +1279,17 @@
                 const icon = th.querySelector('.sort-icon');
                 icon.className = 'fas fa-sort sort-icon';
             });
-            
+
             // Odstráň active zo všetkých mobilných tlačidiel
             document.querySelectorAll('.header-label-main').forEach(label => {
                 label.classList.remove('active');
             });
-            
+
             // Pridaj aktívny stav k aktuálnej hlavičke
             const activeHeader = document.getElementById(`sort-${currentSort}`);
             if (activeHeader) {
                 activeHeader.classList.add('active');
-                
+
                 // Pridaj active aj na mobilné tlačidlo názvu ak je aktívne
                 if (currentSort === 'name') {
                     const mobileNameLabel = activeHeader.querySelector('.header-label-main');
@@ -1297,10 +1297,10 @@
                         mobileNameLabel.classList.add('active');
                     }
                 }
-                
+
                 // Aktualizuj ikonu podľa smeru zoradenia
                 const icon = activeHeader.querySelector('.sort-icon');
-                
+
                 switch (currentSort) {
                     case 'name':
                         icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-alpha-down' : 'fa-sort-alpha-up'} sort-icon`;
@@ -1345,16 +1345,16 @@
                 }
             }
         }
-        
+
         // Inicializácia pri načítaní stránky
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             initTheme();
             const tbody = document.getElementById('filesTableBody');
             if (!tbody) return;
-            
+
             allRows = Array.from(tbody.getElementsByTagName('tr'));
             // Zoradenie je už urobené server-side (mtime desc), klient tu už iba pripraví animáciu
-            
+
             // Animácia až po správnom poradí
             allRows.forEach((row, index) => {
                 row.style.opacity = '0';
@@ -1365,24 +1365,24 @@
                     row.style.transform = 'translateY(0)';
                 }, index * 20);
             });
-            
+
             updateSortHeaders();
             filterAndPaginate();
             updateFileCounts();
             updateMobileDateToggle();
         });
-        
+
         // Funkcia pre potvrdenie vymazania zálohy
         function confirmDeleteBackup(filename) {
             if (confirm(`Naozaj chcete vymazať záložný súbor "${filename}"?\n\nTento súbor bude vymazaný lokálne aj z FTP servera (ak je nakonfigurovaný).`)) {
                 deleteBackup(filename);
             }
         }
-        
+
         // Funkcia pre vymazanie zálohy
         async function deleteBackup(filename) {
             let deleteButton = null;
-            
+
             try {
                 // Nájdi tlačidlo delete pre tento súbor - funguje v PC aj mobile
                 const allDeleteButtons = document.querySelectorAll('.btn-delete-compact');
@@ -1393,27 +1393,27 @@
                         break;
                     }
                 }
-                
+
                 // Fallback: ak nenájdeme tlačidlo cez onclick, skús event.target (pre PC)
                 if (!deleteButton && typeof event !== 'undefined' && event.target) {
                     deleteButton = event.target.closest('button');
                 }
-                
+
                 if (deleteButton) {
                     // Zobraz loading indikátor
                     const originalText = deleteButton.innerHTML;
                     deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                     deleteButton.disabled = true;
-                    
+
                     const response = await fetch(`/api/delete_backup/${encodeURIComponent(filename)}`, {
                         method: 'DELETE',
                         headers: {
                             'Content-Type': 'application/json',
                         }
                     });
-                    
+
                     const result = await response.json();
-                    
+
                     if (response.ok && result.status === 'success') {
                         // Úspešné vymazanie - odstráň riadok(y) z tabuľky
                         const baseName = filename.replace(/(\.backup|\.rsc)$/i, '');
@@ -1439,7 +1439,7 @@
                                 }
                             }, 300 + (idx * 40));
                         });
-                        
+
                     } else {
                         // Chyba - obnov tlačidlo
                         if (deleteButton) {
@@ -1459,9 +1459,9 @@
                             'Content-Type': 'application/json',
                         }
                     });
-                    
+
                     const result = await response.json();
-                    
+
                     if (response.ok && result.status === 'success') {
                         // Úspešné vymazanie - odstráň riadky z tabuľky aj bez tlačidla
                         const baseName = filename.replace(/(\.backup|\.rsc)$/i, '');
@@ -1488,7 +1488,7 @@
                         alert('Chyba pri vymazávaní súboru: ' + (result.message || 'Neznáma chyba'));
                     }
                 }
-                
+
             } catch (error) {
                 console.error('Chyba pri vymazávaní súboru:', error);
                 // Obnov tlačidlo ak existuje
@@ -1499,7 +1499,7 @@
                 alert('Chyba pri vymazávaní súboru: ' + error.message);
             }
         }
-        
+
         // Funkcia pre zobrazenie notifikácií
         function showNotification(message, type = 'info') {
             // Vytvor notifikačný element
@@ -1509,7 +1509,7 @@
                 <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
                 <span>${message}</span>
             `;
-            
+
             // Pridaj štýly pre notifikáciu (ak ešte neexistujú)
             if (!document.getElementById('notification-styles')) {
                 const style = document.createElement('style');
@@ -1545,10 +1545,10 @@
                 `;
                 document.head.appendChild(style);
             }
-            
+
             // Pridaj do dokumentu
             document.body.appendChild(notification);
-            
+
             // Automaticky odstráň po 5 sekundách
             setTimeout(() => {
                 notification.style.animation = 'slideOut 0.3s ease';
@@ -1559,7 +1559,7 @@
                 }, 300);
             }, 5000);
         }
-        
+
         // Funkcia pre aktualizáciu počítadiel súborov
         function updateFileCounts(displayedCount = null) {
             const totalFiles = allRows.length;
@@ -1571,7 +1571,7 @@
             document.getElementById('totalFiles').textContent = totalFiles;
             document.getElementById('visibleFiles').textContent = visible;
         }
-        
+
         // Funkcia pre spracovanie sťahovania v Android aplikácii
         function triggerNativeDownload(event, url) {
             try {
@@ -1589,7 +1589,7 @@
                 return true;
             }
         }
-        
+
         // Funkcia pre spracovanie vymazávania v Android aplikácii
         function triggerNativeDeleteConfirmation(filename) {
             try {
@@ -1607,11 +1607,12 @@
                 return true;
             }
         }
-        
+
         // Funkcia volaná z Android kódu po potvrdení vymazania
         function deleteBackupConfirmed(filename) {
             deleteBackup(filename);
         }
     </script>
 </body>
+
 </html>

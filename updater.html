@@ -107,25 +107,194 @@
                 margin: 10px;
                 padding: 15px;
             }
+
             .header-actions {
                 flex-direction: column;
                 align-items: center;
+                gap: 6px;
             }
+
             .header-title {
                 text-align: center;
                 order: -1;
-                margin-bottom: 4px;
+                margin-bottom: 0;
             }
+
             .header-title h1 {
-                font-size: 1.75rem;
-                margin-bottom: 4px;
+                font-size: 1.4rem;
+                margin-bottom: 10px;
             }
+
             .header-buttons {
                 justify-content: center;
+                flex-wrap: nowrap;
             }
+
+            .btn-refresh .btn-refresh-label {
+                display: none;
+            }
+
             .page-subtitle {
                 display: none;
             }
+        }
+
+        /* ── Mobile device cards (shown only on small screens) ──────────────────── */
+        .devices-cards-container {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+
+            /* Hide table on mobile */
+            .table-container {
+                display: none !important;
+            }
+
+            /* Show cards on mobile */
+            .devices-cards-container {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+        }
+
+        .device-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 14px 12px;
+        }
+
+        .device-card:hover {
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        body.light-theme .device-card {
+            background: linear-gradient(145deg, #f9fbff 0%, #eaf2fd 65%, #deeafa 100%);
+            border-color: #b8c9e6;
+        }
+
+        /* Card header row: checkbox + name + IP */
+        .dc-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .dc-cb-wrap {
+            padding-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .dc-name {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .dc-name strong {
+            font-size: 15px;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dc-name .device-ip {
+            display: block;
+        }
+
+        .dc-name .device-model {
+            display: block;
+            font-size: 12px;
+        }
+
+        .dc-status-badge {
+            flex-shrink: 0;
+            font-size: 13px;
+            text-align: right;
+        }
+
+        /* Grid of version info */
+        .dc-versions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .dc-ver-box {
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border-color);
+            border-radius: 7px;
+            padding: 8px 10px;
+        }
+
+        body.light-theme .dc-ver-box {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        .dc-ver-box .dc-ver-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+
+        .dc-ver-box .dc-ver-content {
+            font-size: 12px;
+        }
+
+        /* Actions area */
+        .dc-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: stretch;
+        }
+
+        /* Force the wrapper div injected by renderActions to stretch full width */
+        .dc-actions>div {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            /* keep both groups on one row */
+            gap: 6px !important;
+            align-items: stretch !important;
+            width: 100%;
+        }
+
+        /* Each button group (Update + TLS) gets half the space */
+        .dc-actions .update-dropdown-wrap {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            margin-left: 0 !important;
+            /* remove the 10px desktop margin */
+        }
+
+        /* Split button: main part expands, chevron stays fixed */
+        .dc-actions .btn-group-main {
+            width: 100%;
+        }
+
+        .dc-actions .full-update-btn {
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+            font-size: 11.5px !important;
+            padding-left: 8px !important;
+            padding-right: 6px !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            justify-content: center !important;
+        }
+
+        .dc-actions .dropdown-toggle-btn {
+            flex-shrink: 0 !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
         }
 
         .btn-back {
@@ -916,7 +1085,7 @@
                 <button id="refreshDevicesBtn" class="btn-refresh" onclick="refreshDevices()"
                     title="Obnoviť stav zariadení">
                     <i class="fas fa-sync"></i>
-                    <span>Obnoviť</span>
+                    <span class="btn-refresh-label">Obnoviť</span>
                 </button>
                 <button onclick="window.location.href='/settings.html'" class="btn-back" title="Nastavenia">
                     <i class="fas fa-cog"></i> <span>Nastavenia</span>
@@ -959,7 +1128,8 @@
                             <input type="checkbox" id="selectAllCb" title="Vybrať všetky"
                                 onchange="toggleSelectAll(this)">
                         </th>
-                        <th class="th-sortable" onclick="handleThClick(1)" width="16%" style="text-align: left;">Zariadenie / IP
+                        <th class="th-sortable" onclick="handleThClick(1)" width="16%" style="text-align: left;">
+                            Zariadenie / IP
                         </th>
                         <th class="th-sortable" onclick="handleThClick(2)" width="10%" style="text-align: center;">
                             Status</th>
@@ -980,6 +1150,9 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Mobile device cards (same data, compact card layout) -->
+        <div class="devices-cards-container" id="devicesCardsContainer"></div>
     </div>
 
     <!-- Schedule modal -->
@@ -1249,6 +1422,12 @@
                 if (statusEl) statusEl.innerHTML = `<span style="color:#9ca3af"><i class="fas fa-spinner fa-spin"></i> Načítavam...</span>`;
                 if (osEl) osEl.innerHTML = `<span style="color:#9ca3af">...</span>`;
                 if (fwEl) fwEl.innerHTML = `<span style="color:#9ca3af">...</span>`;
+                // Sync to cards
+                syncCard(`status-${d.id}`);
+                const cardOs = document.getElementById(`card-os-${d.id}`);
+                if (cardOs) cardOs.innerHTML = `<span style="color:#9ca3af">...</span>`;
+                const cardFw = document.getElementById(`card-fw-${d.id}`);
+                if (cardFw) cardFw.innerHTML = `<span style="color:#9ca3af">...</span>`;
             });
 
             // Restore running updates FIRST (sets active=true) so fetchDeviceDetails skips them
@@ -1267,6 +1446,13 @@
         // fetchDeviceDetails respects this set and will not overwrite the ⟳ Čaká... status
         const _bulkWaitingDeviceIds = new Set();
 
+        // Helper: mirror an element's innerHTML to the card equivalent
+        function syncCard(baseId) {
+            const src = document.getElementById(baseId);
+            const dst = document.getElementById('card-' + baseId);
+            if (src && dst) dst.innerHTML = src.innerHTML;
+        }
+
         // Helper: mark status cell as "updating" (⟳ Prebieha...) and os/fw cells with purple spinner
         function setUpdatingCells(id) {
             _bulkWaitingDeviceIds.delete(id); // no longer waiting – now actually updating
@@ -1277,6 +1463,10 @@
             const spinHtml = `<span style="color:#a78bfa; font-weight:500;">⟳ Aktualizuje sa...</span>`;
             if (osEl) osEl.innerHTML = spinHtml;
             if (fwEl) fwEl.innerHTML = spinHtml;
+            // Sync cards
+            syncCard(`status-${id}`);
+            syncCard(`os-${id}`);
+            syncCard(`fw-${id}`);
         }
 
         // Helper: mark status cell as waiting in bulk queue (⟳ Čaká...)
@@ -1284,11 +1474,16 @@
             _bulkWaitingDeviceIds.add(id);
             const statusEl = document.getElementById(`status-${id}`);
             if (statusEl) statusEl.innerHTML = `<span style="color:#a78bfa; opacity:0.75;">⟳ Čaká...</span>`;
+            // Sync card
+            syncCard(`status-${id}`);
         }
 
         function renderTableShells() {
             const tbody = document.getElementById('devicesTableBody');
             tbody.innerHTML = '';
+            const cardsContainer = document.getElementById('devicesCardsContainer');
+            cardsContainer.innerHTML = '';
+
             devicesList.forEach(dev => {
                 const tr = document.createElement('tr');
                 tr.id = `row-${dev.id}`;
@@ -1309,7 +1504,7 @@
 
                 tr.innerHTML = `
                     <td class="td-checkbox">
-                        <input type="checkbox" class="device-select-cb" data-id="${dev.id}" onchange="onCbChange()">
+                        <input type="checkbox" class="device-select-cb" data-id="${dev.id}" onchange="onCbChange(this)">
                     </td>
                     <td>
                         <strong style="font-size:15px;">${dev.name}</strong><br>
@@ -1328,6 +1523,39 @@
                     </td>
                 `;
                 tbody.appendChild(tr);
+
+                // ── Mobile card ──────────────────────────────────────────────
+                const card = document.createElement('div');
+                card.className = 'device-card';
+                card.id = `card-${dev.id}`;
+                const initStatusHtml = isActiveUpdate ? updatingHtml : isWaiting ? waitingHtml : '<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;"></span>';
+                card.innerHTML = `
+                    <div class="dc-header">
+                        <div class="dc-cb-wrap">
+                            <input type="checkbox" class="device-select-cb" data-id="${dev.id}" onchange="onCbChange(this)">
+                        </div>
+                        <div class="dc-name">
+                            <strong>${dev.name}</strong>
+                            <span class="device-ip">${dev.ip}</span>
+                            <div id="card-model-${dev.id}" class="device-model"></div>
+                        </div>
+                        <div class="dc-status-badge" id="card-status-${dev.id}">${initStatusHtml}</div>
+                    </div>
+                    <div class="dc-versions">
+                        <div class="dc-ver-box">
+                            <div class="dc-ver-label"><i class="fas fa-code-branch" style="margin-right:4px;"></i>RouterOS</div>
+                            <div class="dc-ver-content" id="card-os-${dev.id}">${isActiveUpdate ? updatingHtml : '<span style="color:#9ca3af">Načítavam...</span>'}</div>
+                        </div>
+                        <div class="dc-ver-box">
+                            <div class="dc-ver-label"><i class="fas fa-microchip" style="margin-right:4px;"></i>Firmware</div>
+                            <div class="dc-ver-content" id="card-fw-${dev.id}">${isActiveUpdate ? updatingHtml : '<span style="color:#9ca3af">Načítavam...</span>'}</div>
+                        </div>
+                    </div>
+                    <div class="dc-actions" id="card-actions-${dev.id}" style="opacity:0.5;">
+                        ${isRestored ? restoredHtml : '<span style="color:#9ca3af;font-size:13px;">Čaká sa na spojenie...</span>'}
+                    </div>
+                `;
+                cardsContainer.appendChild(card);
             });
         }
 
@@ -1374,16 +1602,28 @@
                         setWaitingCell(id);
                     } else {
                         document.getElementById(`status-${id}`).innerHTML = statusHtml;
+                        syncCard(`status-${id}`);
                         appendScheduleBadge(id);
                     }
 
                     // OS cell
+                    const osInstalledVer = data.os['installed-version'];
+                    const osLatestVer = data.os['latest-version'];
+                    const osHasUpdate = osInstalledVer !== osLatestVer;
                     document.getElementById(`os-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
                             <span class="version-label">Aktuálna:</span>
-                            <strong>${data.os['installed-version']}</strong>
+                            <strong>${osInstalledVer}</strong>
                             <span class="version-label">Dostupná:</span>
-                            <strong style="${data.os['installed-version'] !== data.os['latest-version'] ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${data.os['latest-version']}</strong>
+                            <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osLatestVer}</strong>
+                        </div>
+                    `;
+                    // Card: compact two-line version display
+                    const cardOsEl = document.getElementById(`card-os-${id}`);
+                    if (cardOsEl) cardOsEl.innerHTML = `
+                        <div style="line-height:1.5;">
+                            <span style="color:#9ca3af;">Aktuálna:</span> <strong>${osInstalledVer}</strong><br>
+                            <span style="color:#9ca3af;">Dostupná:</span> <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osLatestVer}</strong>
                         </div>
                     `;
 
@@ -1397,21 +1637,35 @@
                     const fwAvailable = (fwCurrent !== 'N/A' && fwCurrent === fwUpgrade && hasOsUpdateFw && data.os['latest-version'] !== 'N/A')
                         ? data.os['latest-version']
                         : fwUpgrade;
+                    const fwHasUpdate = fwCurrent !== fwAvailable;
                     document.getElementById(`fw-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
                             <span class="version-label">Aktuálny:</span>
                             <strong>${fwCurrent}</strong>
                             <span class="version-label">Dostupný:</span>
-                            <strong style="${fwCurrent !== fwAvailable ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
+                            <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
                         </div>
                     `;
+                    // Card: compact two-line firmware display
+                    const cardFwEl = document.getElementById(`card-fw-${id}`);
+                    if (cardFwEl) cardFwEl.innerHTML = `
+                        <div style="line-height:1.5;">
+                            <span style="color:#9ca3af;">Aktuálny:</span> <strong>${fwCurrent}</strong><br>
+                            <span style="color:#9ca3af;">Dostupný:</span> <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
+                        </div>
+                    `;
+                    // Sync model
                     document.getElementById(`model-${id}`).innerHTML = data.firmware['model'];
+                    const cardModelEl = document.getElementById(`card-model-${id}`);
+                    if (cardModelEl) cardModelEl.innerHTML = data.firmware['model'];
 
                     // Only render actions if no update is currently running/persisted
                     if (!(_deviceUpdateState[id] && (_deviceUpdateState[id].active || _deviceUpdateState[id].persistedResult))) {
                         renderActions(id, data);
                     } else {
                         document.getElementById(`actions-${id}`).style.opacity = '1';
+                        const cardActEl = document.getElementById(`card-actions-${id}`);
+                        if (cardActEl) cardActEl.style.opacity = '1';
                     }
                 } else {
                     // Don't overwrite cells if an update is actively running on this device
@@ -1421,6 +1675,14 @@
                     document.getElementById(`fw-${id}`).innerHTML = `N/A`;
                     document.getElementById(`actions-${id}`).innerHTML = `<span style="color:var(--danger-color); font-size:13px;">Zariadenie nedostupné</span>`;
                     document.getElementById(`actions-${id}`).style.opacity = '1';
+                    // Sync cards
+                    syncCard(`status-${id}`);
+                    const cardOsEl2 = document.getElementById(`card-os-${id}`);
+                    if (cardOsEl2) cardOsEl2.innerHTML = `<span style="color:var(--danger-color);font-size:12px;">Chyba spojenia</span>`;
+                    const cardFwEl2 = document.getElementById(`card-fw-${id}`);
+                    if (cardFwEl2) cardFwEl2.innerHTML = `<span style="color:var(--danger-color);font-size:12px;">N/A</span>`;
+                    const cardActEl2 = document.getElementById(`card-actions-${id}`);
+                    if (cardActEl2) { cardActEl2.innerHTML = `<span style="color:var(--danger-color);font-size:13px;">Zariadenie nedostupné</span>`; cardActEl2.style.opacity = '1'; }
                 }
             } catch (err) {
                 // Don't overwrite cells if an update is actively running on this device
@@ -1430,6 +1692,14 @@
                 document.getElementById(`fw-${id}`).innerHTML = `N/A`;
                 document.getElementById(`actions-${id}`).innerHTML = `<span style="color:var(--danger-color); font-size:13px;">Zariadenie nedostupné</span>`;
                 document.getElementById(`actions-${id}`).style.opacity = '1';
+                // Sync cards
+                syncCard(`status-${id}`);
+                const cardOsEl3 = document.getElementById(`card-os-${id}`);
+                if (cardOsEl3) cardOsEl3.innerHTML = `<span style="color:var(--danger-color);font-size:12px;">N/A</span>`;
+                const cardFwEl3 = document.getElementById(`card-fw-${id}`);
+                if (cardFwEl3) cardFwEl3.innerHTML = `<span style="color:var(--danger-color);font-size:12px;">N/A</span>`;
+                const cardActEl3 = document.getElementById(`card-actions-${id}`);
+                if (cardActEl3) { cardActEl3.innerHTML = `<span style="color:var(--danger-color);font-size:13px;">Zariadenie nedostupné</span>`; cardActEl3.style.opacity = '1'; }
             }
         }
 
@@ -1518,13 +1788,33 @@
             `;
             document.getElementById(`actions-${id}`).style.opacity = '1';
             document.getElementById(`actions-${id}`).innerHTML = html;
+            // Sync card actions – use shorter button labels for the compact card layout
+            const cardAct = document.getElementById(`card-actions-${id}`);
+            if (cardAct) {
+                cardAct.style.opacity = '1';
+                cardAct.innerHTML = html
+                    .replace('Update MikroTik', 'Update')
+                    .replace(/ TLS/g, '');
+            }
         }
 
         // ─── Generic dropdown toggle ──────────────────────────────────────────────
         function toggleDropdown(ddId, event) {
             event.stopPropagation();
-            const dd = document.getElementById(ddId);
+
+            // Traverse up from the clicked button to find the correct dropdown
+            // (handles duplicate IDs when the same HTML is in both table row and mobile card)
+            let dd = null;
+            const wrap = event.target ? event.target.closest('.update-dropdown-wrap') : null;
+            if (wrap) {
+                dd = wrap.querySelector('.update-dropdown');
+            }
+            // Fallback to getElementById (desktop table view, where duplicate is hidden)
+            if (!dd) dd = document.getElementById(ddId);
+            if (!dd) return;
+
             const isOpen = dd.style.display === 'block';
+            // Close all dropdowns
             document.querySelectorAll('.update-dropdown').forEach(d => {
                 d.style.display = 'none';
                 d.style.top = '';
@@ -1536,11 +1826,11 @@
 
                 const spaceBelowWindow = window.innerHeight - rect.bottom;
 
+                // On mobile cards there is no .table-container – just check viewport space
                 const tableContainer = dd.closest('.table-container');
                 let spaceBelowContainer = 9999;
                 if (tableContainer) {
                     const containerRect = tableContainer.getBoundingClientRect();
-                    // Include some scrollbar tolerance by subtracting a few pixels if needed, but standard rect bottom is fine
                     spaceBelowContainer = containerRect.bottom - rect.bottom;
                 }
 
@@ -1633,17 +1923,16 @@
         }
 
         async function renewSSL(id) {
-            const btn = document.getElementById(`cert-btn-${id}`);
-            const daysEl = document.getElementById(`cert-days-${id}`);
+            // Use querySelectorAll to handle duplicate IDs (table row + mobile card)
+            const btns = document.querySelectorAll(`[id="cert-btn-${id}"]`);
+            const daysEl = document.querySelector(`[id="cert-days-${id}"]`);
             const days = parseInt(daysEl ? daysEl.value : 180) || 180;
 
-            // Close cert dropdown
-            const dd = document.getElementById(`cert-dd-${id}`);
-            if (dd) dd.style.display = 'none';
+            // Close all cert dropdowns for this device
+            document.querySelectorAll(`[id="cert-dd-${id}"]`).forEach(d => d.style.display = 'none');
 
-            const prevHtml = btn.innerHTML;
-            btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`;
-            btn.disabled = true;
+            const prevHtml = btns[0] ? btns[0].innerHTML : '';
+            btns.forEach(btn => { btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`; btn.disabled = true; });
             try {
                 const res = await fetch(`/api/updater/certificate/${id}`, {
                     method: 'POST',
@@ -1657,14 +1946,14 @@
             } catch (err) {
                 showToast('Chyba siete pri obnove TLS certifikátu: ' + err.message, 'error', 6000);
             } finally {
-                btn.innerHTML = prevHtml;
-                btn.disabled = false;
+                btns.forEach(btn => { btn.innerHTML = prevHtml; btn.disabled = false; });
                 refreshDevices();
             }
         }
 
         async function saveCertSettings(id, save) {
-            const daysEl = document.getElementById(`cert-days-${id}`);
+            // Use querySelector to handle duplicate IDs
+            const daysEl = document.querySelector(`[id="cert-days-${id}"]`);
             const days = parseInt(daysEl ? daysEl.value : 180) || 180;
             try {
                 await fetch(`/api/updater/certificate/save_settings/${id}`, {
@@ -1740,6 +2029,15 @@
         }
 
         // ─── Checkbox / bulk select ───────────────────────────────────────────────
+        // Sync checkbox state for a device across all duplicates (table row + mobile card)
+        function syncCheckboxes(changedCb) {
+            const id = changedCb.getAttribute('data-id');
+            const newState = changedCb.checked;
+            document.querySelectorAll(`.device-select-cb[data-id="${id}"]`).forEach(cb => {
+                cb.checked = newState;
+            });
+        }
+
         function toggleSelectAll(masterCb) {
             document.querySelectorAll('.device-select-cb').forEach(cb => {
                 cb.checked = masterCb.checked;
@@ -1747,16 +2045,29 @@
             onCbChange();
         }
 
-        function onCbChange() {
-            const checked = document.querySelectorAll('.device-select-cb:checked').length;
-            const total = document.querySelectorAll('.device-select-cb').length;
+        function onCbChange(changedCb) {
+            // Sync across duplicates if a specific checkbox was clicked
+            if (changedCb) syncCheckboxes(changedCb);
+            // Count unique device IDs (each device has 2 checkboxes: table + card)
+            const allIds = new Set(Array.from(document.querySelectorAll('.device-select-cb')).map(cb => cb.getAttribute('data-id')));
+            const checkedIds = new Set(Array.from(document.querySelectorAll('.device-select-cb:checked')).map(cb => cb.getAttribute('data-id')));
+            const total = allIds.size;
+            const checked = checkedIds.size;
             document.getElementById('selectAllCb').checked = (checked === total && total > 0);
             document.getElementById('selectAllCb').indeterminate = (checked > 0 && checked < total);
             document.getElementById('bulkUpdateBtn').disabled = (checked === 0);
         }
 
         function getCheckedDeviceIds() {
+            // Deduplicate by data-id
+            const seen = new Set();
             return Array.from(document.querySelectorAll('.device-select-cb:checked'))
+                .filter(cb => {
+                    const id = cb.getAttribute('data-id');
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                })
                 .map(cb => parseInt(cb.getAttribute('data-id')));
         }
 
@@ -1776,7 +2087,7 @@
             }
             stepsHtml += `<div id="istep-${id}-8" class="inline-step final-step"></div>`;
 
-            actionsEl.innerHTML = `
+            const progressHtml = `
                 <div>
                     <div class="inline-progress-window">
                         <div id="itrack-${id}" class="inline-progress-track inline-progress">
@@ -1794,6 +2105,13 @@
                     </div>
                 </div>
             `;
+            actionsEl.innerHTML = progressHtml;
+            // Card shows a simple in-progress indicator (avoids duplicate element IDs)
+            const cardActEl = document.getElementById(`card-actions-${id}`);
+            if (cardActEl) {
+                cardActEl.style.opacity = '1';
+                cardActEl.innerHTML = `<span id="card-istatus-${id}" style="color:#a78bfa; font-size:13px;"><i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Aktualizácia prebieha...</span>`;
+            }
             saveUpdateState();
         }
 
@@ -1829,6 +2147,17 @@
             const statusEl = document.getElementById(`istatus-${id}`);
             if (statusEl) {
                 statusEl.style.display = 'none';
+            }
+
+            // Update card with final result and close button
+            const cardActEl = document.getElementById(`card-actions-${id}`);
+            if (cardActEl) {
+                const icon2 = success ? STEP_ICONS['done'] : STEP_ICONS['error'];
+                const color2 = success ? 'var(--success-color)' : 'var(--danger-color)';
+                cardActEl.innerHTML = `
+                    <span style="color:${color2}; font-size:13px; font-weight:600;">${icon2} ${message}</span>
+                    <button onclick="clearUpdateState(${id})" style="background:none;border:none;color:var(--accent-color);cursor:pointer;font-size:12px;text-decoration:underline;padding:0;margin-left:6px;">Zatvoriť</button>
+                `;
             }
             saveUpdateState();
         }
@@ -2324,6 +2653,13 @@
                     + ` <button onclick="cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0;margin-left:2px;" title="Zrušiť plán"><i class="fas fa-times-circle"></i></button>`;
             }
             statusEl.appendChild(badge);
+            // Sync badge to card-status
+            const cardStatusEl = document.getElementById(`card-status-${deviceId}`);
+            if (cardStatusEl) {
+                const existingCardBadge = cardStatusEl.querySelector('.schedule-badge');
+                if (existingCardBadge) existingCardBadge.remove();
+                if (schedule) cardStatusEl.appendChild(badge.cloneNode(true));
+            }
         }
 
         // Helper: returns true if device has any pending OS or firmware update

@@ -102,7 +102,21 @@
             flex-wrap: wrap;
         }
 
+        .mobile-break { display: none; }
+
         @media (max-width: 768px) {
+            .mobile-break { display: block; }
+
+            .rss-actions { flex-wrap: nowrap !important; align-items: stretch !important; }
+            .rss-actions .btn-bulk-update,
+            .rss-actions .btn-changelog { padding: 7px 14px; font-size: 13px; }
+            .rss-actions .btn-bulk-update span { white-space: nowrap; }
+            .rss-actions .btn-changelog { justify-content: center; }
+            .changelog-label { display: none; }
+            #rssInfoCard h3 { font-size: 0.9rem !important; }
+            #rssLatestVersion { font-size: 0.85rem; }
+            .cert-dropdown-wrap .update-dropdown { left: auto; right: 0; }
+
             .main-container {
                 margin: 10px;
                 padding: 15px;
@@ -1103,19 +1117,19 @@
         <!-- RSS info card – bulk update button moved here -->
         <div class="info-card" id="rssInfoCard">
             <div>
-                <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: var(--accent-color);">
-                    Najnovšia verzia (z mikrotik.com)</h3>
+                <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: var(--accent-color); white-space: nowrap;">
+                    Najnovšia verzia (mikrotik.com)</h3>
                 <p id="rssLatestVersion">Načítavam dáta z RSS feedu...</p>
             </div>
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div class="rss-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <button id="bulkUpdateBtn" class="btn-bulk-update" onclick="bulkUpdateDevices()" disabled
                     title="Aktualizovať vybrané zariadenia">
                     <i class="fas fa-download"></i>
                     <span>Aktualizovať vybrané</span>
                 </button>
                 <button onclick="openChangelogModal()" class="btn-changelog" id="btnShowChangelog"
-                    style="display:none;">
-                    <i class="fas fa-list-alt"></i> Zobraziť Changelog
+                    style="display:none;" title="Zobraziť Changelog">
+                    <i class="fas fa-list-alt"></i><span class="changelog-label"> Changelog</span>
                 </button>
             </div>
         </div>
@@ -1319,8 +1333,11 @@
                 const json = await res.json();
                 if (json.status === 'success' && json.data.latest) {
                     rssData = json.data.latest;
+                    const _d = new Date(rssData.pubDate);
+                    const _p = n => String(n).padStart(2, '0');
+                    const pubDateLocal = `${_p(_d.getDate())}.${_p(_d.getMonth()+1)}.${_d.getFullYear()} ${_p(_d.getHours())}:${_p(_d.getMinutes())}`;
                     document.getElementById('rssLatestVersion').innerHTML =
-                        `<strong>RouterOS ${rssData.version}</strong> (Vydané: ${rssData.pubDate})`;
+                        `<strong>RouterOS ${rssData.version}</strong> <br class="mobile-break">(Vydané: ${pubDateLocal})`;
                     document.getElementById('btnShowChangelog').style.display = 'inline-flex';
                 } else {
                     document.getElementById('rssLatestVersion').innerText = 'Nepodarilo sa načítať stabilnú verziu z RSS.';
@@ -1557,6 +1574,15 @@
                 `;
                 cardsContainer.appendChild(card);
             });
+
+            // Sort cards A-Z by device name
+            const sortedCards = Array.from(cardsContainer.children)
+                .sort((a, b) => {
+                    const na = a.querySelector('strong')?.textContent.trim().toLowerCase() || '';
+                    const nb = b.querySelector('strong')?.textContent.trim().toLowerCase() || '';
+                    return na.localeCompare(nb, 'sk');
+                });
+            sortedCards.forEach(c => cardsContainer.appendChild(c));
         }
 
         async function fetchDeviceDetails(id) {
@@ -1759,7 +1785,7 @@
                     </div>
 
                     <!-- Cert button + dropdown (days input) -->
-                    <div class="update-dropdown-wrap" style="margin-left: 10px;">
+                    <div class="update-dropdown-wrap cert-dropdown-wrap" style="margin-left: 10px;">
                         <div class="btn-group-main">
                             <button onclick="renewSSL(${id})" id="cert-btn-${id}" class="action-btn full-update-btn ${certClass}" title="${certLabel}">
                                 <i class="fas fa-shield-alt"></i> ${certLabel}

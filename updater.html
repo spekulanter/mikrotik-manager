@@ -493,6 +493,21 @@
             cursor: default;
         }
 
+        .table tbody tr.tr-offline {
+            opacity: 0.55;
+            cursor: default !important;
+        }
+
+        .device-card.tr-offline {
+            opacity: 0.55;
+            cursor: default !important;
+        }
+
+        .table tbody tr.tr-offline .device-select-cb,
+        .device-card.tr-offline .device-select-cb {
+            cursor: not-allowed;
+        }
+
         .table tbody td {
             padding: 12px 16px;
             font-size: 14px;
@@ -1475,6 +1490,26 @@
         // fetchDeviceDetails respects this set and will not overwrite the ⟳ Čaká... status
         const _bulkWaitingDeviceIds = new Set();
 
+        // Set of device IDs that are offline/unavailable – their checkboxes are disabled
+        const _offlineDeviceIds = new Set();
+
+        function setDeviceSelectable(id, selectable) {
+            const row = document.getElementById(`row-${id}`);
+            const card = document.getElementById(`card-${id}`);
+            document.querySelectorAll(`.device-select-cb[data-id="${id}"]`).forEach(cb => {
+                cb.disabled = !selectable;
+                if (!selectable) cb.checked = false;
+            });
+            if (row) row.classList.toggle('tr-offline', !selectable);
+            if (card) card.classList.toggle('tr-offline', !selectable);
+            if (!selectable) {
+                _offlineDeviceIds.add(id);
+            } else {
+                _offlineDeviceIds.delete(id);
+            }
+            onCbChange();
+        }
+
         // Helper: mirror an element's innerHTML to the card equivalent
         function syncCard(baseId) {
             const src = document.getElementById(baseId);
@@ -1517,6 +1552,7 @@
                 const tr = document.createElement('tr');
                 tr.id = `row-${dev.id}`;
                 tr.addEventListener('click', function(e) {
+                    if (_offlineDeviceIds.has(dev.id)) return;
                     if (e.target.classList.contains('device-select-cb')) return;
                     const cb = tr.querySelector('.device-select-cb');
                     if (cb) { cb.checked = !cb.checked; onCbChange(cb); }
@@ -1564,6 +1600,7 @@
                 card.className = 'device-card';
                 card.id = `card-${dev.id}`;
                 card.addEventListener('click', function(e) {
+                    if (_offlineDeviceIds.has(dev.id)) return;
                     if (e.target.classList.contains('device-select-cb')) return;
                     const cb = card.querySelector('.device-select-cb');
                     if (cb) { cb.checked = !cb.checked; onCbChange(cb); }
@@ -1620,6 +1657,7 @@
                 deviceDataMap[id] = data;
 
                 if (data.status === 'success') {
+                    setDeviceSelectable(id, true);
                     // Status cell
                     let statusHtml = `<span style="color:var(--success-color)"><i class="fas fa-check-circle"></i> Online</span>`;
                     if (!data.ssl_ok) {
@@ -1720,6 +1758,7 @@
                 } else {
                     // Don't overwrite cells if an update is actively running on this device
                     if (_deviceUpdateState[id]?.active) return;
+                    setDeviceSelectable(id, false);
                     document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
                     document.getElementById(`os-${id}`).innerHTML = `Chyba spojenia API`;
                     document.getElementById(`fw-${id}`).innerHTML = `N/A`;
@@ -1737,6 +1776,7 @@
             } catch (err) {
                 // Don't overwrite cells if an update is actively running on this device
                 if (_deviceUpdateState[id]?.active) return;
+                setDeviceSelectable(id, false);
                 document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
                 document.getElementById(`os-${id}`).innerHTML = `N/A`;
                 document.getElementById(`fw-${id}`).innerHTML = `N/A`;
@@ -2089,7 +2129,7 @@
         }
 
         function toggleSelectAll(masterCb) {
-            document.querySelectorAll('.device-select-cb').forEach(cb => {
+            document.querySelectorAll('.device-select-cb:not([disabled])').forEach(cb => {
                 cb.checked = masterCb.checked;
             });
             onCbChange();
@@ -2098,8 +2138,8 @@
         function onCbChange(changedCb) {
             // Sync across duplicates if a specific checkbox was clicked
             if (changedCb) syncCheckboxes(changedCb);
-            // Count unique device IDs (each device has 2 checkboxes: table + card)
-            const allIds = new Set(Array.from(document.querySelectorAll('.device-select-cb')).map(cb => cb.getAttribute('data-id')));
+            // Count unique device IDs – only selectable (online) devices count toward total
+            const allIds = new Set(Array.from(document.querySelectorAll('.device-select-cb:not([disabled])')).map(cb => cb.getAttribute('data-id')));
             const checkedIds = new Set(Array.from(document.querySelectorAll('.device-select-cb:checked')).map(cb => cb.getAttribute('data-id')));
             const total = allIds.size;
             const checked = checkedIds.size;

@@ -1593,6 +1593,12 @@
                     </td>
                 `;
                 tr.querySelector('td:last-child').addEventListener('click', function(e) { e.stopPropagation(); });
+                // Disable selection until fetchDeviceDetails confirms online status
+                if (!isActiveUpdate) {
+                    _offlineDeviceIds.add(dev.id);
+                    tr.classList.add('tr-offline');
+                    tr.querySelector('.device-select-cb').disabled = true;
+                }
                 tbody.appendChild(tr);
 
                 // ── Mobile card ──────────────────────────────────────────────
@@ -1633,6 +1639,11 @@
                     </div>
                 `;
                 card.querySelector('.dc-actions').addEventListener('click', function(e) { e.stopPropagation(); });
+                // Disable selection until fetchDeviceDetails confirms online status
+                if (!isActiveUpdate) {
+                    card.classList.add('tr-offline');
+                    card.querySelector('.device-select-cb').disabled = true;
+                }
                 cardsContainer.appendChild(card);
             });
 

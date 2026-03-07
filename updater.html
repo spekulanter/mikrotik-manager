@@ -579,6 +579,13 @@
             display: inline-block;
         }
 
+        @media (max-width: 1300px) and (min-width: 769px) {
+            .desktop-actions-wrap .cert-dropdown-wrap {
+                flex-basis: 100%;
+                margin-left: 0 !important;
+            }
+        }
+
         .update-dropdown {
             position: absolute;
             top: calc(100% + 4px);
@@ -1755,7 +1762,7 @@
             }
 
             const html = `
-                <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                <div class="desktop-actions-wrap" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
                     <!-- Main update button + dropdown -->
                     <div class="update-dropdown-wrap">
                         <div class="btn-group-main">

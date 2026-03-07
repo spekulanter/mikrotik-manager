@@ -193,7 +193,9 @@ DEFAULT_SETTING_VALUES = {
     'backup_retention_count': '10',
     'backup_delay_seconds': '30',
     'backup_detailed_logging': 'false',
-    'ftp_port': '21'
+    'ftp_port': '21',
+    'updater_stabilization_delay': '120',
+    'updater_pre_reboot_delay': '20'
 }
 
 PASSWORD_RECOVERY_CODE_LENGTH = 8
@@ -888,6 +890,8 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('debug_terminal', 'false'))  # Pridané: debug terminál v monitoringu
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retry_interval', '20'))  # Retry interval pri výpadku v sekundách
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('bulk_update_delay_seconds', '60'))  # Oneskorenie medzi zariadeniami pri hromadnej aktualizácii
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_stabilization_delay', '120'))  # Pauza po reštarte OS (krok 4)
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_pre_reboot_delay', '20'))  # Pauza pred finálnym reštartom (krok 6)
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retries', '3'))  # Počet neúspešných pokusov pred označením offline
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_timeout', '5'))  # Timeout pre jeden ping
         additional_defaults = {
@@ -4334,6 +4338,16 @@ def run_scheduled_update(schedule_id):
                     notification_key='notify_backup_failure'
                 )
 
+            # Načítaj konfigurovateľné pauzy zo settings
+            try:
+                with get_db_connection() as _sc:
+                    _sett = {r['key']: r['value'] for r in _sc.execute('SELECT key, value FROM settings').fetchall()}
+                stabilization_delay = int(_sett.get('updater_stabilization_delay', 120))
+                pre_reboot_delay = int(_sett.get('updater_pre_reboot_delay', 20))
+            except Exception:
+                stabilization_delay = 120
+                pre_reboot_delay = 20
+
             # Init tracking state
             _running_scheduled_updates[device_id] = {
                 'device_name': device_name,
@@ -4430,10 +4444,10 @@ def run_scheduled_update(schedule_id):
                     )
                     return
 
-                # Krok 4: 120s stabilizácia (iba pre zariadenia s routerboardom)
-                add_log('info', f'Naplánovaný update [{device_name}]: Online, čakám 120s stabilizáciu...', device_ip)
-                _emit('step_active', step=4, msg='Čakám 120s na stabilizáciu služieb...')
-                time.sleep(120)
+                # Krok 4: stabilizácia (iba pre zariadenia s routerboardom)
+                add_log('info', f'Naplánovaný update [{device_name}]: Online, čakám {stabilization_delay}s stabilizáciu...', device_ip)
+                _emit('step_active', step=4, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
+                time.sleep(stabilization_delay)
                 _emit('step_done', step=4)
             else:
                 add_log('info', f'Naplánovaný update [{device_name}]: RouterOS {installed} je aktuálny, preskakujem.', device_ip)
@@ -4489,9 +4503,9 @@ def run_scheduled_update(schedule_id):
                     return
                 _emit('step_done', step=5)
 
-                # Krok 6: 20s čakanie pred finálnym reštartom
-                _emit('step_active', step=6, msg='Čakám 20s pred finálnym reštartom...')
-                time.sleep(20)
+                # Krok 6: čakanie pred finálnym reštartom
+                _emit('step_active', step=6, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
+                time.sleep(pre_reboot_delay)
                 _emit('step_done', step=6)
 
                 # Krok 7: Finálny reštart
@@ -4603,6 +4617,16 @@ def run_device_update(device_id):
                     notification_key='notify_backup_failure'
                 )
 
+            # Načítaj konfigurovateľné pauzy zo settings
+            try:
+                with get_db_connection() as _sc:
+                    _sett = {r['key']: r['value'] for r in _sc.execute('SELECT key, value FROM settings').fetchall()}
+                stabilization_delay = int(_sett.get('updater_stabilization_delay', 120))
+                pre_reboot_delay = int(_sett.get('updater_pre_reboot_delay', 20))
+            except Exception:
+                stabilization_delay = 120
+                pre_reboot_delay = 20
+
             # Init tracking state
             _running_manual_updates[device_id] = {
                 'device_name': device_name,
@@ -4688,10 +4712,10 @@ def run_device_update(device_id):
                     )
                     return
 
-                # Krok 4: 120s stabilizácia
-                add_log('info', f'Manuálny update [{device_name}]: Online, čakám 120s stabilizáciu...', device_ip)
-                _emit('step_active', step=4, msg='Čakám 120s na stabilizáciu služieb...')
-                time.sleep(120)
+                # Krok 4: stabilizácia
+                add_log('info', f'Manuálny update [{device_name}]: Online, čakám {stabilization_delay}s stabilizáciu...', device_ip)
+                _emit('step_active', step=4, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
+                time.sleep(stabilization_delay)
                 _step_done(4)
             else:
                 add_log('info', f'Manuálny update [{device_name}]: RouterOS {installed} je aktuálny, preskakujem.', device_ip)
@@ -4723,9 +4747,9 @@ def run_device_update(device_id):
                     return
                 _step_done(5)
 
-                # Krok 6: 20s pred finálnym reštartom
-                _emit('step_active', step=6, msg='Čakám 20s pred finálnym reštartom...')
-                time.sleep(20)
+                # Krok 6: čakanie pred finálnym reštartom
+                _emit('step_active', step=6, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
+                time.sleep(pre_reboot_delay)
                 _step_done(6)
 
                 # Krok 7: Finálny reštart

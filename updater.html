@@ -482,10 +482,15 @@
         .table tbody tr {
             border-bottom: 1px solid var(--border-color);
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .table tbody tr:hover {
             background-color: rgba(56, 189, 248, 0.05);
+        }
+
+        .table tbody tr td:last-child {
+            cursor: default;
         }
 
         .table tbody td {
@@ -1511,6 +1516,11 @@
             devicesList.forEach(dev => {
                 const tr = document.createElement('tr');
                 tr.id = `row-${dev.id}`;
+                tr.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('device-select-cb')) return;
+                    const cb = tr.querySelector('.device-select-cb');
+                    if (cb) { cb.checked = !cb.checked; onCbChange(cb); }
+                });
 
                 const isActiveUpdate = _deviceUpdateState[dev.id]?.active;
 
@@ -1546,12 +1556,18 @@
                         </div>
                     </td>
                 `;
+                tr.querySelector('td:last-child').addEventListener('click', function(e) { e.stopPropagation(); });
                 tbody.appendChild(tr);
 
                 // ── Mobile card ──────────────────────────────────────────────
                 const card = document.createElement('div');
                 card.className = 'device-card';
                 card.id = `card-${dev.id}`;
+                card.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('device-select-cb')) return;
+                    const cb = card.querySelector('.device-select-cb');
+                    if (cb) { cb.checked = !cb.checked; onCbChange(cb); }
+                });
                 const initStatusHtml = isActiveUpdate ? updatingHtml : isWaiting ? waitingHtml : '<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;"></span>';
                 card.innerHTML = `
                     <div class="dc-header">
@@ -1579,6 +1595,7 @@
                         ${isRestored ? restoredHtml : '<span style="color:#9ca3af;font-size:13px;">Čaká sa na spojenie...</span>'}
                     </div>
                 `;
+                card.querySelector('.dc-actions').addEventListener('click', function(e) { e.stopPropagation(); });
                 cardsContainer.appendChild(card);
             });
 
@@ -2105,7 +2122,9 @@
         }
 
         // ─── Inline progress helpers ──────────────────────────────────────────────
-        const STEP_LABELS = ['', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', '120s pauza', 'Update Firmware', '20s pauza', 'Finálny reštart'];
+        let _updaterStabilizationDelay = 120;
+        let _updaterPreRebootDelay = 20;
+        let STEP_LABELS = ['', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', `${_updaterStabilizationDelay}s pauza`, 'Update Firmware', `${_updaterPreRebootDelay}s pauza`, 'Finálny reštart'];
         const STEP_ICONS = { '': '○', active: '⟳', done: '✓', error: '✗' };
 
         function startInlineUpdate(id) {
@@ -2369,9 +2388,9 @@
             }
             setInlineStep(id, 5, 'done');
 
-            // Step 6 – 20s countdown
+            // Step 6 – pre-reboot countdown
             setInlineStep(id, 6, 'active');
-            await inlineCountdown(id, 6, 20);
+            await inlineCountdown(id, 6, _updaterPreRebootDelay);
             setInlineStep(id, 6, 'done');
 
             await _doFinalReboot(id, isLowMem);
@@ -2432,7 +2451,7 @@
                         }
                         setInlineStep(id, 3, 'done');
 
-                        // VM/CHR (no routerboard) – skip 120s + firmware steps entirely
+                        // VM/CHR (no routerboard) – skip stabilization + firmware steps entirely
                         const _resumeDevData = deviceDataMap[id];
                         if (_resumeDevData && _resumeDevData.firmware && _resumeDevData.firmware['current-firmware'] === 'N/A') {
                             setInlineStep(id, 4, 'done');
@@ -2445,7 +2464,7 @@
                         }
 
                         setInlineStep(id, 4, 'active');
-                        await inlineCountdown(id, 4, 120);
+                        await inlineCountdown(id, 4, _updaterStabilizationDelay);
                         setInlineStep(id, 4, 'done');
                     } else {
                         // Device already online – skip steps 2-4
@@ -2459,7 +2478,7 @@
                     await _doFirmwareAndReboot(id, isLowMem);
 
                 } else if (step === 6) {
-                    // Was in 20s countdown after firmware install – skip to reboot
+                    // Was in pre-reboot countdown after firmware install – skip to reboot
                     setInlineStep(id, 6, 'done');
                     await _doFinalReboot(id, isLowMem);
 
@@ -2532,7 +2551,11 @@
                 const res = await fetch('/api/settings');
                 const s = await res.json();
                 _bulkUpdateDelaySec = parseInt(s.bulk_update_delay_seconds || 60);
-            } catch (e) { /* keep default */ }
+                _updaterStabilizationDelay = parseInt(s.updater_stabilization_delay || 120);
+                _updaterPreRebootDelay = parseInt(s.updater_pre_reboot_delay || 20);
+                STEP_LABELS[4] = `${_updaterStabilizationDelay}s pauza`;
+                STEP_LABELS[6] = `${_updaterPreRebootDelay}s pauza`;
+            } catch (e) { /* keep defaults */ }
         }
         _loadBulkDelay();
 

@@ -981,6 +981,33 @@
                     </div>
                 </div>
 
+                <!-- Časové limity procesu aktualizácie -->
+                <div class="pt-6 border-t border-gray-700 mb-8">
+                    <h3 class="text-lg font-semibold text-sky-400 mb-4">
+                        <i class="fas fa-hourglass-half mr-2"></i>Časové limity procesu aktualizácie
+                    </h3>
+                    <div class="mb-4 p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg text-blue-200">
+                        <i class="fas fa-info-circle mr-2 text-blue-400"></i>
+                        Pauzy v rámci 7-krokového procesu aktualizácie RouterOS. Platia pre manuálny aj naplánovaný update.
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="updater_stabilization_delay" class="block mb-2 font-medium">Krok 4 – stabilizačná pauza po reštarte OS (sekundy)</label>
+                            <input type="number" id="updater_stabilization_delay" name="updater_stabilization_delay"
+                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                value="120" min="10" max="600">
+                            <small class="text-gray-400 block mt-1">Čakanie po opätovnom nabehnutí zariadenia pred kontrolou firmvéru. Predvolené: 120 sekúnd.</small>
+                        </div>
+                        <div>
+                            <label for="updater_pre_reboot_delay" class="block mb-2 font-medium">Krok 6 – pauza pred finálnym reštartom (sekundy)</label>
+                            <input type="number" id="updater_pre_reboot_delay" name="updater_pre_reboot_delay"
+                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                value="20" min="5" max="300">
+                            <small class="text-gray-400 block mt-1">Čakanie po aktualizácii firmvéru pred odoslaním príkazu na finálny reštart. Predvolené: 20 sekúnd.</small>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Nastavenia TLS certifikátov -->
                 <div class="pt-6 border-t border-gray-700">
                     <h3 class="text-lg font-semibold text-sky-400 mb-4">

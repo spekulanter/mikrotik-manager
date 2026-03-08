@@ -2095,13 +2095,14 @@
             // Use querySelector to handle duplicate IDs
             const daysEl = document.querySelector(`[id="cert-days-${id}"]`);
             const days = parseInt(daysEl ? daysEl.value : 180) || 180;
+            document.querySelectorAll(`[id="cert-dd-${id}"]`).forEach(d => d.style.display = 'none');
             try {
                 await fetch(`/api/updater/certificate/save_settings/${id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ days, save_for_device: save })
                 });
-                refreshDevices();
+                fetchDeviceDetails(id);
             } catch (err) {
                 console.error('Nepodarilo sa uložiť nastavenia certifikátu na pozadí:', err);
             }

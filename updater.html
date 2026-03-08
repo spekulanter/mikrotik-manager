@@ -2835,7 +2835,7 @@
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`;
             } else {
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`
-                    + ` <button onclick="cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0;margin-left:2px;" title="Zrušiť plán"><i class="fas fa-times-circle"></i></button>`;
+                    + ` <button onclick="event.stopPropagation(); cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0;margin-left:2px;" title="Zrušiť plán"><i class="fas fa-times-circle"></i></button>`;
             }
             statusEl.appendChild(badge);
             // Sync badge to card-status

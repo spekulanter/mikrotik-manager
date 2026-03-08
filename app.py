@@ -2731,6 +2731,34 @@ def api_updater_run_update(device_id):
     return jsonify({'status': 'success', 'message': 'Aktualizácia spustená.'})
 
 
+@app.route('/api/updater/run-update-os/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_run_update_os(device_id):
+    """Spustí manuálny RouterOS-only update (kroky 1–3) ako server-side daemon thread."""
+    if device_id in _running_manual_updates:
+        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT id, name FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if not device:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+    threading.Thread(target=run_device_update_os, args=(device_id,), daemon=True).start()
+    return jsonify({'status': 'success', 'message': 'Aktualizácia RouterOS spustená.'})
+
+
+@app.route('/api/updater/run-update-firmware/<int:device_id>', methods=['POST'])
+@login_required
+def api_updater_run_update_firmware(device_id):
+    """Spustí manuálny Firmware-only update (kroky 1–3) ako server-side daemon thread."""
+    if device_id in _running_manual_updates:
+        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT id, name FROM devices WHERE id = ?', (device_id,)).fetchone()
+    if not device:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+    threading.Thread(target=run_device_update_firmware, args=(device_id,), daemon=True).start()
+    return jsonify({'status': 'success', 'message': 'Aktualizácia Firmware spustená.'})
+
+
 @app.route('/api/updater/running-updates')
 @login_required
 def api_updater_running_updates():
@@ -2743,7 +2771,8 @@ def api_updater_running_updates():
             'current_step': info.get('current_step', 0),
             'steps_done': info.get('steps_done', []),
             'current_msg': info.get('current_msg', ''),
-            'started_at': info.get('started_at', '')
+            'started_at': info.get('started_at', ''),
+            'update_type': info.get('update_type', 'full')
         })
     return jsonify({'running': result})
 
@@ -4793,6 +4822,302 @@ def run_device_update(device_id):
                     'state': 'failed',
                     'step': 0,
                     'msg': f'❌ Neočakávaná chyba: {e}'
+                })
+            except Exception:
+                pass
+        finally:
+            _running_manual_updates.pop(device_id, None)
+
+
+def run_device_update_os(device_id):
+    """Vykoná manuálny RouterOS-only update (kroky 1–3) pre zariadenie (server-side daemon thread)."""
+    with app.app_context():
+        try:
+            with get_db_connection() as conn:
+                device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+            if not device:
+                _running_manual_updates.pop(device_id, None)
+                return
+
+            device_ip = device['ip']
+            device_name = device['name']
+
+            def _upd(step=None, msg=None):
+                entry = _running_manual_updates.get(device_id, {})
+                if step is not None:
+                    entry['current_step'] = step
+                if msg is not None:
+                    entry['current_msg'] = msg
+                _running_manual_updates[device_id] = entry
+
+            def _emit(state, step=0, msg=''):
+                _upd(step=step if step > 0 else None, msg=msg if msg else None)
+                socketio.emit('scheduled_update_progress', {
+                    'device_id': device_id,
+                    'schedule_id': 0,
+                    'state': state,
+                    'step': step,
+                    'msg': msg,
+                    'update_type': 'os'
+                })
+
+            def _step_done(step, msg=''):
+                entry = _running_manual_updates.get(device_id, {})
+                steps = entry.get('steps_done', [])
+                if step not in steps:
+                    steps.append(step)
+                entry['steps_done'] = steps
+                _running_manual_updates[device_id] = entry
+                _emit('step_done', step=step, msg=msg)
+
+            def _fail(msg):
+                add_log('error', f'RouterOS update [{device_name}]: {msg}', device_ip)
+                _emit('failed', msg=f'❌ {msg}')
+                send_pushover_notification(
+                    f'RouterOS update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
+                    title='MikroTik Update – Chyba',
+                    notification_key='notify_backup_failure'
+                )
+
+            _running_manual_updates[device_id] = {
+                'device_name': device_name,
+                'device_ip': device_ip,
+                'started_at': datetime.now().isoformat(),
+                'current_step': 0,
+                'steps_done': [],
+                'current_msg': '',
+                'update_type': 'os'
+            }
+
+            add_log('info', f'RouterOS update [{device_name}]: Spúšťam...', device_ip)
+            _emit('start', msg=f'RouterOS update: {device_name}')
+
+            # Krok 1: Zisti dostupnosť OS update
+            _emit('step_active', step=1, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
+            os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
+            if err:
+                _emit('step_error', step=1)
+                _fail(f'Zariadenie nedostupné: {err}')
+                return
+
+            os_info = {}
+            if isinstance(os_data, list) and os_data:
+                os_info = os_data[-1]
+            elif isinstance(os_data, dict):
+                os_info = os_data
+
+            installed = os_info.get('installed-version', '')
+            latest = os_info.get('latest-version', '')
+            has_os_update = installed and latest and installed != latest
+
+            if has_os_update:
+                add_log('info', f'RouterOS update [{device_name}]: Inštalujem RouterOS {installed} → {latest}', device_ip)
+                _emit('step_active', step=1, msg=f'Inštalujem RouterOS {installed} → {latest}...')
+                _, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
+                if err and code != 500:
+                    _emit('step_error', step=1)
+                    _fail(f'Chyba inštalácie OS: {err}')
+                    return
+                _step_done(1)
+
+                # Krok 2: Čakaj offline
+                add_log('info', f'RouterOS update [{device_name}]: Čakám na reštart...', device_ip)
+                _emit('step_active', step=2, msg='Čakám na reštart zariadenia...')
+                if not _wait_device_offline(device_id, timeout=240):
+                    _emit('step_error', step=2)
+                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
+                    return
+                _step_done(2)
+
+                # Krok 3: Čakaj online
+                add_log('info', f'RouterOS update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
+                _emit('step_active', step=3, msg='Čakám kým zariadenie nabootuje...')
+                if not _wait_device_online(device_id, timeout=300):
+                    _emit('step_error', step=3)
+                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    return
+                _step_done(3)
+            else:
+                add_log('info', f'RouterOS update [{device_name}]: RouterOS {installed} je aktuálny.', device_ip)
+                _step_done(1, msg=f'RouterOS {installed} je aktuálny.')
+                for s in [2, 3]:
+                    _step_done(s)
+
+            msg = f'RouterOS: {installed} → {latest if has_os_update else installed}'
+            add_log('info', f'RouterOS update [{device_name}]: Dokončený. {msg}', device_ip)
+            _emit('done', msg=f'✅ RouterOS update dokončený! {msg}')
+            send_pushover_notification(
+                f'RouterOS update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                title='MikroTik Update – Hotovo',
+                notification_key='notify_backup_success'
+            )
+
+        except Exception as e:
+            add_log('error', f'RouterOS update [device_id={device_id}]: Neočakávaná chyba: {e}')
+            try:
+                socketio.emit('scheduled_update_progress', {
+                    'device_id': device_id or 0,
+                    'schedule_id': 0,
+                    'state': 'failed',
+                    'step': 0,
+                    'msg': f'❌ Neočakávaná chyba: {e}',
+                    'update_type': 'os'
+                })
+            except Exception:
+                pass
+        finally:
+            _running_manual_updates.pop(device_id, None)
+
+
+def run_device_update_firmware(device_id):
+    """Vykoná manuálny Firmware-only update (kroky 1–3, mapované z krokov 5–7) pre zariadenie."""
+    with app.app_context():
+        try:
+            with get_db_connection() as conn:
+                device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+            if not device:
+                _running_manual_updates.pop(device_id, None)
+                return
+
+            device_ip = device['ip']
+            device_name = device['name']
+
+            def _upd(step=None, msg=None):
+                entry = _running_manual_updates.get(device_id, {})
+                if step is not None:
+                    entry['current_step'] = step
+                if msg is not None:
+                    entry['current_msg'] = msg
+                _running_manual_updates[device_id] = entry
+
+            def _emit(state, step=0, msg=''):
+                _upd(step=step if step > 0 else None, msg=msg if msg else None)
+                socketio.emit('scheduled_update_progress', {
+                    'device_id': device_id,
+                    'schedule_id': 0,
+                    'state': state,
+                    'step': step,
+                    'msg': msg,
+                    'update_type': 'firmware'
+                })
+
+            def _step_done(step, msg=''):
+                entry = _running_manual_updates.get(device_id, {})
+                steps = entry.get('steps_done', [])
+                if step not in steps:
+                    steps.append(step)
+                entry['steps_done'] = steps
+                _running_manual_updates[device_id] = entry
+                _emit('step_done', step=step, msg=msg)
+
+            def _fail(msg):
+                add_log('error', f'Firmware update [{device_name}]: {msg}', device_ip)
+                _emit('failed', msg=f'❌ {msg}')
+                send_pushover_notification(
+                    f'Firmware update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
+                    title='MikroTik Update – Chyba',
+                    notification_key='notify_backup_failure'
+                )
+
+            try:
+                with get_db_connection() as _sc:
+                    _sett = {r['key']: r['value'] for r in _sc.execute('SELECT key, value FROM settings').fetchall()}
+                pre_reboot_delay = int(_sett.get('updater_pre_reboot_delay', 20))
+            except Exception:
+                pre_reboot_delay = 20
+
+            _running_manual_updates[device_id] = {
+                'device_name': device_name,
+                'device_ip': device_ip,
+                'started_at': datetime.now().isoformat(),
+                'current_step': 0,
+                'steps_done': [],
+                'current_msg': '',
+                'update_type': 'firmware'
+            }
+
+            add_log('info', f'Firmware update [{device_name}]: Spúšťam...', device_ip)
+            _emit('start', msg=f'Firmware update: {device_name}')
+
+            # Krok 1 (≡ pôv. krok 5): Zisti dostupnosť firmware update
+            _emit('step_active', step=1, msg='Kontrolujem verzie firmware...')
+            fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
+            fw_info = {}
+            if not err:
+                if isinstance(fw_data, list) and fw_data:
+                    fw_info = fw_data[0]
+                elif isinstance(fw_data, dict):
+                    fw_info = fw_data
+
+            fw_current = fw_info.get('current-firmware', '')
+            fw_upgrade = fw_info.get('upgrade-firmware', '')
+            has_fw_update = fw_current and fw_upgrade and fw_current != fw_upgrade
+
+            if not fw_current:
+                # VM/CHR – žiadny routerboard
+                add_log('info', f'Firmware update [{device_name}]: VM/CHR zariadenie, firmware nie je podporovaný.', device_ip)
+                _step_done(1, msg='Firmware nie je podporovaný (VM/CHR).')
+                for s in [2, 3]:
+                    _step_done(s)
+                _emit('done', msg='✅ Firmware update dokončený! (VM/CHR – bez routerboardu)')
+                send_pushover_notification(
+                    f'Firmware update zariadenia {device_name} ({device_ip}) dokončený. VM/CHR – bez routerboardu.',
+                    title='MikroTik Update – Hotovo',
+                    notification_key='notify_backup_success'
+                )
+                return
+
+            if has_fw_update:
+                add_log('info', f'Firmware update [{device_name}]: Inštalujem Firmware {fw_current} → {fw_upgrade}', device_ip)
+                _emit('step_active', step=1, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
+                _, err, _ = mk_api(device_id, 'POST', 'system/routerboard/upgrade')
+                if err:
+                    _emit('step_error', step=1)
+                    _fail(f'Chyba inštalácie firmware: {err}')
+                    return
+                _step_done(1)
+
+                # Krok 2 (≡ pôv. krok 6): čakanie pred finálnym reštartom
+                _emit('step_active', step=2, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
+                time.sleep(pre_reboot_delay)
+                _step_done(2)
+
+                # Krok 3 (≡ pôv. krok 7): Finálny reštart
+                add_log('info', f'Firmware update [{device_name}]: Finálny reštart...', device_ip)
+                _emit('step_active', step=3, msg='Odosielam príkaz na finálny reštart...')
+                mk_api(device_id, 'POST', 'system/reboot')
+                _wait_device_offline(device_id, timeout=120)
+                if not _wait_device_online(device_id, timeout=300):
+                    _emit('step_error', step=3)
+                    _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
+                    return
+                _step_done(3)
+            else:
+                add_log('info', f'Firmware update [{device_name}]: Firmware je aktuálny, preskakujem.', device_ip)
+                _step_done(1, msg=f'Firmware {fw_current} je aktuálny.')
+                for s in [2, 3]:
+                    _step_done(s)
+
+            fw_summary = f'{fw_current} → {fw_upgrade}' if has_fw_update else f'{fw_current} (aktuálny)'
+            msg = f'Firmware: {fw_summary}'
+            add_log('info', f'Firmware update [{device_name}]: Dokončený. {msg}', device_ip)
+            _emit('done', msg=f'✅ Firmware update dokončený! {msg}')
+            send_pushover_notification(
+                f'Firmware update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                title='MikroTik Update – Hotovo',
+                notification_key='notify_backup_success'
+            )
+
+        except Exception as e:
+            add_log('error', f'Firmware update [device_id={device_id}]: Neočakávaná chyba: {e}')
+            try:
+                socketio.emit('scheduled_update_progress', {
+                    'device_id': device_id or 0,
+                    'schedule_id': 0,
+                    'state': 'failed',
+                    'step': 0,
+                    'msg': f'❌ Neočakávaná chyba: {e}',
+                    'update_type': 'firmware'
                 })
             except Exception:
                 pass

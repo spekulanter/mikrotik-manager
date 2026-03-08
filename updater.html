@@ -1289,11 +1289,12 @@
                 const state = data.state;
                 const step = data.step;
                 const msg = data.msg || '';
+                const updateType = data.update_type || 'full';
 
                 if (state === 'start') {
                     // Start inline update UI (replaces action buttons with step list)
                     if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
-                        startInlineUpdate(id);
+                        startInlineUpdate(id, updateType);
                     }
                     // Mark status/os/fw cells with purple "updating" indicator
                     setUpdatingCells(id);
@@ -1308,7 +1309,7 @@
                     loadSchedules();
                 } else if (state === 'step_active') {
                     if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) {
-                        startInlineUpdate(id);
+                        startInlineUpdate(id, updateType);
                         setUpdatingCells(id);
                     }
                     setInlineStep(id, step, 'active');
@@ -1977,7 +1978,26 @@
                     return;
                 }
             }
-            apiCall(`/api/updater/install-os/${id}`, btn);
+            if (_deviceUpdateState[id] && _deviceUpdateState[id].active) {
+                showToast('Aktualizácia pre toto zariadenie už prebieha.', 'warning');
+                return;
+            }
+            startInlineUpdate(id, 'os');
+            setUpdatingCells(id);
+            setInlineStep(id, 1, 'active');
+            setInlineStatus(id, 'Spúšťam aktualizáciu RouterOS na serveri...');
+            try {
+                const res = await fetch(`/api/updater/run-update-os/${id}`, { method: 'POST' });
+                const result = await res.json();
+                if (!res.ok) {
+                    showToast(result.message || 'Chyba pri spúšťaní aktualizácie.', 'error');
+                    endInlineUpdate(id, false, result.message || 'Chyba pri spúšťaní.');
+                }
+                // Pri úspechu SocketIO prevezme riadenie UI
+            } catch (err) {
+                showToast('Chyba spojenia.', 'error');
+                endInlineUpdate(id, false, 'Chyba spojenia.');
+            }
         }
 
         async function installFirmwareWithCheck(id, btn) {
@@ -1994,7 +2014,26 @@
                     return;
                 }
             }
-            apiCall(`/api/updater/install-firmware/${id}`, btn);
+            if (_deviceUpdateState[id] && _deviceUpdateState[id].active) {
+                showToast('Aktualizácia pre toto zariadenie už prebieha.', 'warning');
+                return;
+            }
+            startInlineUpdate(id, 'firmware');
+            setUpdatingCells(id);
+            setInlineStep(id, 1, 'active');
+            setInlineStatus(id, 'Spúšťam aktualizáciu Firmware na serveri...');
+            try {
+                const res = await fetch(`/api/updater/run-update-firmware/${id}`, { method: 'POST' });
+                const result = await res.json();
+                if (!res.ok) {
+                    showToast(result.message || 'Chyba pri spúšťaní aktualizácie.', 'error');
+                    endInlineUpdate(id, false, result.message || 'Chyba pri spúšťaní.');
+                }
+                // Pri úspechu SocketIO prevezme riadenie UI
+            } catch (err) {
+                showToast('Chyba spojenia.', 'error');
+                endInlineUpdate(id, false, 'Chyba spojenia.');
+            }
         }
 
         // ─── Individual action wrappers ───────────────────────────────────────────
@@ -2178,17 +2217,33 @@
         let STEP_LABELS = ['', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', `${_updaterStabilizationDelay}s pauza`, 'Update Firmware', `${_updaterPreRebootDelay}s pauza`, 'Finálny reštart'];
         const STEP_ICONS = { '': '○', active: '⟳', done: '✓', error: '✗' };
 
-        function startInlineUpdate(id) {
-            _deviceUpdateState[id] = { active: true, decideResolve: null, persistedResult: false };
+        function startInlineUpdate(id, updateType) {
+            updateType = updateType || 'full';
+
+            let stepLabels, stepCount;
+            if (updateType === 'os') {
+                stepLabels = ['', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot'];
+                stepCount = 3;
+            } else if (updateType === 'firmware') {
+                const delay = _updaterPreRebootDelay || 20;
+                stepLabels = ['', 'Update Firmware', `${delay}s pauza`, 'Finálny reštart'];
+                stepCount = 3;
+            } else {
+                stepLabels = STEP_LABELS;
+                stepCount = 7;
+            }
+            const finalStep = stepCount + 1;
+
+            _deviceUpdateState[id] = { active: true, decideResolve: null, persistedResult: false, updateType: updateType, stepLabels: stepLabels, stepCount: stepCount, finalStep: finalStep };
             const actionsEl = document.getElementById(`actions-${id}`);
             if (!actionsEl) return;
             actionsEl.style.opacity = '1';
 
             let stepsHtml = '';
-            for (let i = 1; i <= 7; i++) {
-                stepsHtml += `<div id="istep-${id}-${i}" class="inline-step">○ ${STEP_LABELS[i]}</div>`;
+            for (let i = 1; i <= stepCount; i++) {
+                stepsHtml += `<div id="istep-${id}-${i}" class="inline-step">○ ${stepLabels[i]}</div>`;
             }
-            stepsHtml += `<div id="istep-${id}-8" class="inline-step final-step"></div>`;
+            stepsHtml += `<div id="istep-${id}-${finalStep}" class="inline-step final-step"></div>`;
 
             const progressHtml = `
                 <div>
@@ -2228,12 +2283,13 @@
         }
 
         function endInlineUpdate(id, success, message) {
+            const finalStep = (_deviceUpdateState[id] && _deviceUpdateState[id].finalStep) || 8;
             if (_deviceUpdateState[id]) {
                 _deviceUpdateState[id].active = false;
                 _deviceUpdateState[id].persistedResult = true;
             }
 
-            const finalStepEl = document.getElementById(`istep-${id}-8`);
+            const finalStepEl = document.getElementById(`istep-${id}-${finalStep}`);
             if (finalStepEl) {
                 const icon = success ? STEP_ICONS['done'] : STEP_ICONS['error'];
                 const color = success ? 'var(--success-color)' : 'var(--danger-color)';
@@ -2245,7 +2301,7 @@
                 `;
             }
 
-            setInlineStep(id, 8, success ? 'done' : 'error');
+            setInlineStep(id, finalStep, success ? 'done' : 'error');
 
             const statusEl = document.getElementById(`istatus-${id}`);
             if (statusEl) {
@@ -2266,30 +2322,29 @@
         }
 
         function setInlineStep(id, stepNum, state) {
+            const st = _deviceUpdateState[id] || {};
+            const stepCount = st.stepCount || 7;
+            const stepLabels = st.stepLabels || STEP_LABELS;
+            const finalStep = st.finalStep || 8;
+
             const el = document.getElementById(`istep-${id}-${stepNum}`);
             if (!el) return;
             const isFinal = el.classList.contains('final-step');
             el.className = 'inline-step' + (isFinal ? ' final-step' : '') + (state ? ` ${state}` : '');
 
-            if (stepNum <= 7) {
-                el.textContent = `${STEP_ICONS[state] || '○'} ${STEP_LABELS[stepNum]}`;
+            if (stepNum <= stepCount) {
+                el.textContent = `${STEP_ICONS[state] || '○'} ${stepLabels[stepNum]}`;
             }
 
             if (state === 'active' && _deviceUpdateState[id]) {
                 _deviceUpdateState[id].currentStep = stepNum;
             }
 
-            for (let i = 1; i <= 8; i++) {
+            for (let i = 1; i <= finalStep; i++) {
                 const sEl = document.getElementById(`istep-${id}-${i}`);
                 if (sEl) sEl.classList.remove('carousel-active');
             }
-            if (state !== 'done') {
-                el.classList.add('carousel-active');
-            } else if (stepNum < 8) {
-                el.classList.add('carousel-active');
-            } else {
-                el.classList.add('carousel-active');
-            }
+            el.classList.add('carousel-active');
 
             const track = document.getElementById(`itrack-${id}`);
             if (track) {
@@ -2696,9 +2751,10 @@
                 const data = await res.json();
                 for (const ru of (data.running || [])) {
                     const id = ru.device_id;
+                    const updateType = ru.update_type || 'full';
                     if (_deviceUpdateState[id] && _deviceUpdateState[id].active) continue;
                     setUpdatingCells(id);
-                    startInlineUpdate(id);
+                    startInlineUpdate(id, updateType);
                     for (const step of (ru.steps_done || [])) {
                         setInlineStep(id, step, 'done');
                     }

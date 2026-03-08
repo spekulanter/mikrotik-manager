@@ -2195,7 +2195,8 @@
             const checked = checkedIds.size;
             document.getElementById('selectAllCb').checked = (checked === total && total > 0);
             document.getElementById('selectAllCb').indeterminate = (checked > 0 && checked < total);
-            document.getElementById('bulkUpdateBtn').disabled = (checked === 0);
+            const anyCheckedHasUpdate = checked > 0 && Array.from(checkedIds).some(id => deviceHasUpdate(id));
+            document.getElementById('bulkUpdateBtn').disabled = !anyCheckedHasUpdate;
         }
 
         function getCheckedDeviceIds() {
@@ -2687,47 +2688,68 @@
             const ids = getCheckedDeviceIds();
             if (ids.length === 0) return;
 
+            // Filter out devices that are already up to date
+            const idsToUpdate = ids.filter(id => deviceHasUpdate(id));
+            const skippedCount = ids.length - idsToUpdate.length;
+
+            if (idsToUpdate.length === 0) {
+                // All selected devices are already up to date
+                const sample = deviceDataMap[ids[0]];
+                const osVer = (sample && sample.os && sample.os['installed-version']) ? sample.os['installed-version'] : '–';
+                const fwVer = (sample && sample.firmware && sample.firmware['current-firmware'] && sample.firmware['current-firmware'] !== 'N/A') ? sample.firmware['current-firmware'] : '–';
+                if (ids.length === 1) {
+                    showToast(`Zariadenie má najnovšie verzie – RouterOS ${osVer}, Firmware ${fwVer}. Aktualizácia nebola spustená.`, 'success', 5000);
+                } else {
+                    showToast(`Všetky vybrané zariadenia (${ids.length}) majú najnovšie verzie. Aktualizácia nebola spustená.`, 'success', 5000);
+                }
+                return;
+            }
+
+            if (skippedCount > 0) {
+                showToast(`${skippedCount} zariadenie/í preskočené – majú najnovšie verzie. Aktualizuje sa ${idsToUpdate.length} zariadenie/í.`, 'info', 5000);
+            }
+
             await _loadBulkDelay();
 
             const bulkBtn = document.getElementById('bulkUpdateBtn');
             bulkBtn.disabled = true;
 
-            if (ids.length === 1) {
+            if (idsToUpdate.length === 1) {
                 // Single device – start immediately (unchanged)
-                await fullUpdateDevice(ids[0]);
+                await fullUpdateDevice(idsToUpdate[0]);
             } else {
                 // Multiple devices – delegate full sequence to backend (F5-resilient)
                 // Pre-show inline UI for first device (instant feedback)
-                if (!(_deviceUpdateState[ids[0]] && _deviceUpdateState[ids[0]].active)) {
-                    startInlineUpdate(ids[0]);
+                if (!(_deviceUpdateState[idsToUpdate[0]] && _deviceUpdateState[idsToUpdate[0]].active)) {
+                    startInlineUpdate(idsToUpdate[0]);
                 }
-                setUpdatingCells(ids[0]);
-                setInlineStep(ids[0], 1, 'active');
-                setInlineStatus(ids[0], 'Spúšťam hromadnú aktualizáciu na serveri...');
+                setUpdatingCells(idsToUpdate[0]);
+                setInlineStep(idsToUpdate[0], 1, 'active');
+                setInlineStatus(idsToUpdate[0], 'Spúšťam hromadnú aktualizáciu na serveri...');
                 // Mark remaining devices as waiting
-                ids.slice(1).forEach(qid => setWaitingCell(qid));
+                idsToUpdate.slice(1).forEach(qid => setWaitingCell(qid));
 
                 try {
                     const res = await fetch('/api/updater/run-bulk-update', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ device_ids: ids })
+                        body: JSON.stringify({ device_ids: idsToUpdate })
                     });
                     const data = await res.json();
                     if (res.status === 409 || data.status !== 'success') {
-                        endInlineUpdate(ids[0], false, `❌ Chyba pri spustení: ${data.message || 'Neznáma chyba'}`);
-                        ids.slice(1).forEach(qid => {
+                        endInlineUpdate(idsToUpdate[0], false, `❌ Chyba pri spustení: ${data.message || 'Neznáma chyba'}`);
+                        idsToUpdate.slice(1).forEach(qid => {
                             _bulkWaitingDeviceIds.delete(qid);
                             fetchDeviceDetails(qid);
                         });
                         bulkBtn.disabled = false;
                         return;
                     }
-                    showToast(`Sekvenčná hromadná aktualizácia: spustilo sa ${ids.length} zariadení s ${_bulkUpdateDelaySec}s oneskorením.`, 'info', 6000);
+                    showToast(`Sekvenčná hromadná aktualizácia: spustilo sa ${idsToUpdate.length} zariadení s ${_bulkUpdateDelaySec}s oneskorením.`, 'info', 6000);
                     // Backend drives the sequence – SocketIO events update the UI
                 } catch (err) {
-                    endInlineUpdate(ids[0], false, `❌ Chyba pri spustení: ${err.message}`);
-                    ids.slice(1).forEach(qid => {
+                    endInlineUpdate(idsToUpdate[0], false, `❌ Chyba pri spustení: ${err.message}`);
+                    idsToUpdate.slice(1).forEach(qid => {
                         _bulkWaitingDeviceIds.delete(qid);
                         fetchDeviceDetails(qid);
                     });

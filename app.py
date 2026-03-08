@@ -2422,13 +2422,13 @@ def api_updater_schedules():
         if gid:
             group_statuses[gid].add(r['status'])
 
-    FINISHED_STATUSES = {'done', 'failed', 'completed', 'cancelled'}
+    # A group counts as "between devices" only if a device actually ran (done/failed),
+    # not if it was merely cancelled by the user before running started.
+    RAN_STATUSES = {'done', 'failed', 'completed', 'running'}
     active_groups = set()
     for gid, statuses in group_statuses.items():
-        if 'running' in statuses:
-            active_groups.add(gid)
-        elif 'pending' in statuses and (statuses & FINISHED_STATUSES):
-            # Between devices: previous one finished, next one not yet started
+        if 'pending' in statuses and (statuses & RAN_STATUSES):
+            # Running now, OR previous device finished and next is still pending
             active_groups.add(gid)
 
     for r in result:

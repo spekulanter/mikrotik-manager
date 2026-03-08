@@ -2087,7 +2087,7 @@
                 showToast('Chyba siete pri obnove TLS certifikátu: ' + err.message, 'error', 6000);
             } finally {
                 btns.forEach(btn => { btn.innerHTML = prevHtml; btn.disabled = false; });
-                refreshDevices();
+                fetchDeviceDetails(id);
             }
         }
 

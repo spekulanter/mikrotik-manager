@@ -2323,7 +2323,7 @@ def check_certificates_expiry():
                     expiry_dt = parse_mikrotik_date(invalid_after)
                     if not expiry_dt:
                         continue
-                    days_remaining = (expiry_dt - datetime.now()).days
+                    days_remaining = -(-int((expiry_dt - datetime.now()).total_seconds()) // 86400)
                 except Exception:
                     continue
 
@@ -2577,7 +2577,7 @@ def api_updater_device(device_id):
                     if invalid_after:
                         expiry_dt = parse_mikrotik_date(invalid_after)
                         if expiry_dt:
-                            days_remaining = (expiry_dt - datetime.now()).days
+                            days_remaining = -(-int((expiry_dt - datetime.now()).total_seconds()) // 86400)
                             cert_expiry = {
                                 'days_remaining': days_remaining,
                                 'invalid_after': invalid_after

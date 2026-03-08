@@ -775,7 +775,9 @@
             --accent-color: #0369a1;
             --accent-color-hover: #0284c7;
             --success-color: #15803d;
+            --warning-color: #c27a00;
             --danger-color: #b91c1c;
+            --input-bg: #deeafa;
         }
 
         body.light-theme .table-container,
@@ -783,8 +785,78 @@
             background-color: #deeafa;
         }
 
+        body.light-theme .update-dropdown .dropdown-label {
+            color: #374151;
+            font-weight: 600;
+        }
+
+        body.light-theme .update-dropdown .dropdown-label span {
+            color: #6b7280 !important;
+            font-weight: 400;
+        }
+
+        body.light-theme .update-dropdown .dropdown-input-row {
+            color: #1f2937;
+            font-weight: 500;
+        }
+
+        body.light-theme .update-dropdown .dropdown-input-row input {
+            color: #1f2937;
+            font-weight: 600;
+            border-color: #93b4d4;
+        }
+
         body.light-theme .update-dropdown {
-            background-color: #deeafa;
+            background-color: #ffffff;
+            border-color: #c5d8f0;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        body.light-theme .update-dropdown .dropdown-item {
+            background-color: transparent;
+            border-color: transparent;
+            color: #374151;
+            box-shadow: none;
+        }
+
+        body.light-theme .update-dropdown .dropdown-item.primary {
+            background: transparent;
+            border-color: transparent;
+            box-shadow: none;
+            color: #0369a1;
+            font-weight: 600;
+            border-left: 3px solid #0ea5e9;
+            padding-left: 13px;
+        }
+
+        body.light-theme .update-dropdown .dropdown-item:hover {
+            background-color: rgba(3, 105, 161, 0.08);
+            color: #0369a1;
+        }
+
+        body.light-theme .update-dropdown .dropdown-item.primary:hover {
+            background-color: rgba(3, 105, 161, 0.08);
+        }
+
+        body.light-theme .update-dropdown .dropdown-item.danger {
+            background-color: transparent;
+            border-color: transparent;
+            color: #dc2626;
+        }
+
+        body.light-theme .update-dropdown .dropdown-item.danger:hover {
+            background-color: rgba(220, 38, 38, 0.08);
+        }
+
+        body.light-theme .update-dropdown .dropdown-item.disabled-item {
+            opacity: 1 !important;
+            color: #7b8694;
+            cursor: not-allowed;
+        }
+
+        body.light-theme .update-dropdown .dropdown-item.disabled-item:hover {
+            background-color: transparent;
+            color: #7b8694;
         }
 
         /* Light theme – subtitle */
@@ -850,6 +922,27 @@
 
         body.light-theme .table tbody td {
             color: #1f2937;
+        }
+
+        /* Loading rows: reduce opacity less aggressively in light mode */
+        body.light-theme .table tbody tr.tr-offline {
+            opacity: 0.9;
+        }
+
+        /* "Zisťujem" + "Načítavam..." text color in light mode */
+        body.light-theme .table tbody tr.tr-offline td {
+            color: #6b7280;
+        }
+
+        /* "Čaká sa na spojenie..." – override the inline opacity:0.5 on the actions div */
+        body.light-theme .table tbody tr.tr-offline td:last-child > div {
+            opacity: 1 !important;
+            color: #9ca3af;
+        }
+
+        /* "Online" text – bold in light mode for better visibility */
+        body.light-theme .status-online-text {
+            font-weight: 700;
         }
 
         /* Light theme – device IP, model, version labels */
@@ -1206,15 +1299,13 @@
                 <button onclick="closeScheduleModal()"
                     style="background:none;border:none;color:var(--text-color);font-size:1.5rem;cursor:pointer;">&times;</button>
             </div>
-            <p style="color:var(--text-muted);font-size:13px;margin-bottom:4px;">Zariadenie:</p>
-            <p style="font-weight:600;margin-bottom:16px;" id="scheduleDeviceName"></p>
-            <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">Dátum a čas
-                aktualizácie:</label>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Zariadenie:</p>
+            <p style="font-weight:700;font-size:15px;margin-bottom:16px;color:var(--accent-color);" id="scheduleDeviceName"></p>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Dátum a čas aktualizácie:</label>
             <input type="datetime-local" id="scheduleDateTime"
                 style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border-color);background:var(--input-bg,#1f2937);color:var(--text-color);font-size:14px;box-sizing:border-box;margin-bottom:14px;">
             <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
-                <i class="fas fa-info-circle"></i> Vykoná sa automaticky: RouterOS update → Firmware update → Reštart.
-                Zariadenie nemusí byť otvorené v prehliadači.
+                <i class="fas fa-info-circle" style="color:var(--accent-color);"></i> Vykoná sa automaticky <i class="fas fa-sync-alt" style="color:var(--accent-color);"></i> <strong style="color:var(--accent-color);">Update RouterOS</strong>.
             </p>
             <div id="scheduleModalError"
                 style="display:none;color:var(--danger-color);font-size:13px;margin-bottom:12px;"></div>
@@ -1671,7 +1762,7 @@
                 if (data.status === 'success') {
                     setDeviceSelectable(id, true);
                     // Status cell
-                    let statusHtml = `<span style="color:var(--success-color)"><i class="fas fa-check-circle"></i> Online</span>`;
+                    let statusHtml = `<span class="status-online-text" style="color:var(--success-color)"><i class="fas fa-check-circle"></i> Online</span>`;
                     if (!data.ssl_ok) {
                         statusHtml += `<br><span style="color:var(--warning-color); font-size:11px;"><i class="fas fa-exclamation-triangle"></i> Bez TLS certifikátu</span>`;
                     }
@@ -1847,7 +1938,7 @@
                                 <i class="fas fa-download"></i> Update RouterOS
                             </button>
                             <button onclick="installFirmwareWithCheck(${id}, this)" class="action-btn dropdown-item ${hasFwUpdate ? 'primary' : 'disabled-item'} ${noFirmware ? 'disabled-item' : ''}" title="${noFirmware ? 'Zariadenie nemá routerboard (VM/CHR) – firmware update nie je dostupný' : hasFwUpdate ? 'Nainštalovať aktualizáciu firmware' : 'Firmware je na aktuálnej verzii'}">
-                                <i class="fas fa-microchip"></i> Update Firmware
+                                <i class="fas fa-microchip"></i> Upgrade Firmware
                             </button>
                             <div class="dropdown-divider"></div>
                             <button onclick="openScheduleModal(${id}, (devicesList.find(d=>d.id===${id})||{}).name||'', ${anyUpdate})" class="action-btn dropdown-item ${anyUpdate ? '' : 'disabled-item'}" title="${anyUpdate ? 'Naplánovať automatický update' : 'Zariadenie je na aktuálnej verzii'}">

@@ -2072,7 +2072,7 @@
             document.querySelectorAll(`[id="cert-dd-${id}"]`).forEach(d => d.style.display = 'none');
 
             const prevHtml = btns[0] ? btns[0].innerHTML : '';
-            btns.forEach(btn => { btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`; btn.disabled = true; });
+            btns.forEach(btn => { btn.style.minWidth = btn.offsetWidth + 'px'; btn.style.display = 'flex'; btn.style.justifyContent = 'center'; btn.style.alignItems = 'center'; btn.innerHTML = `<span class="loading-spinner" style="width:12px; height:12px; border-width: 2px; border-top-color: currentColor;"></span>`; btn.disabled = true; });
             try {
                 const res = await fetch(`/api/updater/certificate/${id}`, {
                     method: 'POST',
@@ -2086,7 +2086,7 @@
             } catch (err) {
                 showToast('Chyba siete pri obnove TLS certifikátu: ' + err.message, 'error', 6000);
             } finally {
-                btns.forEach(btn => { btn.innerHTML = prevHtml; btn.disabled = false; });
+                btns.forEach(btn => { btn.style.minWidth = ''; btn.style.display = ''; btn.style.justifyContent = ''; btn.style.alignItems = ''; btn.innerHTML = prevHtml; btn.disabled = false; });
                 fetchDeviceDetails(id);
             }
         }

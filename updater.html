@@ -1252,6 +1252,13 @@
         }
 
         /* ── Flatpickr custom theme ─────────────────────────────────── */
+        .flatpickr-calendar.arrowTop::before,
+        .flatpickr-calendar.arrowTop::after,
+        .flatpickr-calendar.arrowBottom::before,
+        .flatpickr-calendar.arrowBottom::after {
+            display: none;
+        }
+
         .flatpickr-calendar {
             background: #1f2937;
             border: 1px solid #374151;
@@ -1265,11 +1272,6 @@
             z-index: 99999 !important;
         }
 
-        /* Calendar appended to modal overlay: center horizontally */
-        #scheduleModal>.flatpickr-calendar {
-            left: 50% !important;
-            transform: translateX(-50%) !important;
-        }
 
         /* Alt input styling (shown to user instead of raw ISO input) */
         .fp-alt-input {
@@ -1287,15 +1289,13 @@
         }
 
         .flatpickr-months {
-            display: flex;
-            align-items: center;
+            position: relative;
             padding: 6px 0;
         }
 
         .flatpickr-months .flatpickr-month {
             background: transparent;
             color: #e5e7eb !important;
-            flex: 1;
         }
 
         .flatpickr-current-month,
@@ -1314,7 +1314,10 @@
 
         .flatpickr-months .flatpickr-prev-month,
         .flatpickr-months .flatpickr-next-month {
-            position: static;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            height: auto;
             color: #9ca3af;
             fill: #9ca3af;
             padding: 4px 8px;
@@ -1760,7 +1763,7 @@
                 time_24hr: true,
                 minuteIncrement: 1,
                 disableMobile: true,
-                appendTo: document.getElementById('scheduleModal'),
+
                 monthSelectorType: 'static',
                 altInput: true,
                 altFormat: 'd.m.Y  H:i',

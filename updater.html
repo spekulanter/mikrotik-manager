@@ -9,6 +9,8 @@
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <style>
         :root {
             --main-bg: #111827;
@@ -102,20 +104,50 @@
             flex-wrap: wrap;
         }
 
-        .mobile-break { display: none; }
+        .mobile-break {
+            display: none;
+        }
 
         @media (max-width: 768px) {
-            .mobile-break { display: block; }
+            .mobile-break {
+                display: block;
+            }
 
-            .rss-actions { flex-wrap: nowrap !important; align-items: stretch !important; }
+            .rss-actions {
+                flex-wrap: nowrap !important;
+                align-items: stretch !important;
+            }
+
             .rss-actions .btn-bulk-update,
-            .rss-actions .btn-changelog { padding: 7px 14px; font-size: 13px; }
-            .rss-actions .btn-bulk-update span { white-space: nowrap; }
-            .rss-actions .btn-changelog { justify-content: center; }
-            .changelog-label { display: none; }
-            #rssInfoCard h3 { font-size: 0.9rem !important; }
-            #rssLatestVersion { font-size: 0.85rem; }
-            .cert-dropdown-wrap .update-dropdown { left: auto; right: 0; }
+            .rss-actions .btn-changelog {
+                padding: 7px 14px;
+                font-size: 13px;
+            }
+
+            .rss-actions .btn-bulk-update span {
+                white-space: nowrap;
+            }
+
+            .rss-actions .btn-changelog {
+                justify-content: center;
+            }
+
+            .changelog-label {
+                display: none;
+            }
+
+            #rssInfoCard h3 {
+                font-size: 0.9rem !important;
+            }
+
+            #rssLatestVersion {
+                font-size: 0.85rem;
+            }
+
+            .cert-dropdown-wrap .update-dropdown {
+                left: auto;
+                right: 0;
+            }
 
             .main-container {
                 margin: 10px;
@@ -806,6 +838,11 @@
             border-color: #93b4d4;
         }
 
+        body.light-theme #scheduleDateTime {
+            background-color: #deeafa;
+            color: #1f2937;
+        }
+
         body.light-theme .update-dropdown {
             background-color: #ffffff;
             border-color: #c5d8f0;
@@ -935,7 +972,7 @@
         }
 
         /* "Čaká sa na spojenie..." – override the inline opacity:0.5 on the actions div */
-        body.light-theme .table tbody tr.tr-offline td:last-child > div {
+        body.light-theme .table tbody tr.tr-offline td:last-child>div {
             opacity: 1 !important;
             color: #9ca3af;
         }
@@ -1204,6 +1241,256 @@
                 transform: translateX(-50%) translateY(0);
             }
         }
+
+        /* ── Flatpickr custom theme ─────────────────────────────────── */
+        .flatpickr-calendar {
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            color: #e5e7eb;
+            padding: 8px;
+            width: 324px !important;
+            z-index: 99999 !important;
+        }
+
+        /* Calendar appended to modal overlay: center horizontally */
+        #scheduleModal>.flatpickr-calendar {
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+        }
+
+        /* Alt input styling (shown to user instead of raw ISO input) */
+        .fp-alt-input {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--input-bg, #1f2937);
+            color: var(--text-color);
+            font-size: 14px;
+            box-sizing: border-box;
+            margin-bottom: 14px;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .flatpickr-months {
+            padding: 4px 0 6px;
+        }
+
+        .flatpickr-months .flatpickr-month {
+            background: transparent;
+            color: #e5e7eb !important;
+        }
+
+        .flatpickr-current-month,
+        .flatpickr-current-month input.cur-year,
+        .flatpickr-current-month .cur-month,
+        .flatpickr-current-month span.cur-month {
+            background: transparent;
+            color: #e5e7eb !important;
+            fill: #e5e7eb;
+        }
+
+        .flatpickr-current-month input.cur-year:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+        }
+
+        .flatpickr-months .flatpickr-prev-month,
+        .flatpickr-months .flatpickr-next-month {
+            color: #9ca3af;
+            fill: #9ca3af;
+            padding: 6px 8px;
+        }
+
+        .flatpickr-months .flatpickr-prev-month:hover,
+        .flatpickr-months .flatpickr-next-month:hover {
+            color: #e5e7eb;
+            fill: #e5e7eb;
+        }
+
+        .flatpickr-weekdays {
+            background: transparent;
+        }
+
+        .flatpickr-weekday {
+            background: transparent;
+            color: #38bdf8 !important;
+            font-weight: 600;
+            font-size: 11px;
+        }
+
+        .flatpickr-day {
+            color: #ffffff;
+            border-radius: 6px;
+            border: none;
+        }
+
+        .flatpickr-day:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #f9fafb;
+        }
+
+        .flatpickr-day.today {
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
+            font-weight: 600;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        .flatpickr-day.today:hover {
+            background: rgba(56, 189, 248, 0.2);
+        }
+
+        .flatpickr-day.selected,
+        .flatpickr-day.selected:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #f9fafb;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+
+        .flatpickr-day.flatpickr-disabled,
+        .flatpickr-day.flatpickr-disabled:hover {
+            color: #374151;
+            cursor: not-allowed;
+        }
+
+        .flatpickr-innerContainer {
+            border: none;
+        }
+
+        .flatpickr-rContainer {
+            width: 100%;
+        }
+
+        .flatpickr-days {
+            border: none;
+        }
+
+        /* Time picker */
+        .flatpickr-time {
+            background: rgba(255, 255, 255, 0.04);
+            border-top: 1px solid #374151 !important;
+            border-radius: 0 0 8px 8px;
+            margin-top: 6px;
+        }
+
+        .flatpickr-time input,
+        .flatpickr-time .flatpickr-am-pm {
+            color: #e5e7eb;
+            font-weight: 600;
+            font-size: 15px;
+            background: transparent;
+        }
+
+        .flatpickr-time input:hover,
+        .flatpickr-time input:focus,
+        .flatpickr-time .flatpickr-am-pm:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+        }
+
+        .flatpickr-time .flatpickr-time-separator {
+            color: #6b7280;
+        }
+
+        .numInputWrapper:hover {
+            background: transparent;
+        }
+
+        .numInputWrapper span.arrowUp,
+        .numInputWrapper span.arrowDown {
+            border-color: #4b5563;
+        }
+
+        .numInputWrapper span:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        /* Light theme overrides */
+        body.light-theme .flatpickr-calendar {
+            background: #ffffff;
+            border-color: #c5d8f0;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            color: #1f2937;
+        }
+
+        body.light-theme .flatpickr-current-month input.cur-year,
+        body.light-theme .flatpickr-current-month .cur-month,
+        body.light-theme .flatpickr-current-month span.cur-month {
+            color: #1f2937 !important;
+            fill: #1f2937;
+        }
+
+        body.light-theme .flatpickr-months .flatpickr-prev-month,
+        body.light-theme .flatpickr-months .flatpickr-next-month {
+            color: #6b7280;
+            fill: #6b7280;
+        }
+
+        body.light-theme .flatpickr-months .flatpickr-prev-month:hover,
+        body.light-theme .flatpickr-months .flatpickr-next-month:hover {
+            color: #1f2937;
+            fill: #1f2937;
+        }
+
+        body.light-theme .flatpickr-weekday {
+            color: #0369a1 !important;
+        }
+
+        body.light-theme .flatpickr-day {
+            color: #374151;
+        }
+
+        body.light-theme .flatpickr-day:hover {
+            background: rgba(3, 105, 161, 0.08);
+            color: #0369a1;
+        }
+
+        body.light-theme .flatpickr-day.today {
+            background: rgba(3, 105, 161, 0.08);
+            color: #0369a1;
+            border-color: rgba(3, 105, 161, 0.3);
+        }
+
+        body.light-theme .flatpickr-day.selected,
+        body.light-theme .flatpickr-day.selected:hover {
+            background: rgba(3, 105, 161, 0.12);
+            color: #0369a1;
+            font-weight: 700;
+            border-color: rgba(3, 105, 161, 0.3);
+        }
+
+        body.light-theme .flatpickr-day.flatpickr-disabled,
+        body.light-theme .flatpickr-day.flatpickr-disabled:hover {
+            color: #d1d5db;
+        }
+
+        body.light-theme .flatpickr-time {
+            background: rgba(3, 105, 161, 0.04);
+            border-top-color: #c5d8f0 !important;
+        }
+
+        body.light-theme .flatpickr-time input,
+        body.light-theme .flatpickr-time .flatpickr-am-pm {
+            color: #1f2937;
+        }
+
+        body.light-theme .flatpickr-time input:hover,
+        body.light-theme .flatpickr-time input:focus {
+            background: rgba(3, 105, 161, 0.08);
+        }
+
+        body.light-theme .flatpickr-time .flatpickr-time-separator {
+            color: #9ca3af;
+        }
+
+        /* ── End Flatpickr ──────────────────────────────────────────── */
     </style>
 </head>
 
@@ -1237,7 +1524,8 @@
         <!-- RSS info card – bulk update button moved here -->
         <div class="info-card" id="rssInfoCard">
             <div>
-                <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: var(--accent-color); white-space: nowrap;">
+                <h3
+                    style="font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: var(--accent-color); white-space: nowrap;">
                     Najnovšia verzia (mikrotik.com)</h3>
                 <p id="rssLatestVersion">Načítavam dáta z RSS feedu...</p>
             </div>
@@ -1247,8 +1535,8 @@
                     <i class="fas fa-download"></i>
                     <span>Aktualizovať vybrané</span>
                 </button>
-                <button onclick="openChangelogModal()" class="btn-changelog" id="btnShowChangelog"
-                    style="display:none;" title="Zobraziť Changelog">
+                <button onclick="openChangelogModal()" class="btn-changelog" id="btnShowChangelog" style="display:none;"
+                    title="Zobraziť Changelog">
                     <i class="fas fa-list-alt"></i><span class="changelog-label"> Changelog</span>
                 </button>
             </div>
@@ -1300,12 +1588,18 @@
                     style="background:none;border:none;color:var(--text-color);font-size:1.5rem;cursor:pointer;">&times;</button>
             </div>
             <p style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Zariadenie:</p>
-            <p style="font-weight:700;font-size:15px;margin-bottom:16px;color:var(--accent-color);" id="scheduleDeviceName"></p>
-            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Dátum a čas aktualizácie:</label>
-            <input type="datetime-local" id="scheduleDateTime"
-                style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border-color);background:var(--input-bg,#1f2937);color:var(--text-color);font-size:14px;box-sizing:border-box;margin-bottom:14px;">
+            <p style="font-weight:700;font-size:15px;margin-bottom:16px;color:var(--accent-color);"
+                id="scheduleDeviceName"></p>
+            <label
+                style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">Dátum
+                a čas aktualizácie:</label>
+            <input type="text" id="scheduleDateTime" placeholder="Vyberte dátum a čas..."
+                style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border-color);background:var(--input-bg,#1f2937);color:var(--text-color);font-size:14px;box-sizing:border-box;margin-bottom:14px;cursor:pointer;"
+                readonly>
             <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
-                <i class="fas fa-info-circle" style="color:var(--accent-color);"></i> Vykoná sa automaticky <i class="fas fa-sync-alt" style="color:var(--accent-color);"></i> <strong style="color:var(--accent-color);">Update RouterOS</strong>.
+                <i class="fas fa-info-circle" style="color:var(--accent-color);"></i> Vykoná sa automaticky <i
+                    class="fas fa-sync-alt" style="color:var(--accent-color);"></i> <strong
+                    style="color:var(--accent-color);">Update RouterOS</strong>.
             </p>
             <div id="scheduleModalError"
                 style="display:none;color:var(--danger-color);font-size:13px;margin-bottom:12px;"></div>
@@ -1443,6 +1737,35 @@
             initScheduledUpdateSocket();
             fetchRssData();
             fetchDevices();
+
+            // Init Flatpickr
+            window._fpInstance = flatpickr('#scheduleDateTime', {
+                enableTime: true,
+                dateFormat: 'Y-m-dTH:i',
+                time_24hr: true,
+                minuteIncrement: 1,
+                disableMobile: true,
+                appendTo: document.getElementById('scheduleModal'),
+                monthSelectorType: 'static',
+                altInput: true,
+                altFormat: 'd.m.Y  H:i',
+                altInputClass: 'fp-alt-input',
+                locale: {
+                    firstDayOfWeek: 1,
+                    weekdays: {
+                        shorthand: ['Ne', 'Po', 'Ut', 'St', 'Št', 'Pi', 'So'],
+                        longhand: ['Nedeľa', 'Pondelok', 'Utorok', 'Streda', 'Štvrtok', 'Piatok', 'Sobota']
+                    },
+                    months: {
+                        shorthand: ['Jan', 'Feb', 'Mar', 'Apr', 'Máj', 'Jún', 'Júl', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'],
+                        longhand: ['Január', 'Február', 'Marec', 'Apríl', 'Máj', 'Jún', 'Júl', 'August', 'September', 'Október', 'November', 'December']
+                    },
+                    rangeSeparator: ' – ',
+                    weekAbbreviation: 'Týž',
+                    scrollTitle: 'Posúvajte pre zmenu',
+                    toggleTitle: 'Prepnúť'
+                }
+            });
         });
 
         // ─── RSS ──────────────────────────────────────────────────────────────────
@@ -1454,7 +1777,7 @@
                     rssData = json.data.latest;
                     const _d = new Date(rssData.pubDate);
                     const _p = n => String(n).padStart(2, '0');
-                    const pubDateLocal = `${_p(_d.getDate())}.${_p(_d.getMonth()+1)}.${_d.getFullYear()} ${_p(_d.getHours())}:${_p(_d.getMinutes())}`;
+                    const pubDateLocal = `${_p(_d.getDate())}.${_p(_d.getMonth() + 1)}.${_d.getFullYear()} ${_p(_d.getHours())}:${_p(_d.getMinutes())}`;
                     document.getElementById('rssLatestVersion').innerHTML =
                         `<strong>RouterOS ${rssData.version}</strong> <br class="mobile-break">(Vydané: ${pubDateLocal})`;
                     document.getElementById('btnShowChangelog').style.display = 'inline-flex';
@@ -1643,7 +1966,7 @@
             devicesList.forEach(dev => {
                 const tr = document.createElement('tr');
                 tr.id = `row-${dev.id}`;
-                tr.addEventListener('click', function(e) {
+                tr.addEventListener('click', function (e) {
                     if (_offlineDeviceIds.has(dev.id)) return;
                     if (e.target.classList.contains('device-select-cb')) return;
                     const cb = tr.querySelector('.device-select-cb');
@@ -1684,7 +2007,7 @@
                         </div>
                     </td>
                 `;
-                tr.querySelector('td:last-child').addEventListener('click', function(e) { e.stopPropagation(); });
+                tr.querySelector('td:last-child').addEventListener('click', function (e) { e.stopPropagation(); });
                 // Disable selection until fetchDeviceDetails confirms online status
                 if (!isActiveUpdate) {
                     _offlineDeviceIds.add(dev.id);
@@ -1697,7 +2020,7 @@
                 const card = document.createElement('div');
                 card.className = 'device-card';
                 card.id = `card-${dev.id}`;
-                card.addEventListener('click', function(e) {
+                card.addEventListener('click', function (e) {
                     if (_offlineDeviceIds.has(dev.id)) return;
                     if (e.target.classList.contains('device-select-cb')) return;
                     const cb = card.querySelector('.device-select-cb');
@@ -1730,7 +2053,7 @@
                         ${isRestored ? restoredHtml : '<span style="color:#9ca3af;font-size:13px;">Čaká sa na spojenie...</span>'}
                     </div>
                 `;
-                card.querySelector('.dc-actions').addEventListener('click', function(e) { e.stopPropagation(); });
+                card.querySelector('.dc-actions').addEventListener('click', function (e) { e.stopPropagation(); });
                 // Disable selection until fetchDeviceDetails confirms online status
                 if (!isActiveUpdate) {
                     card.classList.add('tr-offline');
@@ -3003,11 +3326,10 @@
 
             document.getElementById('scheduleModalError').style.display = 'none';
             const minDt = new Date(Date.now() + 5 * 60000);
-            const pad = n => String(n).padStart(2, '0');
-            const minStr = `${minDt.getFullYear()}-${pad(minDt.getMonth() + 1)}-${pad(minDt.getDate())}T${pad(minDt.getHours())}:${pad(minDt.getMinutes())}`;
-            const dtInput = document.getElementById('scheduleDateTime');
-            dtInput.min = minStr;
-            dtInput.value = '';
+            if (window._fpInstance) {
+                window._fpInstance.clear();
+                window._fpInstance.set('minDate', minDt);
+            }
             document.getElementById('scheduleModal').style.display = 'flex';
         }
 

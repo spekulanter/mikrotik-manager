@@ -524,7 +524,8 @@
 
         body.light-theme .table-container {
             background-color: #deeafa;
-            border: none;
+            border: 1px solid #b8c9e6;
+            border-radius: 10px;
             padding: 0 8px;
             overflow: hidden;
         }
@@ -536,9 +537,10 @@
         }
 
         body.light-theme .table thead th {
-            background: transparent;
-            color: #0f172a;
+            background-color: #deeafa;
+            color: #0369a1;
             border: none;
+            border-bottom: 2px solid #b8c9e6;
             padding: 10px 16px;
             line-height: 1.25;
             min-height: 46px;
@@ -560,7 +562,7 @@
         }
 
         body.light-theme .table tbody td {
-            color: #0f172a;
+            color: #1f2937;
             border-bottom: none;
         }
 
@@ -945,10 +947,10 @@
         </div>
 
         <div class="table-container">
-            <table class="table" id="filesTable">
+            <table class="table" id="filesTable" style="table-layout: fixed; width: 100%;">
                 <thead>
                     <tr>
-                        <th class="sortable" onclick="sortTable('name')" id="sort-name">
+                        <th class="sortable" onclick="sortTable('name')" id="sort-name" style="width: 55%;">
                             <div class="header-label-main">
                                 <i class="fas fa-file"></i> Názov súboru
                                 <i class="fas fa-sort sort-icon"></i>
@@ -961,15 +963,15 @@
                                 <i class="fas fa-sort mobile-sort-icon"></i>
                             </button>
                         </th>
-                        <th class="sortable" onclick="sortTable('size')" id="sort-size">
+                        <th class="sortable" onclick="sortTable('size')" id="sort-size" style="width: 12%;">
                             <i class="fas fa-hdd"></i> Veľkosť
                             <i class="fas fa-sort sort-icon"></i>
                         </th>
-                        <th class="sortable" onclick="sortTable('date')" id="sort-date">
+                        <th class="sortable" onclick="sortTable('date')" id="sort-date" style="width: 20%;">
                             <i class="fas fa-calendar"></i> Dátum vytvorenia
                             <i class="fas fa-sort sort-icon"></i>
                         </th>
-                        <th><i class="fas fa-download"></i> Akcie</th>
+                        <th style="width: 13%;"><i class="fas fa-download"></i> Akcie</th>
                     </tr>
                 </thead>
                 <tbody id="filesTableBody">
@@ -1301,17 +1303,7 @@
                 // Aktualizuj ikonu podľa smeru zoradenia
                 const icon = activeHeader.querySelector('.sort-icon');
 
-                switch (currentSort) {
-                    case 'name':
-                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-alpha-down' : 'fa-sort-alpha-up'} sort-icon`;
-                        break;
-                    case 'size':
-                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-amount-down' : 'fa-sort-amount-up'} sort-icon`;
-                        break;
-                    case 'date':
-                        icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-numeric-down' : 'fa-sort-numeric-up'} sort-icon`;
-                        break;
-                }
+                icon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down'} sort-icon`;
             }
         }
 
@@ -1334,7 +1326,7 @@
                     ? 'Zoradené podľa dátumu (najstaršie hore). Kliknutím zmeníš poradie.'
                     : 'Zoradené podľa dátumu (najnovšie hore). Kliknutím zmeníš poradie.';
                 if (sortIcon) {
-                    sortIcon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-numeric-down' : 'fa-sort-numeric-up'} mobile-sort-icon`;
+                    sortIcon.className = `fas ${sortDirection === 'asc' ? 'fa-sort-up' : 'fa-sort-down'} mobile-sort-icon`;
                 }
             } else {
                 button.classList.remove('active');

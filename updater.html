@@ -568,13 +568,13 @@
         }
 
         .action-btn.primary {
-            background-color: var(--accent-color);
+            background-color: #3f82a0;
             color: white;
-            border-color: var(--accent-color);
+            border-color: #3f82a0;
         }
 
         .action-btn.primary:hover {
-            background-color: var(--accent-color-hover);
+            background-color: #336a87;
         }
 
         .action-btn.danger {
@@ -606,13 +606,13 @@
         }
 
         .btn-group-main .full-update-btn.primary+.dropdown-toggle-btn {
-            background-color: var(--accent-color-hover);
+            background-color: #336a87;
             color: white;
-            border-color: var(--accent-color);
+            border-color: #3f82a0;
         }
 
         .btn-group-main .full-update-btn.primary+.dropdown-toggle-btn:hover {
-            background-color: #0284c7;
+            background-color: #2a6180;
         }
 
         .btn-group-main .full-update-btn.danger+.dropdown-toggle-btn {
@@ -1006,15 +1006,24 @@
         }
 
         body.light-theme .action-btn.primary {
-            background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+            background: linear-gradient(135deg, #6ab4e0, #4e95cc);
             color: white;
-            border-color: #38bdf8;
-            box-shadow: 0 4px 10px rgba(14, 165, 233, 0.3);
+            border-color: #6ab4e0;
+            box-shadow: 0 4px 10px rgba(78, 149, 204, 0.25);
         }
 
         body.light-theme .action-btn.primary:hover {
-            background: linear-gradient(135deg, #0ea5e9, #0284c7);
-            box-shadow: 0 6px 14px rgba(14, 165, 233, 0.38);
+            background: linear-gradient(135deg, #4e95cc, #3a7fb8);
+            box-shadow: 0 6px 14px rgba(78, 149, 204, 0.35);
+        }
+
+        body.light-theme .btn-group-main .full-update-btn.primary+.dropdown-toggle-btn {
+            background-color: #4e95cc;
+            border-color: #6ab4e0;
+        }
+
+        body.light-theme .btn-group-main .full-update-btn.primary+.dropdown-toggle-btn:hover {
+            background-color: #3a7fb8;
         }
 
         body.light-theme .action-btn.danger {
@@ -1278,12 +1287,15 @@
         }
 
         .flatpickr-months {
-            padding: 4px 0 6px;
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
         }
 
         .flatpickr-months .flatpickr-month {
             background: transparent;
             color: #e5e7eb !important;
+            flex: 1;
         }
 
         .flatpickr-current-month,
@@ -1302,9 +1314,12 @@
 
         .flatpickr-months .flatpickr-prev-month,
         .flatpickr-months .flatpickr-next-month {
+            position: static;
             color: #9ca3af;
             fill: #9ca3af;
-            padding: 6px 8px;
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
         }
 
         .flatpickr-months .flatpickr-prev-month:hover,

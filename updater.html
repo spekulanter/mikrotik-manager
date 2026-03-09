@@ -843,6 +843,11 @@
             color: #1f2937;
         }
 
+        body.light-theme .schedule-badge {
+            font-weight: 700;
+            color: #7c3aed !important;
+        }
+
         body.light-theme .update-dropdown {
             background-color: #ffffff;
             border-color: #c5d8f0;
@@ -2145,17 +2150,17 @@
                     document.getElementById(`os-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
                             <span class="version-label">Aktuálna:</span>
-                            <strong>${osInstalledVer}</strong>
+                            <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osInstalledVer}</strong>
                             <span class="version-label">Dostupná:</span>
-                            <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osLatestVer}</strong>
+                            <strong>${osLatestVer}</strong>
                         </div>
                     `;
                     // Card: compact two-line version display
                     const cardOsEl = document.getElementById(`card-os-${id}`);
                     if (cardOsEl) cardOsEl.innerHTML = `
                         <div style="line-height:1.5;">
-                            <span style="color:#9ca3af;">Aktuálna:</span> <strong>${osInstalledVer}</strong><br>
-                            <span style="color:#9ca3af;">Dostupná:</span> <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osLatestVer}</strong>
+                            <span style="color:#9ca3af;">Aktuálna:</span> <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osInstalledVer}</strong><br>
+                            <span style="color:#9ca3af;">Dostupná:</span> <strong>${osLatestVer}</strong>
                         </div>
                     `;
 
@@ -2173,17 +2178,17 @@
                     document.getElementById(`fw-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
                             <span class="version-label">Aktuálny:</span>
-                            <strong>${fwCurrent}</strong>
+                            <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwCurrent}</strong>
                             <span class="version-label">Dostupný:</span>
-                            <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
+                            <strong>${fwAvailable}</strong>
                         </div>
                     `;
                     // Card: compact two-line firmware display
                     const cardFwEl = document.getElementById(`card-fw-${id}`);
                     if (cardFwEl) cardFwEl.innerHTML = `
                         <div style="line-height:1.5;">
-                            <span style="color:#9ca3af;">Aktuálny:</span> <strong>${fwCurrent}</strong><br>
-                            <span style="color:#9ca3af;">Dostupný:</span> <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwAvailable}</strong>
+                            <span style="color:#9ca3af;">Aktuálny:</span> <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwCurrent}</strong><br>
+                            <span style="color:#9ca3af;">Dostupný:</span> <strong>${fwAvailable}</strong>
                         </div>
                     `;
                     // Sync model
@@ -3268,7 +3273,7 @@
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`;
             } else {
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`
-                    + ` <button onclick="event.stopPropagation(); cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px;padding:0;margin-left:2px;" title="Zrušiť plán"><i class="fas fa-times-circle"></i></button>`;
+                    + ` <button onclick="event.stopPropagation(); cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:0;margin-left:2px;" title="Zrušiť plán"><i class="fas fa-times"></i></button>`;
             }
             statusEl.appendChild(badge);
             // Sync badge to card-status

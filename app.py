@@ -2176,10 +2176,10 @@ _running_scheduled_updates = {}
 # bulk_group_id -> {device_ids, remaining_ids, current_device_id}
 _manual_bulk_groups = {}
 
-# Suppression dict: device_id -> timestamp of last completed update (via manager)
-# Used to suppress redundant SNMP version change notifications after manager-driven updates
-_recent_updates: dict = {}
-UPDATE_VERSION_SUPPRESS_SECONDS = 3600  # 60 minutes grace period
+# One-time suppression set: device_ids that completed an update via manager.
+# Suppresses the first SNMP reboot/version-change detection after the update.
+# Consumed (cleared) once SNMP processes the post-update cycle.
+_recent_updates: set = set()
 
 
 def _do_renew_certificate(ip, username, password, days):
@@ -5548,9 +5548,8 @@ def _format_duration_from_seconds(seconds):
     return ' '.join(parts)
 
 def record_update_completion(device_id: int):
-    """Zaznamená dokončenie updatu cez manager – potlačí SNMP version change notifikáciu na 60 min."""
-    import time
-    _recent_updates[device_id] = time.monotonic()
+    """Zaznamená dokončenie updatu cez manager – potlačí nasledujúci SNMP reboot/version-change cyklus."""
+    _recent_updates.add(device_id)
 
 
 def evaluate_snmp_notifications(device, snmp_data, previous_data):
@@ -5564,6 +5563,14 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
     except Exception as e:
         add_log('warning', f"Nepodarilo sa načítať nastavenia SNMP notifikácií: {e}", device['ip'])
         return
+
+    # One-time suppression flag: True if update is running OR just completed via manager (consume-once)
+    _dev_id = device['id']
+    _suppress_update_noise = (
+        _dev_id in _running_manual_updates
+        or _dev_id in _running_scheduled_updates
+        or _dev_id in _recent_updates
+    )
 
     temperature_threshold = _safe_int(settings.get('temp_critical_threshold'))
     cpu_threshold = _safe_int(settings.get('cpu_critical_threshold'))
@@ -5640,11 +5647,14 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
             f"(aktuálny uptime {uptime_human})"
         )
         add_log('warning', message, device['ip'])
-        send_pushover_notification(
-            message,
-            title="SNMP Monitor - Reboot",
-            notification_key='notify_reboot_detected'
-        )
+        if _suppress_update_noise:
+            debug_log('snmp', f"[reboot] Potlačená SNMP reboot notifikácia pre {device['ip']} – update prebieha alebo práve dokončený cez manager")
+        else:
+            send_pushover_notification(
+                message,
+                title="SNMP Monitor - Reboot",
+                notification_key='notify_reboot_detected'
+            )
 
     current_version = snmp_data.get('version')
     previous_version = (previous_data or {}).get('version')
@@ -5660,19 +5670,16 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
             f"{previous_version} ➜ {current_version}"
         )
         add_log('info', message, device['ip'])
-        # Suppress notification if update was done via manager in last 60 minutes
-        import time
-        device_id = device['id']
-        last_update_ts = _recent_updates.get(device_id)
-        suppressed = last_update_ts is not None and (time.monotonic() - last_update_ts) < UPDATE_VERSION_SUPPRESS_SECONDS
-        if suppressed:
-            debug_log('snmp', f"[version_change] Potlačená SNMP verzia notifikácia pre {device['ip']} – update bol cez manager pred <60 min")
+        if _suppress_update_noise:
+            debug_log('snmp', f"[version_change] Potlačená SNMP verzia notifikácia pre {device['ip']} – update prebieha alebo práve dokončený cez manager")
         else:
             send_pushover_notification(
                 message,
                 title="SNMP Monitor - Verzia OS",
                 notification_key='notify_version_change'
             )
+        # Consume one-time flag after processing version change (last update-related check)
+        _recent_updates.discard(_dev_id)
 def ping_monitoring_loop():
     """Nekonečná slučka pre ping monitoring s presným dodržaním intervalov pre každé zariadenie"""
     global ping_thread_stop_flag

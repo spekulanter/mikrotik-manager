@@ -2176,6 +2176,11 @@ _running_scheduled_updates = {}
 # bulk_group_id -> {device_ids, remaining_ids, current_device_id}
 _manual_bulk_groups = {}
 
+# Suppression dict: device_id -> timestamp of last completed update (via manager)
+# Used to suppress redundant SNMP version change notifications after manager-driven updates
+_recent_updates: dict = {}
+UPDATE_VERSION_SUPPRESS_SECONDS = 3600  # 60 minutes grace period
+
 
 def _do_renew_certificate(ip, username, password, days):
     """Obnoví TLS certifikát WebCert na MikroTik zariadení cez HTTP (port 80).
@@ -4575,6 +4580,7 @@ def run_scheduled_update(schedule_id):
                         title='MikroTik Update – Hotovo',
                         notification_key='notify_backup_success'
                     )
+                    record_update_completion(device_id)
                     return
 
                 # Krok 5: stabilizácia (iba pre zariadenia s routerboardom)
@@ -4610,6 +4616,7 @@ def run_scheduled_update(schedule_id):
                     title='MikroTik Update – Hotovo',
                     notification_key='notify_backup_success'
                 )
+                record_update_completion(device_id)
                 return
 
             # Krok 6: Zisti dostupnosť firmware update
@@ -4678,6 +4685,7 @@ def run_scheduled_update(schedule_id):
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )
+            record_update_completion(device_id)
 
         except Exception as e:
             add_log('error', f'Naplánovaný update [schedule_id={schedule_id}]: Neočakávaná chyba: {e}')
@@ -4849,6 +4857,7 @@ def run_device_update(device_id):
                         title='MikroTik Update – Hotovo',
                         notification_key='notify_backup_success'
                     )
+                    record_update_completion(device_id)
                     return
 
                 # Krok 5: stabilizácia
@@ -4922,6 +4931,7 @@ def run_device_update(device_id):
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )
+            record_update_completion(device_id)
 
         except Exception as e:
             add_log('error', f'Manuálny update [device_id={device_id}]: Neočakávaná chyba: {e}')
@@ -5065,6 +5075,7 @@ def run_device_update_os(device_id):
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )
+            record_update_completion(device_id)
 
         except Exception as e:
             add_log('error', f'RouterOS update [device_id={device_id}]: Neočakávaná chyba: {e}')
@@ -5182,6 +5193,7 @@ def run_device_update_firmware(device_id):
                     title='MikroTik Update – Hotovo',
                     notification_key='notify_backup_success'
                 )
+                record_update_completion(device_id)
                 return
 
             if has_fw_update:
@@ -5224,6 +5236,7 @@ def run_device_update_firmware(device_id):
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )
+            record_update_completion(device_id)
 
         except Exception as e:
             add_log('error', f'Firmware update [device_id={device_id}]: Neočakávaná chyba: {e}')
@@ -5534,6 +5547,12 @@ def _format_duration_from_seconds(seconds):
     parts.append(f"{minutes}m")
     return ' '.join(parts)
 
+def record_update_completion(device_id: int):
+    """Zaznamená dokončenie updatu cez manager – potlačí SNMP version change notifikáciu na 60 min."""
+    import time
+    _recent_updates[device_id] = time.monotonic()
+
+
 def evaluate_snmp_notifications(device, snmp_data, previous_data):
     """Vyhodnotí SNMP notifikácie podľa kritických limitov a zmien."""
     try:
@@ -5641,11 +5660,19 @@ def evaluate_snmp_notifications(device, snmp_data, previous_data):
             f"{previous_version} ➜ {current_version}"
         )
         add_log('info', message, device['ip'])
-        send_pushover_notification(
-            message,
-            title="SNMP Monitor - Verzia OS",
-            notification_key='notify_version_change'
-        )
+        # Suppress notification if update was done via manager in last 60 minutes
+        import time
+        device_id = device['id']
+        last_update_ts = _recent_updates.get(device_id)
+        suppressed = last_update_ts is not None and (time.monotonic() - last_update_ts) < UPDATE_VERSION_SUPPRESS_SECONDS
+        if suppressed:
+            debug_log('snmp', f"[version_change] Potlačená SNMP verzia notifikácia pre {device['ip']} – update bol cez manager pred <60 min")
+        else:
+            send_pushover_notification(
+                message,
+                title="SNMP Monitor - Verzia OS",
+                notification_key='notify_version_change'
+            )
 def ping_monitoring_loop():
     """Nekonečná slučka pre ping monitoring s presným dodržaním intervalov pre každé zariadenie"""
     global ping_thread_stop_flag

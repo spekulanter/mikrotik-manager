@@ -1023,14 +1023,25 @@
                         oneskorení spustí
                         ďalšie. Toto zabraňuje preťaženiu siete a zaručuje stabilnú aktualizáciu.
                     </div>
-                    <div>
-                        <label for="bulk_update_delay_seconds" class="block mb-2 font-medium">Oneskorenie medzi
-                            zariadeniami pri hromadnom update (sekundy)</label>
-                        <input type="number" id="bulk_update_delay_seconds" name="bulk_update_delay_seconds"
-                            class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                            value="60" min="10" max="3600">
-                        <small class="text-gray-400 block mt-1">Čas čakania po dokončení jedného zariadenia pred
-                            spustením ďalšieho. Predvolené: 60 sekúnd.</small>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="bulk_update_delay_seconds" class="block mb-2 font-medium">Oneskorenie medzi
+                                zariadeniami pri hromadnom update (sekundy)</label>
+                            <input type="number" id="bulk_update_delay_seconds" name="bulk_update_delay_seconds"
+                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                value="60" min="10" max="3600">
+                            <small class="text-gray-400 block mt-1">Čas čakania po dokončení jedného zariadenia pred
+                                spustením ďalšieho. Predvolené: 60 sekúnd.</small>
+                        </div>
+                        <div>
+                            <label for="updater_post_backup_delay" class="block mb-2 font-medium">Pauza po zálohe pred
+                                aktualizáciou (sekundy)</label>
+                            <input type="number" id="updater_post_backup_delay" name="updater_post_backup_delay"
+                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                value="10" min="0" max="600">
+                            <small class="text-gray-400 block mt-1">Pauza medzi dokončením kroku zálohy a spustením
+                                samotnej aktualizácie. Hodnota <strong>0</strong> pauzu vypne. Predvolené: 10 sekúnd.</small>
+                        </div>
                     </div>
                 </div>
 
@@ -1041,18 +1052,18 @@
                     </h3>
                     <div class="mb-4 p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg text-blue-200">
                         <i class="fas fa-info-circle mr-2 text-blue-400"></i>
-                        Pauzy v rámci 8-krokového procesu aktualizácie RouterOS. Platia pre manuálny aj naplánovaný update.
+                        Pauzy v rámci 9-krokového procesu aktualizácie RouterOS. Platia pre manuálny aj naplánovaný update.
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label for="updater_stabilization_delay" class="block mb-2 font-medium">Krok 5 – stabilizačná pauza po reštarte OS (sekundy)</label>
+                            <label for="updater_stabilization_delay" class="block mb-2 font-medium">Krok 6 – stabilizačná pauza po reštarte OS (sekundy)</label>
                             <input type="number" id="updater_stabilization_delay" name="updater_stabilization_delay"
                                 class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 value="120" min="10" max="600">
                             <small class="text-gray-400 block mt-1">Čakanie po opätovnom nabehnutí zariadenia pred kontrolou firmvéru. Predvolené: 120 sekúnd.</small>
                         </div>
                         <div>
-                            <label for="updater_pre_reboot_delay" class="block mb-2 font-medium">Krok 7 – pauza pred finálnym reštartom (sekundy)</label>
+                            <label for="updater_pre_reboot_delay" class="block mb-2 font-medium">Krok 8 – pauza pred finálnym reštartom (sekundy)</label>
                             <input type="number" id="updater_pre_reboot_delay" name="updater_pre_reboot_delay"
                                 class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 value="20" min="5" max="300">

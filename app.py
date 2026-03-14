@@ -112,6 +112,7 @@ SETTING_LABELS = {
     'notify_password_recovery_failure': 'Notifikácia: neúspešná obnova hesla',
     'notify_new_routeros_version': 'Notifikácia: nová verzia RouterOS (RSS)',
     'updater_backup_before_update': 'Záloha pred aktualizáciou',
+    'updater_post_backup_delay': 'Pauza po zálohe pred aktualizáciou',
     'viewport': 'Režim zobrazenia'
 }
 
@@ -125,6 +126,7 @@ SETTING_VALUE_SUFFIXES = {
     'ping_retention_days': ' dní',
     'ping_retries': ' pokusov',
     'backup_delay_seconds': ' s',
+    'updater_post_backup_delay': ' s',
     'backup_retention_count': ' ks',
     'snmp_check_interval_minutes': ' min',
     'snmp_health_check_interval_minutes': ' min',
@@ -197,6 +199,7 @@ DEFAULT_SETTING_VALUES = {
     'backup_detailed_logging': 'false',
     'ftp_port': '21',
     'updater_backup_before_update': 'true',
+    'updater_post_backup_delay': '10',
     'updater_stabilization_delay': '120',
     'updater_pre_reboot_delay': '20'
 }
@@ -894,8 +897,9 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retry_interval', '20'))  # Retry interval pri výpadku v sekundách
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('bulk_update_delay_seconds', '60'))  # Oneskorenie medzi zariadeniami pri hromadnej aktualizácii
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_backup_before_update', 'true'))  # Záloha pred aktualizáciou
-        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_stabilization_delay', '120'))  # Pauza po reštarte OS (krok 5)
-        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_pre_reboot_delay', '20'))  # Pauza pred finálnym reštartom (krok 7)
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_post_backup_delay', '10'))  # Pauza po zálohe pred aktualizáciou
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_stabilization_delay', '120'))  # Pauza po reštarte OS (krok 6)
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_pre_reboot_delay', '20'))  # Pauza pred finálnym reštartom (krok 8)
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retries', '3'))  # Počet neúspešných pokusov pred označením offline
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_timeout', '5'))  # Timeout pre jeden ping
         additional_defaults = {
@@ -2755,7 +2759,7 @@ def api_updater_run_update(device_id):
 @app.route('/api/updater/run-update-os/<int:device_id>', methods=['POST'])
 @login_required
 def api_updater_run_update_os(device_id):
-    """Spustí manuálny RouterOS-only update (kroky 1–4) ako server-side daemon thread."""
+    """Spustí manuálny RouterOS-only update (kroky 1–5) ako server-side daemon thread."""
     if device_id in _running_manual_updates:
         return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
@@ -2769,7 +2773,7 @@ def api_updater_run_update_os(device_id):
 @app.route('/api/updater/run-update-firmware/<int:device_id>', methods=['POST'])
 @login_required
 def api_updater_run_update_firmware(device_id):
-    """Spustí manuálny Firmware-only update (kroky 1–4) ako server-side daemon thread."""
+    """Spustí manuálny Firmware-only update (kroky 1–5) ako server-side daemon thread."""
     if device_id in _running_manual_updates:
         return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
@@ -4352,15 +4356,33 @@ def _wait_device_online(device_id, timeout=300, interval=15):
         time.sleep(interval)
     return False
 
+def _run_post_backup_delay(delay_seconds, device_name, device_ip, _emit, _step_done):
+    """Samostatný krok pauzy medzi zálohou a spustením aktualizácie."""
+    if delay_seconds <= 0:
+        _step_done(2, msg='Pauza po zálohe je vypnutá.')
+        return
+
+    add_log('info', f'Záloha pred update [{device_name}]: čakám {delay_seconds}s pred spustením aktualizácie', device_ip)
+    for remaining in range(delay_seconds, 0, -1):
+        if remaining == delay_seconds or remaining <= 5 or remaining % 5 == 0:
+            _emit('step_active', step=2, msg=f'Čakám {remaining}s po zálohe pred spustením aktualizácie...')
+        time.sleep(1)
+    _step_done(2, msg='Pauza po zálohe dokončená, pokračujem aktualizáciou...')
+
 def _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
     """Spustí existujúcu logiku zálohy ako prvý krok aktualizácie."""
     with get_db_connection() as conn:
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
 
     enabled = settings.get('updater_backup_before_update', 'true').lower() == 'true'
+    try:
+        post_backup_delay = max(0, int(settings.get('updater_post_backup_delay', 10)))
+    except (TypeError, ValueError):
+        post_backup_delay = 10
     if not enabled:
         add_log('info', f'Záloha pred update [{device_name}]: preskočená (vypnuté v nastaveniach)', device_ip)
         _step_done(1, msg='Záloha pred aktualizáciou je vypnutá.')
+        _step_done(2, msg='Pauza po zálohe preskočená, keďže záloha je vypnutá.')
         return True
 
     _emit('step_active', step=1, msg='Vytváram zálohu konfigurácie...')
@@ -4399,14 +4421,17 @@ def _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_do
     if status == 'skipped':
         add_log('info', f'Záloha pred update [{device_name}]: žiadne zmeny v konfigurácii', device_ip)
         _step_done(1, msg='Záloha preskočená, konfigurácia je bez zmien.')
+        _step_done(2, msg='Pauza po zálohe preskočená, keďže nebolo čo zálohovať.')
         return True
     if status == 'success':
         add_log('info', f'Záloha pred update [{device_name}]: záloha vytvorená', device_ip)
         _step_done(1, msg='Záloha konfigurácie dokončená.')
+        _run_post_backup_delay(post_backup_delay, device_name, device_ip, _emit, _step_done)
         return True
 
     add_log('warning', f'Záloha pred update [{device_name}]: neznámy status ({status})', device_ip)
     _step_done(1, msg='Záloha dokončená, status nebol špecifikovaný.')
+    _step_done(2, msg='Pauza po zálohe preskočená, status zálohy nie je jednoznačný.')
     return True
 
 def run_scheduled_update(schedule_id):
@@ -4511,11 +4536,11 @@ def run_scheduled_update(schedule_id):
             _probe_fw_val = fw_probe_info.get('current-firmware', '')
             is_vm = bool(fw_probe_err) or not _probe_fw_val or _probe_fw_val == 'N/A'
 
-            # Krok 2: Zisti dostupnosť OS update
-            _emit('step_active', step=2, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
+            # Krok 3: Zisti dostupnosť OS update
+            _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
             os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
             if err:
-                _emit('step_error', step=2)
+                _emit('step_error', step=3)
                 _fail(f'Zariadenie nedostupné: {err}')
                 return
 
@@ -4531,40 +4556,40 @@ def run_scheduled_update(schedule_id):
 
             if has_os_update:
                 add_log('info', f'Naplánovaný update [{device_name}]: Inštalujem RouterOS {installed} → {latest}', device_ip)
-                _emit('step_active', step=2, msg=f'Inštalujem RouterOS {installed} → {latest}...')
+                _emit('step_active', step=3, msg=f'Inštalujem RouterOS {installed} → {latest}...')
                 _, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
                 # 500 = connection error – device started updating and rebooted before responding
                 if err and code != 500:
-                    _emit('step_error', step=2)
-                    _fail(f'Chyba inštalácie OS: {err}')
-                    return
-                _step_done(2)
-
-                # Krok 3: Čakaj offline
-                add_log('info', f'Naplánovaný update [{device_name}]: Čakám na reštart...', device_ip)
-                _emit('step_active', step=3, msg='Čakám na reštart zariadenia...')
-                if not _wait_device_offline(device_id, timeout=240):
                     _emit('step_error', step=3)
-                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
+                    _fail(f'Chyba inštalácie OS: {err}')
                     return
                 _step_done(3)
 
-                # Krok 4: Čakaj online
-                add_log('info', f'Naplánovaný update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
-                _emit('step_active', step=4, msg='Čakám kým zariadenie nabootuje...')
-                if not _wait_device_online(device_id, timeout=300):
+                # Krok 4: Čakaj offline
+                add_log('info', f'Naplánovaný update [{device_name}]: Čakám na reštart...', device_ip)
+                _emit('step_active', step=4, msg='Čakám na reštart zariadenia...')
+                if not _wait_device_offline(device_id, timeout=240):
                     _emit('step_error', step=4)
-                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
                     return
                 _step_done(4)
 
-                # VM/CHR – žiadny routerboard, preskočiť kroky 5-6-7-8
+                # Krok 5: Čakaj online
+                add_log('info', f'Naplánovaný update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
+                _emit('step_active', step=5, msg='Čakám kým zariadenie nabootuje...')
+                if not _wait_device_online(device_id, timeout=300):
+                    _emit('step_error', step=5)
+                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    return
+                _step_done(5)
+
+                # VM/CHR – žiadny routerboard, preskočiť kroky 6-7-8-9
                 if is_vm:
                     add_log('info', f'Naplánovaný update [{device_name}]: VM/CHR – firmware nie je potrebný, končím.', device_ip)
-                    _step_done(5, msg='VM/CHR – firmware preskočený.')
                     _step_done(6)
                     _step_done(7)
                     _step_done(8)
+                    _step_done(9, msg='VM/CHR – firmware preskočený.')
                     fw_summary = 'bez routerboardu (VM/CHR)'
                     msg = f'RouterOS: {installed} → {latest} | Firmware: {fw_summary}'
                     add_log('info', f'Naplánovaný update [{device_name}]: Dokončený. {msg}', device_ip)
@@ -4583,24 +4608,24 @@ def run_scheduled_update(schedule_id):
                     record_update_completion(device_id)
                     return
 
-                # Krok 5: stabilizácia (iba pre zariadenia s routerboardom)
+                # Krok 6: stabilizácia (iba pre zariadenia s routerboardom)
                 add_log('info', f'Naplánovaný update [{device_name}]: Online, čakám {stabilization_delay}s stabilizáciu...', device_ip)
-                _emit('step_active', step=5, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
+                _emit('step_active', step=6, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
                 time.sleep(stabilization_delay)
-                _step_done(5)
+                _step_done(6)
             else:
                 add_log('info', f'Naplánovaný update [{device_name}]: RouterOS {installed} je aktuálny, preskakujem.', device_ip)
-                _step_done(2, msg=f'RouterOS {installed} je aktuálny.')
                 _step_done(3)
                 _step_done(4)
                 _step_done(5)
+                _step_done(6, msg=f'RouterOS {installed} je aktuálny.')
 
             # VM/CHR bez OS update – preskočiť firmware kroky
             if is_vm:
                 add_log('info', f'Naplánovaný update [{device_name}]: VM/CHR – firmware kroky preskočené.', device_ip)
-                _step_done(6, msg='VM/CHR – firmware nie je dostupný.')
                 _step_done(7)
                 _step_done(8)
+                _step_done(9, msg='VM/CHR – firmware nie je dostupný.')
                 fw_summary = 'bez routerboardu (VM/CHR)'
                 msg = f'RouterOS: {installed} ({"aktualizovaný" if has_os_update else "aktuálny"}) | Firmware: {fw_summary}'
                 add_log('info', f'Naplánovaný update [{device_name}]: Dokončený. {msg}', device_ip)
@@ -4619,8 +4644,8 @@ def run_scheduled_update(schedule_id):
                 record_update_completion(device_id)
                 return
 
-            # Krok 6: Zisti dostupnosť firmware update
-            _emit('step_active', step=6, msg='Kontrolujem verzie firmware...')
+            # Krok 7: Zisti dostupnosť firmware update
+            _emit('step_active', step=7, msg='Kontrolujem verzie firmware...')
             fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
             fw_info = {}
             if not err:
@@ -4635,34 +4660,34 @@ def run_scheduled_update(schedule_id):
 
             if has_fw_update:
                 add_log('info', f'Naplánovaný update [{device_name}]: Inštalujem Firmware {fw_current} → {fw_upgrade}', device_ip)
-                _emit('step_active', step=6, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
+                _emit('step_active', step=7, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
                 _, err, _ = mk_api(device_id, 'POST', 'system/routerboard/upgrade')
                 if err:
-                    _emit('step_error', step=6)
+                    _emit('step_error', step=7)
                     _fail(f'Chyba inštalácie firmware: {err}')
                     return
-                _step_done(6)
-
-                # Krok 7: čakanie pred finálnym reštartom
-                _emit('step_active', step=7, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
-                time.sleep(pre_reboot_delay)
                 _step_done(7)
 
-                # Krok 8: Finálny reštart
+                # Krok 8: čakanie pred finálnym reštartom
+                _emit('step_active', step=8, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
+                time.sleep(pre_reboot_delay)
+                _step_done(8)
+
+                # Krok 9: Finálny reštart
                 add_log('info', f'Naplánovaný update [{device_name}]: Finálny reštart...', device_ip)
-                _emit('step_active', step=8, msg='Odosielam príkaz na finálny reštart...')
+                _emit('step_active', step=9, msg='Odosielam príkaz na finálny reštart...')
                 mk_api(device_id, 'POST', 'system/reboot')
                 _wait_device_offline(device_id, timeout=120)
                 if not _wait_device_online(device_id, timeout=300):
-                    _emit('step_error', step=8)
+                    _emit('step_error', step=9)
                     _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
                     return
-                _step_done(8)
+                _step_done(9)
             else:
                 add_log('info', f'Naplánovaný update [{device_name}]: Firmware je aktuálny alebo nie je podporovaný, preskakujem.', device_ip)
-                _step_done(6, msg='Firmware je aktuálny.')
                 _step_done(7)
                 _step_done(8)
+                _step_done(9, msg='Firmware je aktuálny.')
 
             # Hotovo
             if not fw_current:
@@ -4798,11 +4823,11 @@ def run_device_update(device_id):
             _probe_fw_val = fw_probe_info.get('current-firmware', '')
             is_vm = bool(fw_probe_err) or not _probe_fw_val or _probe_fw_val == 'N/A'
 
-            # Krok 2: Zisti dostupnosť OS update
-            _emit('step_active', step=2, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
+            # Krok 3: Zisti dostupnosť OS update
+            _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
             os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
             if err:
-                _emit('step_error', step=2)
+                _emit('step_error', step=3)
                 _fail(f'Zariadenie nedostupné: {err}')
                 return
 
@@ -4818,36 +4843,36 @@ def run_device_update(device_id):
 
             if has_os_update:
                 add_log('info', f'Manuálny update [{device_name}]: Inštalujem RouterOS {installed} → {latest}', device_ip)
-                _emit('step_active', step=2, msg=f'Inštalujem RouterOS {installed} → {latest}...')
+                _emit('step_active', step=3, msg=f'Inštalujem RouterOS {installed} → {latest}...')
                 _, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
                 if err and code != 500:
-                    _emit('step_error', step=2)
-                    _fail(f'Chyba inštalácie OS: {err}')
-                    return
-                _step_done(2)
-
-                # Krok 3: Čakaj offline
-                add_log('info', f'Manuálny update [{device_name}]: Čakám na reštart...', device_ip)
-                _emit('step_active', step=3, msg='Čakám na reštart zariadenia...')
-                if not _wait_device_offline(device_id, timeout=240):
                     _emit('step_error', step=3)
-                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
+                    _fail(f'Chyba inštalácie OS: {err}')
                     return
                 _step_done(3)
 
-                # Krok 4: Čakaj online
-                add_log('info', f'Manuálny update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
-                _emit('step_active', step=4, msg='Čakám kým zariadenie nabootuje...')
-                if not _wait_device_online(device_id, timeout=300):
+                # Krok 4: Čakaj offline
+                add_log('info', f'Manuálny update [{device_name}]: Čakám na reštart...', device_ip)
+                _emit('step_active', step=4, msg='Čakám na reštart zariadenia...')
+                if not _wait_device_offline(device_id, timeout=240):
                     _emit('step_error', step=4)
-                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
                     return
                 _step_done(4)
+
+                # Krok 5: Čakaj online
+                add_log('info', f'Manuálny update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
+                _emit('step_active', step=5, msg='Čakám kým zariadenie nabootuje...')
+                if not _wait_device_online(device_id, timeout=300):
+                    _emit('step_error', step=5)
+                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    return
+                _step_done(5)
 
                 if is_vm:
                     # VM/CHR – no routerboard, skip stabilisation + firmware steps
                     add_log('info', f'Manuálny update [{device_name}]: VM/CHR zariadenie, preskakujem firmware kroky.', device_ip)
-                    for s in [5, 6, 7, 8]:
+                    for s in [6, 7, 8, 9]:
                         _step_done(s)
                     msg = f'RouterOS: {installed} → {latest} | Firmware: bez routerboardu (VM/CHR)'
                     add_log('info', f'Manuálny update [{device_name}]: Dokončený. {msg}', device_ip)
@@ -4860,19 +4885,19 @@ def run_device_update(device_id):
                     record_update_completion(device_id)
                     return
 
-                # Krok 5: stabilizácia
+                # Krok 6: stabilizácia
                 add_log('info', f'Manuálny update [{device_name}]: Online, čakám {stabilization_delay}s stabilizáciu...', device_ip)
-                _emit('step_active', step=5, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
+                _emit('step_active', step=6, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
                 time.sleep(stabilization_delay)
-                _step_done(5)
+                _step_done(6)
             else:
                 add_log('info', f'Manuálny update [{device_name}]: RouterOS {installed} je aktuálny, preskakujem.', device_ip)
-                _step_done(2, msg=f'RouterOS {installed} je aktuálny.')
-                for s in [3, 4, 5]:
+                _step_done(3, msg=f'RouterOS {installed} je aktuálny.')
+                for s in [4, 5, 6]:
                     _step_done(s)
 
-            # Krok 6: Zisti dostupnosť firmware update
-            _emit('step_active', step=6, msg='Kontrolujem verzie firmware...')
+            # Krok 7: Zisti dostupnosť firmware update
+            _emit('step_active', step=7, msg='Kontrolujem verzie firmware...')
             fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
             fw_info = {}
             if not err:
@@ -4887,33 +4912,33 @@ def run_device_update(device_id):
 
             if has_fw_update:
                 add_log('info', f'Manuálny update [{device_name}]: Inštalujem Firmware {fw_current} → {fw_upgrade}', device_ip)
-                _emit('step_active', step=6, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
+                _emit('step_active', step=7, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
                 _, err, _ = mk_api(device_id, 'POST', 'system/routerboard/upgrade')
                 if err:
-                    _emit('step_error', step=6)
+                    _emit('step_error', step=7)
                     _fail(f'Chyba inštalácie firmware: {err}')
                     return
-                _step_done(6)
-
-                # Krok 7: čakanie pred finálnym reštartom
-                _emit('step_active', step=7, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
-                time.sleep(pre_reboot_delay)
                 _step_done(7)
 
-                # Krok 8: Finálny reštart
+                # Krok 8: čakanie pred finálnym reštartom
+                _emit('step_active', step=8, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
+                time.sleep(pre_reboot_delay)
+                _step_done(8)
+
+                # Krok 9: Finálny reštart
                 add_log('info', f'Manuálny update [{device_name}]: Finálny reštart...', device_ip)
-                _emit('step_active', step=8, msg='Odosielam príkaz na finálny reštart...')
+                _emit('step_active', step=9, msg='Odosielam príkaz na finálny reštart...')
                 mk_api(device_id, 'POST', 'system/reboot')
                 _wait_device_offline(device_id, timeout=120)
                 if not _wait_device_online(device_id, timeout=300):
-                    _emit('step_error', step=8)
+                    _emit('step_error', step=9)
                     _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
                     return
-                _step_done(8)
+                _step_done(9)
             else:
                 add_log('info', f'Manuálny update [{device_name}]: Firmware je aktuálny alebo nie je podporovaný, preskakujem.', device_ip)
-                _step_done(6, msg='Firmware je aktuálny.')
-                for s in [7, 8]:
+                _step_done(7, msg='Firmware je aktuálny.')
+                for s in [8, 9]:
                     _step_done(s)
 
             # Hotovo
@@ -4951,7 +4976,7 @@ def run_device_update(device_id):
 
 
 def run_device_update_os(device_id):
-    """Vykoná manuálny RouterOS-only update (kroky 1–4) pre zariadenie (server-side daemon thread)."""
+    """Vykoná manuálny RouterOS-only update (kroky 1–5) pre zariadenie (server-side daemon thread)."""
     with app.app_context():
         try:
             with get_db_connection() as conn:
@@ -5016,11 +5041,11 @@ def run_device_update_os(device_id):
             if not _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
                 return
 
-            # Krok 2: Zisti dostupnosť OS update
-            _emit('step_active', step=2, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
+            # Krok 3: Zisti dostupnosť OS update
+            _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
             os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
             if err:
-                _emit('step_error', step=2)
+                _emit('step_error', step=3)
                 _fail(f'Zariadenie nedostupné: {err}')
                 return
 
@@ -5036,35 +5061,35 @@ def run_device_update_os(device_id):
 
             if has_os_update:
                 add_log('info', f'RouterOS update [{device_name}]: Inštalujem RouterOS {installed} → {latest}', device_ip)
-                _emit('step_active', step=2, msg=f'Inštalujem RouterOS {installed} → {latest}...')
+                _emit('step_active', step=3, msg=f'Inštalujem RouterOS {installed} → {latest}...')
                 _, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
                 if err and code != 500:
-                    _emit('step_error', step=2)
-                    _fail(f'Chyba inštalácie OS: {err}')
-                    return
-                _step_done(2)
-
-                # Krok 3: Čakaj offline
-                add_log('info', f'RouterOS update [{device_name}]: Čakám na reštart...', device_ip)
-                _emit('step_active', step=3, msg='Čakám na reštart zariadenia...')
-                if not _wait_device_offline(device_id, timeout=240):
                     _emit('step_error', step=3)
-                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
+                    _fail(f'Chyba inštalácie OS: {err}')
                     return
                 _step_done(3)
 
-                # Krok 4: Čakaj online
-                add_log('info', f'RouterOS update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
-                _emit('step_active', step=4, msg='Čakám kým zariadenie nabootuje...')
-                if not _wait_device_online(device_id, timeout=300):
+                # Krok 4: Čakaj offline
+                add_log('info', f'RouterOS update [{device_name}]: Čakám na reštart...', device_ip)
+                _emit('step_active', step=4, msg='Čakám na reštart zariadenia...')
+                if not _wait_device_offline(device_id, timeout=240):
                     _emit('step_error', step=4)
-                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    _fail('Zariadenie sa nereštartovalo po aktualizácii OS (timeout 240s)')
                     return
                 _step_done(4)
+
+                # Krok 5: Čakaj online
+                add_log('info', f'RouterOS update [{device_name}]: Zariadenie offline, čakám na boot...', device_ip)
+                _emit('step_active', step=5, msg='Čakám kým zariadenie nabootuje...')
+                if not _wait_device_online(device_id, timeout=300):
+                    _emit('step_error', step=5)
+                    _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    return
+                _step_done(5)
             else:
                 add_log('info', f'RouterOS update [{device_name}]: RouterOS {installed} je aktuálny.', device_ip)
-                _step_done(2, msg=f'RouterOS {installed} je aktuálny.')
-                for s in [3, 4]:
+                _step_done(3, msg=f'RouterOS {installed} je aktuálny.')
+                for s in [4, 5]:
                     _step_done(s)
 
             msg = f'RouterOS: {installed} → {latest if has_os_update else installed}'
@@ -5095,7 +5120,7 @@ def run_device_update_os(device_id):
 
 
 def run_device_update_firmware(device_id):
-    """Vykoná manuálny Firmware-only update (kroky 1–4, mapované z krokov 6–8) pre zariadenie."""
+    """Vykoná manuálny Firmware-only update (kroky 1–5, mapované z krokov 7–9) pre zariadenie."""
     with app.app_context():
         try:
             with get_db_connection() as conn:
@@ -5167,8 +5192,8 @@ def run_device_update_firmware(device_id):
             if not _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
                 return
 
-            # Krok 2 (≡ pôv. krok 6): Zisti dostupnosť firmware update
-            _emit('step_active', step=2, msg='Kontrolujem verzie firmware...')
+            # Krok 3 (≡ pôv. krok 7): Zisti dostupnosť firmware update
+            _emit('step_active', step=3, msg='Kontrolujem verzie firmware...')
             fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
             fw_info = {}
             if not err:
@@ -5184,8 +5209,8 @@ def run_device_update_firmware(device_id):
             if not fw_current:
                 # VM/CHR – žiadny routerboard
                 add_log('info', f'Firmware update [{device_name}]: VM/CHR zariadenie, firmware nie je podporovaný.', device_ip)
-                _step_done(2, msg='Firmware nie je podporovaný (VM/CHR).')
-                for s in [3, 4]:
+                _step_done(3, msg='Firmware nie je podporovaný (VM/CHR).')
+                for s in [4, 5]:
                     _step_done(s)
                 _emit('done', msg='✅ Firmware update dokončený! (VM/CHR – bez routerboardu)')
                 send_pushover_notification(
@@ -5198,33 +5223,33 @@ def run_device_update_firmware(device_id):
 
             if has_fw_update:
                 add_log('info', f'Firmware update [{device_name}]: Inštalujem Firmware {fw_current} → {fw_upgrade}', device_ip)
-                _emit('step_active', step=2, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
+                _emit('step_active', step=3, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
                 _, err, _ = mk_api(device_id, 'POST', 'system/routerboard/upgrade')
                 if err:
-                    _emit('step_error', step=2)
+                    _emit('step_error', step=3)
                     _fail(f'Chyba inštalácie firmware: {err}')
                     return
-                _step_done(2)
-
-                # Krok 3 (≡ pôv. krok 7): čakanie pred finálnym reštartom
-                _emit('step_active', step=3, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
-                time.sleep(pre_reboot_delay)
                 _step_done(3)
 
-                # Krok 4 (≡ pôv. krok 8): Finálny reštart
+                # Krok 4 (≡ pôv. krok 8): čakanie pred finálnym reštartom
+                _emit('step_active', step=4, msg=f'Čakám {pre_reboot_delay}s pred finálnym reštartom...')
+                time.sleep(pre_reboot_delay)
+                _step_done(4)
+
+                # Krok 5 (≡ pôv. krok 9): Finálny reštart
                 add_log('info', f'Firmware update [{device_name}]: Finálny reštart...', device_ip)
-                _emit('step_active', step=4, msg='Odosielam príkaz na finálny reštart...')
+                _emit('step_active', step=5, msg='Odosielam príkaz na finálny reštart...')
                 mk_api(device_id, 'POST', 'system/reboot')
                 _wait_device_offline(device_id, timeout=120)
                 if not _wait_device_online(device_id, timeout=300):
-                    _emit('step_error', step=4)
+                    _emit('step_error', step=5)
                     _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
                     return
-                _step_done(4)
+                _step_done(5)
             else:
                 add_log('info', f'Firmware update [{device_name}]: Firmware je aktuálny, preskakujem.', device_ip)
-                _step_done(2, msg=f'Firmware {fw_current} je aktuálny.')
-                for s in [3, 4]:
+                _step_done(3, msg=f'Firmware {fw_current} je aktuálny.')
+                for s in [4, 5]:
                     _step_done(s)
 
             fw_summary = f'{fw_current} → {fw_upgrade}' if has_fw_update else f'{fw_current} (aktuálny)'

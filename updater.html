@@ -796,6 +796,41 @@
             max-width: 700px;
             max-height: 80vh;
             overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(75, 85, 99, 0.4) transparent;
+        }
+
+        .modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .modal-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .modal-content::-webkit-scrollbar-thumb {
+            background-color: rgba(75, 85, 99, 0.4);
+            border-radius: 3px;
+        }
+
+        .modal-content::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(107, 114, 128, 0.6);
+        }
+
+        .modal-content::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        body.light-theme .modal-content {
+            scrollbar-color: rgba(100, 116, 139, 0.3) transparent;
+        }
+
+        body.light-theme .modal-content::-webkit-scrollbar-thumb {
+            background-color: rgba(100, 116, 139, 0.25);
+        }
+
+        body.light-theme .modal-content::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(100, 116, 139, 0.45);
         }
 
         /* Light Theme */

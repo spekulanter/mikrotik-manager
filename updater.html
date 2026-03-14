@@ -3405,10 +3405,21 @@
             }
 
             document.getElementById('scheduleModalError').style.display = 'none';
-            const minDt = new Date(Date.now() + 5 * 60000);
+            const minDt = new Date(Date.now() + 1 * 60000);
+            // Round to next :00 or :30
+            const rounded = new Date(minDt);
+            const mins = rounded.getMinutes();
+            if (mins === 0 || mins === 30) {
+                // already round, keep as is
+            } else if (mins < 30) {
+                rounded.setMinutes(30, 0, 0);
+            } else {
+                rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
+            }
             if (window._fpInstance) {
                 window._fpInstance.clear();
                 window._fpInstance.set('minDate', minDt);
+                window._fpInstance.setDate(rounded, true);
             }
             document.getElementById('scheduleModal').style.display = 'flex';
         }

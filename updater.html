@@ -1798,9 +1798,18 @@
                 const json = await res.json();
                 if (json.status === 'success' && json.data.latest) {
                     rssData = json.data.latest;
-                    const _d = new Date(rssData.pubDate);
-                    const _p = n => String(n).padStart(2, '0');
-                    const pubDateLocal = `${_p(_d.getDate())}.${_p(_d.getMonth() + 1)}.${_d.getFullYear()} ${_p(_d.getHours())}:${_p(_d.getMinutes())}`;
+                    let pubDateLocal = '';
+                    if (rssData.release_date) {
+                        // Format: "2026-Mar-09 10:38" -> "09.03.2026 10:38"
+                        const _months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+                        const _m = rssData.release_date.match(/(\d{4})-(\w{3})-(\d{2})\s+(\d{2}:\d{2})/);
+                        if (_m) pubDateLocal = `${_m[3]}.${_months[_m[2]]}.${_m[1]} ${_m[4]}`;
+                    }
+                    if (!pubDateLocal) {
+                        const _d = new Date(rssData.pubDate);
+                        const _p = n => String(n).padStart(2, '0');
+                        pubDateLocal = `${_p(_d.getDate())}.${_p(_d.getMonth() + 1)}.${_d.getFullYear()} ${_p(_d.getHours())}:${_p(_d.getMinutes())}`;
+                    }
                     document.getElementById('rssLatestVersion').innerHTML =
                         `<strong>RouterOS ${rssData.version}</strong> <br class="mobile-break">(Vydané: ${pubDateLocal})`;
                     document.getElementById('btnShowChangelog').style.display = 'inline-flex';

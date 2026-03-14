@@ -2045,11 +2045,17 @@ def fetch_mikrotik_rss():
                     elif desc_el is not None and desc_el.text:
                         desc = desc_el.text
                         
+                    release_date = ''
+                    release_date_match = re.search(r"What's new in [\d\.]+\s*\((\d{4}-\w{3}-\d{2}\s+[\d:]+)\)", desc)
+                    if release_date_match:
+                        release_date = release_date_match.group(1)
+
                     items.append({
                         'title': title,
                         'version': version,
                         'description': desc,
-                        'pubDate': item.find('pubDate').text if item.find('pubDate') is not None else ''
+                        'pubDate': item.find('pubDate').text if item.find('pubDate') is not None else '',
+                        'release_date': release_date
                     })
         
         latest = items[0] if items else None
@@ -2074,7 +2080,7 @@ def fetch_mikrotik_rss():
                         if settings_dict.get('notify_new_routeros_version', 'false').lower() == 'true':
                             add_log('info', f"Nová verzia RouterOS z RSS feedu: {current_latest}")
                             send_pushover_notification(
-                                f"📣 Nová verzia RouterOS!\nVerzia: {current_latest}\nDátum: {latest.get('pubDate', '')}",
+                                f"📣 Nová verzia RouterOS!\nVerzia: {current_latest}\nDátum: {latest.get('release_date') or latest.get('pubDate', '')}",
                                 notification_key='notify_new_routeros_version'
                             )
 
@@ -3584,7 +3590,29 @@ def handle_settings():
 @app.route('/api/notifications/test', methods=['POST'])
 @login_required
 def test_notification():
-    send_pushover_notification("🔔 Toto je testovacia správa z MikroTik Manager.")
+    data = request.get_json(silent=True) or {}
+    notif_type = data.get('type', 'general')
+
+    test_messages = {
+        'general':                      ("🔔 Toto je testovacia správa z MikroTik Manager.", "Test – MikroTik Manager"),
+        'notify_device_offline':        ("🔴 Test: Zariadenie offline\nZariadenie: Router-Test (192.168.1.1)\nPosledný úspešný ping: pred 35 sekundami.", "Test – Zariadenie Offline"),
+        'notify_device_online':         ("✅ Test: Zariadenie online\nZariadenie: Router-Test (192.168.1.1)\nZariadenie je opäť dostupné.", "Test – Zariadenie Online"),
+        'notify_backup_success':        ("✅ Test: Záloha úspešná\nZariadenie: Router-Test (192.168.1.1)\nSúbory: backup_test.backup, export_test.rsc", "Test – Úspešná Záloha"),
+        'notify_backup_failure':        ("❌ Test: Záloha zlyhala\nZariadenie: Router-Test (192.168.1.1)\nChyba: SSH connection timeout", "Test – Neúspešná Záloha"),
+        'notify_failed_login':          ("🔐 Test: Neúspešné prihlásenie\nIP: 10.0.0.1\nPokus o prihlásenie s nesprávnym heslom.", "Test – Neúspešné Prihlásenie"),
+        'notify_failed_2fa':            ("🛡️ Test: Neúspešné 2FA overenie\nIP: 10.0.0.1\nNesprávny TOTP kód.", "Test – Neúspešné 2FA"),
+        'notify_password_recovery_failure': ("🚨 Test: Neúspešná obnova hesla\nIP: 10.0.0.1\nNeplatný kód alebo záložný kód.", "Test – Neúspešná Obnova Hesla"),
+        'notify_temp_critical':         ("🌡️ Test: Kritická teplota\nZariadenie: Router-Test (192.168.1.1)\nTeplota: 78°C (prah: 75°C)", "Test – Kritická Teplota"),
+        'notify_cpu_critical':          ("🖥️ Test: Kritická záťaž CPU\nZariadenie: Router-Test (192.168.1.1)\nCPU: 92% (prah: 80%)", "Test – Kritická CPU"),
+        'notify_memory_critical':       ("💾 Test: Kritická pamäť\nZariadenie: Router-Test (192.168.1.1)\nPamäť: 87% (prah: 80%)", "Test – Kritická Pamäť"),
+        'notify_reboot_detected':       ("🔄 Test: Reboot detekovaný\nZariadenie: Router-Test (192.168.1.1)\nUptime reset na 00:00:05.", "Test – Reboot Detekovaný"),
+        'notify_version_change':        ("🆕 Test: Zmena verzie OS\nZariadenie: Router-Test (192.168.1.1)\nStarý: 7.21 → Nový: 7.22", "Test – Zmena Verzie OS"),
+        'notify_cert_expiry':           ("🔐 Test: TLS certifikát expiruje\nZariadenie: Router-Test (192.168.1.1)\nCertifikát expiruje za 5 dní.", "Test – TLS Certifikát"),
+        'notify_new_routeros_version':  ("📣 Test: Nová verzia RouterOS\nVerzia: 7.22\nDátum: 09.03.2026 10:38", "Test – Nová Verzia RouterOS"),
+    }
+
+    msg, title = test_messages.get(notif_type, test_messages['general'])
+    send_pushover_notification(msg, title=title)
     return jsonify({'status': 'success'})
 
 @app.route('/api/snmp/timers/status', methods=['GET'])

@@ -942,10 +942,43 @@
                     </div>
 
                     <div>
-                        <button type="button" id="testPushoverBtn"
-                            class="btn bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg w-full flex items-center justify-center gap-2">
-                            <i class="fas fa-paper-plane"></i> Otestovať Notifikáciu
-                        </button>
+                        <h3 class="text-lg font-semibold mb-3">Otestovať notifikáciu</h3>
+                        <div class="flex gap-3">
+                            <select id="testNotifType"
+                                class="flex-1 p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm">
+                                <option value="general">🔔 Všeobecná (základná)</option>
+                                <optgroup label="Dostupnosť zariadení">
+                                    <option value="notify_device_offline">🔴 Zariadenie offline (ICMP)</option>
+                                    <option value="notify_device_online">✅ Zariadenie online (ICMP)</option>
+                                </optgroup>
+                                <optgroup label="Zálohovanie">
+                                    <option value="notify_backup_success">✅ Úspešná záloha</option>
+                                    <option value="notify_backup_failure">❌ Neúspešná záloha</option>
+                                </optgroup>
+                                <optgroup label="Bezpečnosť">
+                                    <option value="notify_failed_login">🔐 Neúspešné prihlásenie</option>
+                                    <option value="notify_failed_2fa">🛡️ Neúspešné 2FA overenie</option>
+                                    <option value="notify_password_recovery_failure">🚨 Neúspešná obnova hesla</option>
+                                </optgroup>
+                                <optgroup label="Výkon (SNMP)">
+                                    <option value="notify_temp_critical">🌡️ Kritická teplota</option>
+                                    <option value="notify_cpu_critical">🖥️ Kritická záťaž CPU</option>
+                                    <option value="notify_memory_critical">💾 Kritická pamäť</option>
+                                </optgroup>
+                                <optgroup label="Systémové udalosti">
+                                    <option value="notify_reboot_detected">🔄 Reboot detekovaný</option>
+                                    <option value="notify_version_change">🆕 Zmena verzie OS</option>
+                                </optgroup>
+                                <optgroup label="Updater / TLS">
+                                    <option value="notify_cert_expiry">🔐 TLS certifikát expiruje</option>
+                                    <option value="notify_new_routeros_version">📣 Nová verzia RouterOS (RSS)</option>
+                                </optgroup>
+                            </select>
+                            <button type="button" id="testPushoverBtn"
+                                class="btn bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-5 rounded-lg flex items-center gap-2 whitespace-nowrap">
+                                <i class="fas fa-paper-plane"></i> Otestovať
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1553,8 +1586,9 @@
         document.getElementById('settingsForm').addEventListener('submit', saveSettings);
 
         document.getElementById('testPushoverBtn').addEventListener('click', async () => {
+            const type = document.getElementById('testNotifType').value;
             try {
-                await api.post('notifications/test');
+                await api.post('notifications/test', { type });
                 showNotification('Test notifikácia bola poslaná', 'success');
             } catch (error) {
                 showNotification('Chyba pri posielaní test notifikácie', 'error');

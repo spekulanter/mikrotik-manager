@@ -994,22 +994,18 @@
                     <h3 class="text-lg font-semibold text-emerald-400 mb-4">
                         <i class="fas fa-shield-alt mr-2"></i>Bezpečnostná záloha
                     </h3>
-                    <div class="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                        <div>
-                            <label for="updater_backup_before_update" class="font-medium cursor-pointer">
-                                Záloha pred aktualizáciou
-                            </label>
-                            <small class="text-gray-400 block mt-1">
-                                Automaticky vytvoriť zálohu konfigurácie pred každou aktualizáciou.
-                                Ak záloha zlyhá, aktualizácia sa nespustí. Ak neboli žiadne zmeny v konfigurácii,
-                                záloha sa preskočí a aktualizácia pokračuje.
-                            </small>
-                        </div>
-                        <label class="toggle-switch ml-4">
+                    <div class="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <label for="updater_backup_before_update" class="flex items-center cursor-pointer">
                             <input type="checkbox" id="updater_backup_before_update"
-                                name="updater_backup_before_update">
-                            <span class="toggle-slider"></span>
+                                name="updater_backup_before_update"
+                                class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                            <span class="ml-3 font-medium">Záloha pred aktualizáciou</span>
                         </label>
+                        <small class="text-gray-400 block mt-1 ml-7">
+                            Automaticky vytvoriť zálohu konfigurácie pred každou aktualizáciou.
+                            Ak záloha zlyhá, aktualizácia sa nespustí. Ak neboli žiadne zmeny v konfigurácii,
+                            záloha sa preskočí a aktualizácia pokračuje.
+                        </small>
                     </div>
                 </div>
 

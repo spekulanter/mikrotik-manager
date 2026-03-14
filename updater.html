@@ -1684,9 +1684,41 @@
         </div>
     </div>
 
+    <!-- Custom confirm modal (replaces native confirm() which is blocked in Android WebView) -->
+    <div id="confirmModal" class="modal-overlay" style="z-index:2000;">
+        <div class="modal-content" style="max-width:360px;padding:24px 22px 20px;" onclick="event.stopPropagation()">
+            <p id="confirmModalMsg" style="font-size:15px;margin:0 0 20px;line-height:1.5;"></p>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button id="confirmModalCancel" style="background:none;border:1px solid var(--border-color);color:var(--text-color);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;">Zrušiť</button>
+                <button id="confirmModalOk" style="background:#ef4444;border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Potvrdiť</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let rssData = null;
         let devicesList = [];
+
+        // Custom confirm() replacement – works in Android WebView
+        function showConfirm(message, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmModalMsg').textContent = message;
+            modal.style.display = 'flex';
+            const ok = document.getElementById('confirmModalOk');
+            const cancel = document.getElementById('confirmModalCancel');
+            function cleanup() {
+                modal.style.display = 'none';
+                ok.replaceWith(ok.cloneNode(true));
+                cancel.replaceWith(cancel.cloneNode(true));
+            }
+            document.getElementById('confirmModalOk').addEventListener('click', function () {
+                cleanup();
+                onConfirm();
+            }, { once: true });
+            document.getElementById('confirmModalCancel').addEventListener('click', function () {
+                cleanup();
+            }, { once: true });
+        }
         let deviceDataMap = {};
         let originalOrder = [];
         let sortState = { column: 1, direction: 'asc' };
@@ -2090,6 +2122,7 @@
                 card.addEventListener('click', function (e) {
                     if (_offlineDeviceIds.has(dev.id)) return;
                     if (e.target.classList.contains('device-select-cb')) return;
+                    if (e.target.closest('button')) return;
                     const cb = card.querySelector('.device-select-cb');
                     if (cb) { cb.checked = !cb.checked; onCbChange(cb); }
                 });
@@ -2106,6 +2139,7 @@
                         </div>
                         <div class="dc-status-badge" id="card-status-${dev.id}">${initStatusHtml}</div>
                     </div>
+                    <div id="card-schedule-${dev.id}"></div>
                     <div class="dc-versions">
                         <div class="dc-ver-box">
                             <div class="dc-ver-label"><i class="fas fa-code-branch" style="margin-right:4px;"></i>RouterOS</div>
@@ -2539,8 +2573,9 @@
         }
 
         async function rebootDevice(id, btn) {
-            if (!confirm("Skutočne chcete reštartovať (reboot) toto zariadenie?")) return;
-            apiCall(`/api/updater/reboot/${id}`, btn);
+            showConfirm("Skutočne chcete reštartovať (reboot) toto zariadenie?", () => {
+                apiCall(`/api/updater/reboot/${id}`, btn);
+            });
         }
 
         async function renewSSL(id) {
@@ -3326,6 +3361,8 @@
             if (!statusEl) return;
             const existing = statusEl.querySelector('.schedule-badge');
             if (existing) existing.remove();
+            const cardScheduleElClear = document.getElementById(`card-schedule-${deviceId}`);
+            if (cardScheduleElClear) cardScheduleElClear.innerHTML = '';
             if (!schedule) return;
             const badge = document.createElement('div');
             badge.className = 'schedule-badge';
@@ -3335,15 +3372,18 @@
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`;
             } else {
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`
-                    + ` <button onclick="event.stopPropagation(); cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:0;margin-left:2px;" title="Zrušiť plán"><i class="fas fa-times"></i></button>`;
+                    + ` <button onclick="event.stopPropagation(); cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:5px 7px;margin-left:2px;line-height:1;" title="Zrušiť plán"><i class="fas fa-times"></i></button>`;
             }
             statusEl.appendChild(badge);
-            // Sync badge to card-status
-            const cardStatusEl = document.getElementById(`card-status-${deviceId}`);
-            if (cardStatusEl) {
-                const existingCardBadge = cardStatusEl.querySelector('.schedule-badge');
-                if (existingCardBadge) existingCardBadge.remove();
-                if (schedule) cardStatusEl.appendChild(badge.cloneNode(true));
+            // Sync badge to card-schedule area (separate row below header to avoid truncating device name)
+            const cardScheduleEl = document.getElementById(`card-schedule-${deviceId}`);
+            if (cardScheduleEl) {
+                cardScheduleEl.innerHTML = '';
+                if (schedule) {
+                    const cardBadge = badge.cloneNode(true);
+                    cardBadge.style.cssText = 'margin-bottom:8px;font-size:11px;color:#a78bfa;display:flex;align-items:center;justify-content:flex-start;gap:4px;flex-wrap:wrap;';
+                    cardScheduleEl.appendChild(cardBadge);
+                }
             }
         }
 
@@ -3509,43 +3549,43 @@
                 }
 
                 const deviceCount = scheduleIds.length;
-                if (!confirm(`Zrušiť naplánovaný update pre ${deviceCount} označených zariadení?`)) return;
-
-                let cancelled = 0, failed = 0;
-                for (const sid of scheduleIds) {
-                    try {
-                        const res = await fetch(`/api/updater/schedule/${sid}`, { method: 'DELETE' });
-                        const data = await res.json();
-                        if (data.status === 'success') cancelled++;
-                        else failed++;
-                    } catch (e) {
-                        failed++;
+                showConfirm(`Zrušiť naplánovaný update pre ${deviceCount} označených zariadení?`, async () => {
+                    let cancelled = 0, failed = 0;
+                    for (const sid of scheduleIds) {
+                        try {
+                            const res = await fetch(`/api/updater/schedule/${sid}`, { method: 'DELETE' });
+                            const data = await res.json();
+                            if (data.status === 'success') cancelled++;
+                            else failed++;
+                        } catch (e) {
+                            failed++;
+                        }
                     }
-                }
-
-                if (failed === 0) {
-                    showToast(`${cancelled} plán${cancelled > 1 ? 'y' : ''} zrušen${cancelled > 1 ? 'é' : 'ý'}.`, 'info');
-                } else {
-                    showToast(`Zrušených: ${cancelled}, chýb: ${failed}.`, 'warning');
-                }
-                await loadSchedules();
+                    if (failed === 0) {
+                        showToast(`${cancelled} plán${cancelled > 1 ? 'y' : ''} zrušen${cancelled > 1 ? 'é' : 'ý'}.`, 'info');
+                    } else {
+                        showToast(`Zrušených: ${cancelled}, chýb: ${failed}.`, 'warning');
+                    }
+                    await loadSchedules();
+                });
                 return;
             }
 
             // Standard single-device cancel
-            if (!confirm('Zrušiť naplánovaný update?')) return;
-            try {
-                const res = await fetch(`/api/updater/schedule/${scheduleId}`, { method: 'DELETE' });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    showToast('Plán zrušený.', 'info');
-                    await loadSchedules();
-                } else {
-                    showToast(data.message || 'Chyba pri rušení.', 'warning');
+            showConfirm('Zrušiť naplánovaný update?', async () => {
+                try {
+                    const res = await fetch(`/api/updater/schedule/${scheduleId}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        showToast('Plán zrušený.', 'info');
+                        await loadSchedules();
+                    } else {
+                        showToast(data.message || 'Chyba pri rušení.', 'warning');
+                    }
+                } catch (e) {
+                    showToast('Chyba spojenia.', 'warning');
                 }
-            } catch (e) {
-                showToast('Chyba spojenia.', 'warning');
-            }
+            });
         }
 
         async function loadSchedules() {

@@ -829,6 +829,14 @@
             background-color: rgba(100, 116, 139, 0.25);
         }
 
+        .schedule-modal-content {
+            position: relative;
+        }
+
+        .schedule-modal-content.schedule-picker-open {
+            overflow: visible;
+        }
+
         body.light-theme .modal-content::-webkit-scrollbar-thumb:hover {
             background-color: rgba(100, 116, 139, 0.45);
         }
@@ -1453,6 +1461,16 @@
             border-radius: 6px;
         }
 
+        .flatpickr-time input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .flatpickr-time input::selection {
+            background: transparent;
+            color: inherit;
+        }
+
         .flatpickr-time .flatpickr-time-separator {
             color: #6b7280;
         }
@@ -1544,8 +1562,86 @@
             background: rgba(3, 105, 161, 0.08);
         }
 
+        body.light-theme .flatpickr-time input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        body.light-theme .flatpickr-time input::selection {
+            background: transparent;
+            color: inherit;
+        }
+
         body.light-theme .flatpickr-time .flatpickr-time-separator {
             color: #9ca3af;
+        }
+
+        .schedule-flatpickr-actions {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            #scheduleModal.schedule-modal-open {
+                padding: 12px;
+            }
+
+            #scheduleModal.schedule-modal-open .schedule-modal-content {
+                width: min(420px, calc(100vw - 24px));
+                max-height: min(80vh, calc(var(--schedule-viewport-height, 100dvh) - 24px));
+                overscroll-behavior: contain;
+            }
+
+            .flatpickr-calendar.schedule-flatpickr-mobile {
+                position: fixed !important;
+                top: var(--schedule-picker-top, 50vh) !important;
+                left: var(--schedule-picker-left, 50vw) !important;
+                right: auto !important;
+                bottom: auto !important;
+                transform: translate(-50%, -50%) !important;
+                width: min(324px, calc(var(--schedule-viewport-width, 100vw) - 24px)) !important;
+                max-width: calc(var(--schedule-viewport-width, 100vw) - 24px) !important;
+                max-height: calc(var(--schedule-viewport-height, 100dvh) - 24px) !important;
+                margin: 0 !important;
+                overflow-y: auto !important;
+                overscroll-behavior: contain;
+                z-index: 100001 !important;
+            }
+
+            .flatpickr-calendar.schedule-flatpickr-mobile .schedule-flatpickr-actions {
+                display: flex;
+                justify-content: flex-end;
+                position: sticky;
+                bottom: 0;
+                margin-top: 8px;
+                padding: 10px 4px 4px;
+                border-top: 1px solid #374151;
+                background: linear-gradient(180deg, rgba(31, 41, 55, 0) 0%, rgba(31, 41, 55, 0.96) 36%, #1f2937 100%);
+            }
+
+            .flatpickr-calendar.schedule-flatpickr-mobile .schedule-flatpickr-done {
+                border: none;
+                border-radius: 8px;
+                padding: 9px 16px;
+                background: var(--accent-color);
+                color: #fff;
+                font-size: 13px;
+                font-weight: 700;
+                cursor: pointer;
+                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+            }
+
+            .flatpickr-calendar.schedule-flatpickr-mobile .schedule-flatpickr-done:active {
+                transform: translateY(1px);
+            }
+
+            body.light-theme .flatpickr-calendar.schedule-flatpickr-mobile .schedule-flatpickr-actions {
+                border-top-color: #c5d8f0;
+                background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.96) 36%, #ffffff 100%);
+            }
+
+            body.light-theme .flatpickr-calendar.schedule-flatpickr-mobile .schedule-flatpickr-done {
+                background: #0369a1;
+            }
         }
 
         /* ── End Flatpickr ──────────────────────────────────────────── */
@@ -1637,7 +1733,7 @@
 
     <!-- Schedule modal -->
     <div id="scheduleModal" class="modal-overlay" onclick="closeScheduleModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:420px;">
+        <div class="modal-content schedule-modal-content" onclick="event.stopPropagation()" style="max-width:420px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
                 <h2 style="font-size:1.15rem; font-weight:600; color:var(--accent-color);">
                     <i class="fas fa-calendar-plus" style="margin-right:8px;"></i>Naplánovať update
@@ -1728,6 +1824,19 @@
 
         // Module-level Socket.IO instance (shared by SocketIO handler and other functions)
         let _socket = null;
+        const MOBILE_SCHEDULE_QUERY = '(max-width: 768px)';
+        const SCHEDULE_MODAL_SCROLL_LOCK = 'schedule-modal';
+        const SCHEDULE_PICKER_SCROLL_LOCK = 'schedule-picker';
+        let _bodyScrollLocks = new Set();
+        let _bodyScrollState = {
+            bodyOverflow: '',
+            htmlOverflow: '',
+            bodyPosition: '',
+            bodyTop: '',
+            bodyWidth: '',
+            scrollY: 0
+        };
+        let _scheduleViewportCleanup = null;
 
         // Setup clear storage on logout if needed, but not here
         function saveUpdateState() {
@@ -1744,6 +1853,188 @@
                 }
             }
             localStorage.setItem('mikrotik_updater_state', JSON.stringify(stateToSave));
+        }
+
+        function isMobileScheduleViewport() {
+            return window.matchMedia(MOBILE_SCHEDULE_QUERY).matches;
+        }
+
+        function lockBodyScroll(reason) {
+            if (_bodyScrollLocks.has(reason)) return;
+            if (_bodyScrollLocks.size === 0) {
+                _bodyScrollState = {
+                    bodyOverflow: document.body.style.overflow,
+                    htmlOverflow: document.documentElement.style.overflow,
+                    bodyPosition: document.body.style.position,
+                    bodyTop: document.body.style.top,
+                    bodyWidth: document.body.style.width,
+                    scrollY: window.scrollY || window.pageYOffset || 0
+                };
+                document.body.style.overflow = 'hidden';
+                document.documentElement.style.overflow = 'hidden';
+                if (isMobileScheduleViewport()) {
+                    document.body.style.position = 'fixed';
+                    document.body.style.top = `-${_bodyScrollState.scrollY}px`;
+                    document.body.style.width = '100%';
+                }
+            }
+            _bodyScrollLocks.add(reason);
+        }
+
+        function unlockBodyScroll(reason) {
+            if (!_bodyScrollLocks.has(reason)) return;
+            _bodyScrollLocks.delete(reason);
+            if (_bodyScrollLocks.size > 0) return;
+            const restoreScrollY = _bodyScrollState.scrollY || 0;
+            document.body.style.overflow = _bodyScrollState.bodyOverflow;
+            document.documentElement.style.overflow = _bodyScrollState.htmlOverflow;
+            document.body.style.position = _bodyScrollState.bodyPosition;
+            document.body.style.top = _bodyScrollState.bodyTop;
+            document.body.style.width = _bodyScrollState.bodyWidth;
+            window.scrollTo(0, restoreScrollY);
+        }
+
+        function clearScheduleViewportVars() {
+            document.documentElement.style.removeProperty('--schedule-viewport-width');
+            document.documentElement.style.removeProperty('--schedule-viewport-height');
+            document.documentElement.style.removeProperty('--schedule-picker-left');
+            document.documentElement.style.removeProperty('--schedule-picker-top');
+        }
+
+        function syncScheduleViewportVars() {
+            const viewport = window.visualViewport;
+            const width = viewport ? viewport.width : window.innerWidth;
+            const height = viewport ? viewport.height : window.innerHeight;
+            const offsetLeft = viewport ? viewport.offsetLeft : 0;
+            const offsetTop = viewport ? viewport.offsetTop : 0;
+            document.documentElement.style.setProperty('--schedule-viewport-width', `${Math.round(width)}px`);
+            document.documentElement.style.setProperty('--schedule-viewport-height', `${Math.round(height)}px`);
+            document.documentElement.style.setProperty('--schedule-picker-left', `${Math.round(offsetLeft + (width / 2))}px`);
+            document.documentElement.style.setProperty('--schedule-picker-top', `${Math.round(offsetTop + (height / 2))}px`);
+        }
+
+        function stopScheduleViewportSync() {
+            if (_scheduleViewportCleanup) {
+                _scheduleViewportCleanup();
+                _scheduleViewportCleanup = null;
+            } else {
+                clearScheduleViewportVars();
+            }
+        }
+
+        function startScheduleViewportSync() {
+            stopScheduleViewportSync();
+            if (!isMobileScheduleViewport()) return;
+            const sync = () => syncScheduleViewportVars();
+            sync();
+            const cleanupFns = [];
+            window.addEventListener('resize', sync);
+            cleanupFns.push(() => window.removeEventListener('resize', sync));
+            window.addEventListener('orientationchange', sync);
+            cleanupFns.push(() => window.removeEventListener('orientationchange', sync));
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', sync);
+                window.visualViewport.addEventListener('scroll', sync);
+                cleanupFns.push(() => window.visualViewport.removeEventListener('resize', sync));
+                cleanupFns.push(() => window.visualViewport.removeEventListener('scroll', sync));
+            }
+            _scheduleViewportCleanup = () => {
+                cleanupFns.forEach(fn => fn());
+                clearScheduleViewportVars();
+            };
+        }
+
+        function setSchedulePickerMobileState(isOpen, fpInstance) {
+            const modal = document.getElementById('scheduleModal');
+            const modalContent = modal ? modal.querySelector('.schedule-modal-content') : null;
+            const calendar = fpInstance && fpInstance.calendarContainer ? fpInstance.calendarContainer : null;
+            const shouldUseMobileState = isOpen && isMobileScheduleViewport();
+            if (modal) modal.classList.toggle('schedule-picker-open', shouldUseMobileState);
+            if (modalContent) modalContent.classList.toggle('schedule-picker-open', shouldUseMobileState);
+            if (calendar) calendar.classList.toggle('schedule-flatpickr-mobile', shouldUseMobileState);
+            if (shouldUseMobileState) {
+                syncScheduleViewportVars();
+            }
+        }
+
+        function blurScheduleAutofocus(fpInstance) {
+            if (!fpInstance || !fpInstance.calendarContainer) return;
+            const timeContainer = fpInstance.calendarContainer.querySelector('.flatpickr-time');
+            const active = document.activeElement;
+            if (active && timeContainer && timeContainer.contains(active)) {
+                active.blur();
+            }
+            if (fpInstance.altInput && document.activeElement === fpInstance.altInput) {
+                fpInstance.altInput.blur();
+            }
+            if (fpInstance.input && document.activeElement === fpInstance.input) {
+                fpInstance.input.blur();
+            }
+        }
+
+        function setupScheduleFlatpickrInputs(fpInstance) {
+            if (fpInstance.altInput) {
+                fpInstance.altInput.setAttribute('readonly', 'readonly');
+                fpInstance.altInput.setAttribute('inputmode', 'none');
+            }
+            if (fpInstance.input) {
+                fpInstance.input.setAttribute('readonly', 'readonly');
+                fpInstance.input.setAttribute('inputmode', 'none');
+            }
+            fpInstance.calendarContainer.querySelectorAll('.flatpickr-time input').forEach(input => {
+                input.setAttribute('inputmode', 'numeric');
+            });
+        }
+
+        function ensureSchedulePickerActions(fpInstance) {
+            if (!fpInstance || !fpInstance.calendarContainer) return;
+            let actions = fpInstance.calendarContainer.querySelector('.schedule-flatpickr-actions');
+            if (actions) return;
+
+            actions = document.createElement('div');
+            actions.className = 'schedule-flatpickr-actions';
+
+            const doneBtn = document.createElement('button');
+            doneBtn.type = 'button';
+            doneBtn.className = 'schedule-flatpickr-done';
+            doneBtn.textContent = 'Hotovo';
+            doneBtn.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                blurScheduleAutofocus(fpInstance);
+                fpInstance.close();
+            });
+
+            actions.appendChild(doneBtn);
+            fpInstance.calendarContainer.appendChild(actions);
+        }
+
+        function closeSchedulePickerOnly() {
+            if (!window._fpInstance || !window._fpInstance.isOpen) return false;
+            blurScheduleAutofocus(window._fpInstance);
+            window._fpInstance.close();
+            return true;
+        }
+
+        function cleanupScheduleModalUi() {
+            const modal = document.getElementById('scheduleModal');
+            const modalContent = modal ? modal.querySelector('.schedule-modal-content') : null;
+            if (window._fpInstance && window._fpInstance.isOpen) {
+                window._fpInstance.close();
+            }
+            if (window._fpInstance && window._fpInstance.calendarContainer) {
+                window._fpInstance.calendarContainer.classList.remove('schedule-flatpickr-mobile');
+            }
+            if (modal) {
+                modal.classList.remove('schedule-modal-open', 'schedule-picker-open');
+                modal.style.display = 'none';
+            }
+            if (modalContent) {
+                modalContent.classList.remove('schedule-picker-open');
+            }
+            unlockBodyScroll(SCHEDULE_PICKER_SCROLL_LOCK);
+            unlockBodyScroll(SCHEDULE_MODAL_SCROLL_LOCK);
+            stopScheduleViewportSync();
         }
 
         // ─── Theme ───────────────────────────────────────────────────────────────
@@ -1854,6 +2145,40 @@
                     weekAbbreviation: 'Týž',
                     scrollTitle: 'Posúvajte pre zmenu',
                     toggleTitle: 'Prepnúť'
+                },
+                onReady: function (selectedDates, dateStr, instance) {
+                    setupScheduleFlatpickrInputs(instance);
+                    ensureSchedulePickerActions(instance);
+                    instance._scheduleDaySelection = false;
+                    const markDaySelection = function (event) {
+                        const target = event.target instanceof Element ? event.target : null;
+                        instance._scheduleDaySelection = !!(target && target.closest('.flatpickr-day'));
+                    };
+                    instance.calendarContainer.addEventListener('mousedown', markDaySelection, true);
+                    instance.calendarContainer.addEventListener('touchstart', markDaySelection, true);
+                },
+                onOpen: function (selectedDates, dateStr, instance) {
+                    lockBodyScroll(SCHEDULE_PICKER_SCROLL_LOCK);
+                    setSchedulePickerMobileState(true, instance);
+                    setupScheduleFlatpickrInputs(instance);
+                    ensureSchedulePickerActions(instance);
+                    setTimeout(() => blurScheduleAutofocus(instance), 0);
+                },
+                onChange: function (selectedDates, dateStr, instance) {
+                    if (!isMobileScheduleViewport()) return;
+                    const shouldBlur = !!instance._scheduleDaySelection;
+                    instance._scheduleDaySelection = false;
+                    if (shouldBlur) {
+                        setTimeout(() => {
+                            blurScheduleAutofocus(instance);
+                            syncScheduleViewportVars();
+                        }, 0);
+                    }
+                },
+                onClose: function (selectedDates, dateStr, instance) {
+                    instance._scheduleDaySelection = false;
+                    setSchedulePickerMobileState(false, instance);
+                    unlockBodyScroll(SCHEDULE_PICKER_SCROLL_LOCK);
                 }
             });
         });
@@ -3462,16 +3787,27 @@
                 rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
             }
             if (window._fpInstance) {
+                if (window._fpInstance.isOpen) {
+                    window._fpInstance.close();
+                }
                 window._fpInstance.clear();
                 window._fpInstance.set('minDate', minDt);
                 window._fpInstance.setDate(rounded, true);
             }
-            document.getElementById('scheduleModal').style.display = 'flex';
+            const modal = document.getElementById('scheduleModal');
+            modal.style.display = 'flex';
+            modal.classList.add('schedule-modal-open');
+            lockBodyScroll(SCHEDULE_MODAL_SCROLL_LOCK);
+            startScheduleViewportSync();
         }
 
         function closeScheduleModal(e) {
-            if (e && e.target !== document.getElementById('scheduleModal')) return;
-            document.getElementById('scheduleModal').style.display = 'none';
+            const modal = document.getElementById('scheduleModal');
+            if (e) {
+                if (e.target !== modal) return;
+                if (closeSchedulePickerOnly()) return;
+            }
+            cleanupScheduleModalUi();
             _scheduleTargetDeviceId = null;
             _scheduleTargetDeviceIds = [];
         }
@@ -3505,7 +3841,7 @@
                 }
                 data = await res.json();
                 if (data.status === 'success') {
-                    document.getElementById('scheduleModal').style.display = 'none';
+                    cleanupScheduleModalUi();
                     if (isBulk) {
                         // Close all open dropdowns for selected devices
                         _scheduleTargetDeviceIds.forEach(devId => {

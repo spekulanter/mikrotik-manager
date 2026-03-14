@@ -1741,7 +1741,7 @@
                     }
                     // Mark status/os/fw cells with purple "updating" indicator
                     setUpdatingCells(id);
-                    // Remove schedule badge – 7-step progress is sufficient feedback
+                    // Remove schedule badge – inline progress is sufficient feedback
                     const statusEl = document.getElementById(`status-${id}`);
                     if (statusEl) {
                         const badge = statusEl.querySelector('.schedule-badge');
@@ -1931,7 +1931,7 @@
                     delete _deviceUpdateState[d.id];
                     saveUpdateState();
                 }
-                // Active update: clear state so restoreRunningUpdates() rebuilds the 7-step inline UI
+                // Active update: clear state so restoreRunningUpdates() rebuilds the inline UI
                 // (renderTableShells already rendered ⟳ Prebieha... cells using the active flag above)
                 if (_deviceUpdateState[d.id]?.active) {
                     delete _deviceUpdateState[d.id];
@@ -2697,7 +2697,7 @@
         // ─── Inline progress helpers ──────────────────────────────────────────────
         let _updaterStabilizationDelay = 120;
         let _updaterPreRebootDelay = 20;
-        let STEP_LABELS = ['', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', `${_updaterStabilizationDelay}s pauza`, 'Update Firmware', `${_updaterPreRebootDelay}s pauza`, 'Finálny reštart'];
+        let STEP_LABELS = ['', 'Záloha', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', `${_updaterStabilizationDelay}s pauza`, 'Update Firmware', `${_updaterPreRebootDelay}s pauza`, 'Finálny reštart'];
         const STEP_ICONS = { '': '○', active: '⟳', done: '✓', error: '✗' };
 
         function startInlineUpdate(id, updateType) {
@@ -2705,15 +2705,15 @@
 
             let stepLabels, stepCount;
             if (updateType === 'os') {
-                stepLabels = ['', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot'];
-                stepCount = 3;
+                stepLabels = ['', 'Záloha', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot'];
+                stepCount = 4;
             } else if (updateType === 'firmware') {
                 const delay = _updaterPreRebootDelay || 20;
-                stepLabels = ['', 'Update Firmware', `${delay}s pauza`, 'Finálny reštart'];
-                stepCount = 3;
+                stepLabels = ['', 'Záloha', 'Update Firmware', `${delay}s pauza`, 'Finálny reštart'];
+                stepCount = 4;
             } else {
                 stepLabels = STEP_LABELS;
-                stepCount = 7;
+                stepCount = 8;
             }
             const finalStep = stepCount + 1;
 
@@ -2766,7 +2766,7 @@
         }
 
         function endInlineUpdate(id, success, message) {
-            const finalStep = (_deviceUpdateState[id] && _deviceUpdateState[id].finalStep) || 8;
+            const finalStep = (_deviceUpdateState[id] && _deviceUpdateState[id].finalStep) || 9;
             if (_deviceUpdateState[id]) {
                 _deviceUpdateState[id].active = false;
                 _deviceUpdateState[id].persistedResult = true;
@@ -2806,9 +2806,9 @@
 
         function setInlineStep(id, stepNum, state) {
             const st = _deviceUpdateState[id] || {};
-            const stepCount = st.stepCount || 7;
+            const stepCount = st.stepCount || 8;
             const stepLabels = st.stepLabels || STEP_LABELS;
-            const finalStep = st.finalStep || 8;
+            const finalStep = st.finalStep || 9;
 
             const el = document.getElementById(`istep-${id}-${stepNum}`);
             if (!el) return;
@@ -2851,7 +2851,9 @@
                 let remaining = seconds;
                 const tick = () => {
                     const el = document.getElementById(`istep-${id}-${stepNum}`);
-                    if (el) el.textContent = `⟳ ${STEP_LABELS[stepNum]} (${remaining}s)`;
+                    const st = _deviceUpdateState[id] || {};
+                    const stepLabels = st.stepLabels || STEP_LABELS;
+                    if (el) el.textContent = `⟳ ${stepLabels[stepNum]} (${remaining}s)`;
                     setInlineStatus(id, `Čakám ${remaining}s...`);
                     if (remaining <= 0) { resolve(); return; }
                     remaining--;
@@ -2941,10 +2943,10 @@
             }
         }
 
-        // ─── Shared helper: steps 5-6-7 (firmware check + optional reboot) ─────────
+        // ─── Shared helper: steps 6-7-8 (firmware check + optional reboot) ─────────
         async function _doFirmwareAndReboot(id, isLowMem) {
-            // Step 5 – Check firmware versions (fetch fresh data)
-            setInlineStep(id, 5, 'active');
+            // Step 6 – Check firmware versions (fetch fresh data)
+            setInlineStep(id, 6, 'active');
             setInlineStatus(id, 'Kontrolujem verzie firmware...');
             let fwUpdateNeeded = true;
             try {
@@ -2960,9 +2962,9 @@
             } catch (e) { /* keep fwUpdateNeeded = true */ }
 
             if (!fwUpdateNeeded) {
-                setInlineStep(id, 5, 'done');
                 setInlineStep(id, 6, 'done');
                 setInlineStep(id, 7, 'done');
+                setInlineStep(id, 8, 'done');
                 endInlineUpdate(id, true, '✅ Firmware je aktuálny. Aktualizácia dokončená!');
                 setTimeout(() => { if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) clearUpdateState(id); }, 2000);
                 return;
@@ -2971,32 +2973,32 @@
             const fwRes = await fetch(`/api/updater/install-firmware/${id}`, { method: 'POST' });
             const fwData = await fwRes.json();
             if (fwData.status !== 'success') {
-                setInlineStep(id, 5, 'error');
+                setInlineStep(id, 6, 'error');
                 endInlineUpdate(id, false, `❌ Chyba Update Firmware: ${fwData.message}`);
                 return;
             }
-            setInlineStep(id, 5, 'done');
-
-            // Step 6 – pre-reboot countdown
-            setInlineStep(id, 6, 'active');
-            await inlineCountdown(id, 6, _updaterPreRebootDelay);
             setInlineStep(id, 6, 'done');
+
+            // Step 7 – pre-reboot countdown
+            setInlineStep(id, 7, 'active');
+            await inlineCountdown(id, 7, _updaterPreRebootDelay);
+            setInlineStep(id, 7, 'done');
 
             await _doFinalReboot(id, isLowMem);
         }
 
         async function _doFinalReboot(id, isLowMem) {
-            // Step 7 – Final reboot
-            setInlineStep(id, 7, 'active');
+            // Step 8 – Final reboot
+            setInlineStep(id, 8, 'active');
             setInlineStatus(id, 'Odosielam príkaz na finálny reštart...');
             const rebootRes = await fetch(`/api/updater/reboot/${id}`, { method: 'POST' });
             const rebootData = await rebootRes.json();
             if (rebootData.status !== 'success') {
-                setInlineStep(id, 7, 'error');
+                setInlineStep(id, 8, 'error');
                 endInlineUpdate(id, false, `❌ Chyba Reštart: ${rebootData.message}`);
                 return;
             }
-            setInlineStep(id, 7, 'done');
+            setInlineStep(id, 8, 'done');
             endInlineUpdate(id, true, '✅ Aktualizácia dokončená!');
             await waitOnlineThenRefresh(id, isLowMem);
         }
@@ -3012,12 +3014,12 @@
             const actionsEl = document.getElementById(`actions-${id}`);
             if (actionsEl) actionsEl.style.opacity = '1';
 
-            const step = state.currentStep || 2;
+            const step = state.currentStep || 1;
 
             setInlineStatus(id, '⟳ Obnova procesu po navigácii...', '#9ca3af');
 
             try {
-                if (step <= 4) {
+                if (step <= 5) {
                     // Was waiting for reboot or boot – check current device status
                     let isOnline = false;
                     try {
@@ -3028,50 +3030,54 @@
 
                     if (!isOnline) {
                         // Device still offline – wait for it to boot
+                        setInlineStep(id, 1, 'done');
                         setInlineStep(id, 2, 'done');
-                        setInlineStep(id, 3, 'active');
+                        setInlineStep(id, 3, 'done');
+                        setInlineStep(id, 4, 'active');
                         setInlineStatus(id, 'Čakám kým zariadenie nabootuje...');
                         const onlineTimeout = isLowMem ? 300000 : 180000;
                         const cameOnline = await pollOnline(id, onlineTimeout, 5000);
                         if (!cameOnline) {
-                            setInlineStep(id, 3, 'error');
+                            setInlineStep(id, 4, 'error');
                             endInlineUpdate(id, false, `❌ Zariadenie sa nevrátilo online v časovom limite (${onlineTimeout / 1000}s).`);
                             return;
                         }
-                        setInlineStep(id, 3, 'done');
+                        setInlineStep(id, 4, 'done');
 
                         // VM/CHR (no routerboard) – skip stabilization + firmware steps entirely
                         const _resumeDevData = deviceDataMap[id];
                         if (_resumeDevData && _resumeDevData.firmware && _resumeDevData.firmware['current-firmware'] === 'N/A') {
-                            setInlineStep(id, 4, 'done');
                             setInlineStep(id, 5, 'done');
                             setInlineStep(id, 6, 'done');
                             setInlineStep(id, 7, 'done');
+                            setInlineStep(id, 8, 'done');
                             endInlineUpdate(id, true, '✅ RouterOS aktualizovaný. (VM/CHR – firmware nie je potrebný)');
                             setTimeout(() => clearUpdateState(id), 3000);
                             return;
                         }
 
-                        setInlineStep(id, 4, 'active');
-                        await inlineCountdown(id, 4, _updaterStabilizationDelay);
-                        setInlineStep(id, 4, 'done');
+                        setInlineStep(id, 5, 'active');
+                        await inlineCountdown(id, 5, _updaterStabilizationDelay);
+                        setInlineStep(id, 5, 'done');
                     } else {
-                        // Device already online – skip steps 2-4
+                        // Device already online – skip steps 1-5
+                        setInlineStep(id, 1, 'done');
                         setInlineStep(id, 2, 'done');
                         setInlineStep(id, 3, 'done');
                         setInlineStep(id, 4, 'done');
+                        setInlineStep(id, 5, 'done');
                     }
                     await _doFirmwareAndReboot(id, isLowMem);
 
-                } else if (step === 5) {
+                } else if (step === 6) {
                     await _doFirmwareAndReboot(id, isLowMem);
 
-                } else if (step === 6) {
+                } else if (step === 7) {
                     // Was in pre-reboot countdown after firmware install – skip to reboot
-                    setInlineStep(id, 6, 'done');
+                    setInlineStep(id, 7, 'done');
                     await _doFinalReboot(id, isLowMem);
 
-                } else if (step === 7) {
+                } else if (step === 8) {
                     await _doFinalReboot(id, isLowMem);
                 }
 
@@ -3142,8 +3148,8 @@
                 _bulkUpdateDelaySec = parseInt(s.bulk_update_delay_seconds || 60);
                 _updaterStabilizationDelay = parseInt(s.updater_stabilization_delay || 120);
                 _updaterPreRebootDelay = parseInt(s.updater_pre_reboot_delay || 20);
-                STEP_LABELS[4] = `${_updaterStabilizationDelay}s pauza`;
-                STEP_LABELS[6] = `${_updaterPreRebootDelay}s pauza`;
+                STEP_LABELS[5] = `${_updaterStabilizationDelay}s pauza`;
+                STEP_LABELS[7] = `${_updaterPreRebootDelay}s pauza`;
             } catch (e) { /* keep defaults */ }
         }
         _loadBulkDelay();
@@ -3256,13 +3262,16 @@
                 for (const ru of (data.running || [])) {
                     const id = ru.device_id;
                     const updateType = ru.update_type || 'full';
+                    const doneSteps = ru.steps_done || [];
                     if (_deviceUpdateState[id] && _deviceUpdateState[id].active) continue;
                     setUpdatingCells(id);
                     startInlineUpdate(id, updateType);
-                    for (const step of (ru.steps_done || [])) {
+                    for (const step of doneSteps) {
                         setInlineStep(id, step, 'done');
                     }
-                    if (ru.current_step > 0) setInlineStep(id, ru.current_step, 'active');
+                    if (ru.current_step > 0 && !doneSteps.includes(ru.current_step)) {
+                        setInlineStep(id, ru.current_step, 'active');
+                    }
                     if (ru.current_msg) setInlineStatus(id, ru.current_msg);
                 }
             } catch (e) { /* Silently ignore */ }
@@ -3273,13 +3282,17 @@
                 const data = await res.json();
                 for (const ru of (data.running || [])) {
                     const id = ru.device_id;
+                    const updateType = ru.update_type || 'full';
+                    const doneSteps = ru.steps_done || [];
                     if (_deviceUpdateState[id] && _deviceUpdateState[id].active) continue;
                     setUpdatingCells(id);
-                    startInlineUpdate(id);
-                    for (const step of (ru.steps_done || [])) {
+                    startInlineUpdate(id, updateType);
+                    for (const step of doneSteps) {
                         setInlineStep(id, step, 'done');
                     }
-                    if (ru.current_step > 0) setInlineStep(id, ru.current_step, 'active');
+                    if (ru.current_step > 0 && !doneSteps.includes(ru.current_step)) {
+                        setInlineStep(id, ru.current_step, 'active');
+                    }
                     if (ru.current_msg) setInlineStatus(id, ru.current_msg);
                 }
             } catch (e) { /* Silently ignore */ }
@@ -3313,7 +3326,7 @@
             badge.className = 'schedule-badge';
             badge.style.cssText = 'margin-top:5px;font-size:11px;color:#a78bfa;display:flex;align-items:center;justify-content:center;gap:4px;';
             if (schedule.status === 'running') {
-                // Running: show scheduled time centered, no cancel button (7-step progress in actions cell is sufficient)
+                // Running: show scheduled time centered, no cancel button (inline progress in actions cell is sufficient)
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`;
             } else {
                 badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`

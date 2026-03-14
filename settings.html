@@ -989,6 +989,30 @@
                     <i class="fa-solid fa-arrows-rotate mr-3"></i>Mikrotik Aktualizátor
                 </h2>
 
+                <!-- Záloha pred aktualizáciou -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold text-emerald-400 mb-4">
+                        <i class="fas fa-shield-alt mr-2"></i>Bezpečnostná záloha
+                    </h3>
+                    <div class="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <div>
+                            <label for="updater_backup_before_update" class="font-medium cursor-pointer">
+                                Záloha pred aktualizáciou
+                            </label>
+                            <small class="text-gray-400 block mt-1">
+                                Automaticky vytvoriť zálohu konfigurácie pred každou aktualizáciou.
+                                Ak záloha zlyhá, aktualizácia sa nespustí. Ak neboli žiadne zmeny v konfigurácii,
+                                záloha sa preskočí a aktualizácia pokračuje.
+                            </small>
+                        </div>
+                        <label class="toggle-switch ml-4">
+                            <input type="checkbox" id="updater_backup_before_update"
+                                name="updater_backup_before_update">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Hromadná aktualizácia -->
                 <div class="mb-8">
                     <h3 class="text-lg font-semibold text-purple-400 mb-4">
@@ -1021,18 +1045,18 @@
                     </h3>
                     <div class="mb-4 p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg text-blue-200">
                         <i class="fas fa-info-circle mr-2 text-blue-400"></i>
-                        Pauzy v rámci 7-krokového procesu aktualizácie RouterOS. Platia pre manuálny aj naplánovaný update.
+                        Pauzy v rámci 8-krokového procesu aktualizácie RouterOS. Platia pre manuálny aj naplánovaný update.
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label for="updater_stabilization_delay" class="block mb-2 font-medium">Krok 4 – stabilizačná pauza po reštarte OS (sekundy)</label>
+                            <label for="updater_stabilization_delay" class="block mb-2 font-medium">Krok 5 – stabilizačná pauza po reštarte OS (sekundy)</label>
                             <input type="number" id="updater_stabilization_delay" name="updater_stabilization_delay"
                                 class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 value="120" min="10" max="600">
                             <small class="text-gray-400 block mt-1">Čakanie po opätovnom nabehnutí zariadenia pred kontrolou firmvéru. Predvolené: 120 sekúnd.</small>
                         </div>
                         <div>
-                            <label for="updater_pre_reboot_delay" class="block mb-2 font-medium">Krok 6 – pauza pred finálnym reštartom (sekundy)</label>
+                            <label for="updater_pre_reboot_delay" class="block mb-2 font-medium">Krok 7 – pauza pred finálnym reštartom (sekundy)</label>
                             <input type="number" id="updater_pre_reboot_delay" name="updater_pre_reboot_delay"
                                 class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 value="20" min="5" max="300">

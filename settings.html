@@ -841,6 +841,57 @@
                 </div>
             </div>
 
+            <!-- Monitoring dáta -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-chart-area mr-3"></i>Monitoring dáta a grafy
+                </h2>
+                <div class="space-y-6">
+                    <div class="p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
+                            <div class="text-sm text-blue-200">
+                                <strong>Účel:</strong> Tieto nastavenia určujú, ako dlho sa uchovávajú dáta pre
+                                monitoring grafy a históriu výkonu zariadení.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="ping_retention_days" class="block mb-2 font-medium">ICMP ping dáta (dni)</label>
+                            <input type="number" id="ping_retention_days" name="ping_retention_days"
+                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                value="30" min="1" max="365">
+                            <small class="text-gray-400 block mt-1">Uchovávanie ping dát pre grafy dostupnosti a
+                                latency. Rozsah: 1-365 dní</small>
+                        </div>
+                        <div>
+                            <label for="snmp_retention_days" class="block mb-2 font-medium">SNMP výkonnostné dáta
+                                (dni)</label>
+                            <input type="number" id="snmp_retention_days" name="snmp_retention_days"
+                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                value="30" min="1" max="365">
+                            <small class="text-gray-400 block mt-1">Uchovávanie SNMP dát (CPU, RAM, teplota) pre
+                                výkonnostné grafy. Rozsah: 1-365 dní</small>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        <div>
+                            <label for="deleted_device_retention_days" class="block mb-2 font-medium">
+                                <i class="fas fa-trash-alt text-red-400 mr-1"></i>
+                                Uchovávanie zmazaných zariadení (dni)
+                            </label>
+                            <input type="number" id="deleted_device_retention_days" name="deleted_device_retention_days"
+                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                value="7" min="1" max="90">
+                            <small class="text-gray-400 block mt-1">Zariadenia v koši sa automaticky natrvalo vymažú po uplynutí tohto počtu dní. Rozsah: 1-90 dní</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Pushover Notifikácie -->
             <div class="section-card card rounded-xl p-6">
                 <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
@@ -1192,57 +1243,6 @@
                                 value="2000" min="100" max="20000">
                             <small class="text-gray-400 block mt-1">Počet logov zobrazených v aktivita okne na hlavnej
                                 stránke. Rozsah: 100-20000</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Monitoring dáta -->
-            <div class="section-card card rounded-xl p-6">
-                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
-                    <i class="fas fa-chart-area mr-3"></i>Monitoring dáta a grafy
-                </h2>
-                <div class="space-y-6">
-                    <div class="p-4 bg-blue-900/30 border border-blue-500/50 rounded-lg">
-                        <div class="flex items-start gap-3">
-                            <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
-                            <div class="text-sm text-blue-200">
-                                <strong>Účel:</strong> Tieto nastavenia určujú, ako dlho sa uchovávajú dáta pre
-                                monitoring grafy a históriu výkonu zariadení.
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="ping_retention_days" class="block mb-2 font-medium">ICMP ping dáta (dni)</label>
-                            <input type="number" id="ping_retention_days" name="ping_retention_days"
-                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                value="30" min="1" max="365">
-                            <small class="text-gray-400 block mt-1">Uchovávanie ping dát pre grafy dostupnosti a
-                                latency. Rozsah: 1-365 dní</small>
-                        </div>
-                        <div>
-                            <label for="snmp_retention_days" class="block mb-2 font-medium">SNMP výkonnostné dáta
-                                (dni)</label>
-                            <input type="number" id="snmp_retention_days" name="snmp_retention_days"
-                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                value="30" min="1" max="365">
-                            <small class="text-gray-400 block mt-1">Uchovávanie SNMP dát (CPU, RAM, teplota) pre
-                                výkonnostné grafy. Rozsah: 1-365 dní</small>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                        <div>
-                            <label for="deleted_device_retention_days" class="block mb-2 font-medium">
-                                <i class="fas fa-trash-alt text-red-400 mr-1"></i>
-                                Uchovávanie zmazaných zariadení (dni)
-                            </label>
-                            <input type="number" id="deleted_device_retention_days" name="deleted_device_retention_days"
-                                class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                value="7" min="1" max="90">
-                            <small class="text-gray-400 block mt-1">Zariadenia v koši sa automaticky natrvalo vymažú po uplynutí tohto počtu dní. Rozsah: 1-90 dní</small>
                         </div>
                     </div>
                 </div>

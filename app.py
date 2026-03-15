@@ -113,7 +113,8 @@ SETTING_LABELS = {
     'notify_new_routeros_version': 'Notifikácia: nová verzia RouterOS (RSS)',
     'updater_backup_before_update': 'Záloha pred aktualizáciou',
     'updater_post_backup_delay': 'Pauza po zálohe pred aktualizáciou',
-    'viewport': 'Režim zobrazenia'
+    'viewport': 'Režim zobrazenia',
+    'deleted_device_retention_days': 'Uchovávanie zmazaných zariadení (dni)'
 }
 
 SENSITIVE_SETTINGS = {'ftp_password', 'pushover_app_key', 'pushover_user_key'}
@@ -135,7 +136,8 @@ SETTING_VALUE_SUFFIXES = {
     'log_max_entries': ' záznamov',
     'cpu_critical_threshold': ' %',
     'memory_critical_threshold': ' %',
-    'temp_critical_threshold': ' °C'
+    'temp_critical_threshold': ' °C',
+    'deleted_device_retention_days': ' dní'
 }
 
 SCHEDULE_TYPE_LABELS = {
@@ -774,7 +776,15 @@ def init_database():
             cursor.execute('ALTER TABLE devices ADD COLUMN monitoring_paused BOOLEAN DEFAULT 0')
         except sqlite3.OperationalError:
             pass
-        
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN purge_after TIMESTAMP DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass
+
         # Pridanie memory stĺpcov do snmp_history tabuľky
         try:
             cursor.execute('ALTER TABLE snmp_history ADD COLUMN total_memory INTEGER')
@@ -919,7 +929,8 @@ def init_database():
             'memory_critical_threshold': '90',
             'quiet_hours_enabled': 'false',
             'quiet_hours_start': '',
-            'quiet_hours_end': ''
+            'quiet_hours_end': '',
+            'deleted_device_retention_days': '7'
         }
         for key, value in additional_defaults.items():
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
@@ -1084,7 +1095,7 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
     if not device_name:
         try:
             with get_db_connection() as conn:
-                row = conn.execute('SELECT name FROM devices WHERE ip = ?', (ip,)).fetchone()
+                row = conn.execute('SELECT name FROM devices WHERE ip = ? AND deleted_at IS NULL', (ip,)).fetchone()
                 if row:
                     device_name = row['name']
         except Exception:
@@ -1169,7 +1180,7 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
             sftp.remove(rsc_path)
         backup_performed = True
         with get_db_connection() as conn:
-            conn.execute("UPDATE devices SET last_backup = CURRENT_TIMESTAMP WHERE id = ?", (device['id'],))
+            conn.execute("UPDATE devices SET last_backup = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL", (device['id'],))
             conn.commit()
         
         # Záverečná správa o dokončení zálohy
@@ -2001,11 +2012,11 @@ def delete_backup(filename):
 
                 with get_db_connection() as conn:
                     if not candidate_files:
-                        conn.execute('UPDATE devices SET last_backup = NULL WHERE ip = ?', (device_ip,))
+                        conn.execute('UPDATE devices SET last_backup = NULL WHERE ip = ? AND deleted_at IS NULL', (device_ip,))
                     else:
                         latest_name, latest_path, latest_mtime = max(candidate_files, key=lambda item: item[2])
                         latest_mtime = datetime.fromtimestamp(latest_mtime)
-                        conn.execute('UPDATE devices SET last_backup = ? WHERE ip = ?', (latest_mtime, device_ip,))
+                        conn.execute('UPDATE devices SET last_backup = ? WHERE ip = ? AND deleted_at IS NULL', (latest_mtime, device_ip,))
                     conn.commit()
         except Exception as db_e:
             add_log('warning', f"Nepodarilo sa aktualizovať databázu po vymazaní zálohy: {db_e}")
@@ -2105,7 +2116,7 @@ def fetch_mikrotik_rss():
 
 def mk_api(device_id, method, endpoint, payload=None, timeout_val=20):
     with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return None, {'status': 'error', 'message': 'Zariadenie nenájdené.'}, 404
         
@@ -2273,7 +2284,7 @@ def check_certificates_expiry():
         try:
             with get_db_connection() as conn:
                 settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
-                devices = conn.execute('SELECT * FROM devices').fetchall()
+                devices = conn.execute('SELECT * FROM devices WHERE deleted_at IS NULL').fetchall()
 
             if settings.get('notify_cert_expiry', 'false').lower() != 'true':
                 return
@@ -2395,7 +2406,7 @@ def api_updater_rss():
 def api_updater_ping(device_id):
     """Rýchla kontrola dostupnosti zariadenia pre polling počas full-update procesu."""
     with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
 
@@ -2432,7 +2443,7 @@ def api_updater_schedules():
                    us.bulk_group_id,
                    d.name AS device_name, d.ip AS device_ip
             FROM update_schedule us
-            JOIN devices d ON d.id = us.device_id
+            JOIN devices d ON d.id = us.device_id AND d.deleted_at IS NULL
             ORDER BY us.scheduled_time DESC
         ''').fetchall()
         result = [dict(r) for r in rows]
@@ -2467,7 +2478,7 @@ def api_updater_schedules():
 def api_updater_schedule_create(device_id):
     """Vytvorí nový naplánovaný update pre zariadenie."""
     with get_db_connection() as conn:
-        device = conn.execute('SELECT id, name FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
     data = request.get_json()
@@ -2512,7 +2523,7 @@ def api_updater_schedule_bulk():
     created_ids = []
     with get_db_connection() as conn:
         devices = {row['id']: row['name'] for row in conn.execute(
-            f"SELECT id, name FROM devices WHERE id IN ({','.join('?' * len(device_ids))})",
+            f"SELECT id, name FROM devices WHERE id IN ({','.join('?' * len(device_ids))}) AND deleted_at IS NULL",
             device_ids
         ).fetchall()}
         for seq, dev_id in enumerate(device_ids):
@@ -2534,7 +2545,7 @@ def api_updater_schedule_delete(schedule_id):
     """Zruší pending naplánovaný update."""
     with get_db_connection() as conn:
         row = conn.execute(
-            'SELECT us.id, us.status, d.name FROM update_schedule us JOIN devices d ON d.id = us.device_id WHERE us.id = ?',
+            'SELECT us.id, us.status, d.name FROM update_schedule us JOIN devices d ON d.id = us.device_id AND d.deleted_at IS NULL WHERE us.id = ?',
             (schedule_id,)
         ).fetchone()
     if not row:
@@ -2576,7 +2587,7 @@ def api_updater_device(device_id):
     ssl_ok = False
     cert_expiry = None
     with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if device:
         device_dec = get_device_with_decrypted_password(dict(device))
         try:
@@ -2653,7 +2664,7 @@ def api_updater_install_os(device_id):
     if err and code != 500:
         return jsonify(err), code
     with get_db_connection() as conn:
-        device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT ip FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if device:
         add_log('INFO', 'Spustená aktualizácia RouterOS.', device_ip=device['ip'])
     
@@ -2666,7 +2677,7 @@ def api_updater_install_firmware(device_id):
     if err: return jsonify(err), code
     
     with get_db_connection() as conn:
-        device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT ip FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if device:
         add_log('INFO', 'Správa o upgrade firmvéru odoslaná, čaká sa na ručný reštart.', device_ip=device['ip'])
         
@@ -2682,7 +2693,7 @@ def api_updater_reboot(device_id):
         return jsonify(err), code
 
     with get_db_connection() as conn:
-        device = conn.execute('SELECT ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT ip FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if device:
         add_log('INFO', 'Príkaz na reštart úspešne odoslaný.', device_ip=device['ip'])
 
@@ -2697,7 +2708,7 @@ def api_updater_certificate(device_id):
     logger.info(f"[{device_id}] Starting SSL certificate regeneration for {days} days.")
 
     with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
 
@@ -2729,14 +2740,14 @@ def api_updater_certificate_save_settings(device_id):
     save_for_device = data.get('save_for_device', False)
 
     with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
         if not device:
             return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
         
         if save_for_device:
-            conn.execute('UPDATE devices SET cert_auto_renewal_days = ? WHERE id = ?', (days, device_id))
+            conn.execute('UPDATE devices SET cert_auto_renewal_days = ? WHERE id = ? AND deleted_at IS NULL', (days, device_id))
         else:
-            conn.execute('UPDATE devices SET cert_auto_renewal_days = NULL WHERE id = ?', (device_id,))
+            conn.execute('UPDATE devices SET cert_auto_renewal_days = NULL WHERE id = ? AND deleted_at IS NULL', (device_id,))
         conn.commit()
 
     return jsonify({'status': 'success', 'message': 'Nastavenia uložené.'})
@@ -2749,7 +2760,7 @@ def api_updater_run_update(device_id):
     if device_id in _running_manual_updates:
         return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
-        device = conn.execute('SELECT id, name FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
     threading.Thread(target=run_device_update, args=(device_id,), daemon=True).start()
@@ -2763,7 +2774,7 @@ def api_updater_run_update_os(device_id):
     if device_id in _running_manual_updates:
         return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
-        device = conn.execute('SELECT id, name FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
     threading.Thread(target=run_device_update_os, args=(device_id,), daemon=True).start()
@@ -2777,7 +2788,7 @@ def api_updater_run_update_firmware(device_id):
     if device_id in _running_manual_updates:
         return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
-        device = conn.execute('SELECT id, name FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
     threading.Thread(target=run_device_update_firmware, args=(device_id,), daemon=True).start()
@@ -3108,7 +3119,7 @@ def handle_devices():
         if request.method == 'GET':
             # Include all necessary fields including status and last_snmp_data
             devices = []
-            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices ORDER BY LOWER(name)').fetchall():
+            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices WHERE deleted_at IS NULL ORDER BY LOWER(name)').fetchall():
                 device = get_device_with_decrypted_password(dict(row))
                 # Convert last_backup to ISO format with UTC timezone for consistent parsing across browsers
                 if device.get('last_backup'):
@@ -3126,7 +3137,7 @@ def handle_devices():
             try:
                 if data.get('id'):
                     # Získame staré nastavenia pre detekciu zmien intervalov
-                    old_device = conn.execute('SELECT snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds FROM devices WHERE id = ?', (data['id'],)).fetchone()
+                    old_device = conn.execute('SELECT snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
                     old_snmp_interval = old_device['snmp_interval_minutes'] if old_device else 0
                     old_ping_interval = old_device['ping_interval_seconds'] if old_device else 0
                     old_ping_retry_interval = old_device['ping_retry_interval_seconds'] if old_device else 0
@@ -3140,13 +3151,13 @@ def handle_devices():
                     if data.get('password'):
                         # Ak je zadané nové heslo, aktualizujeme všetko vrátane hesla
                         encrypted_password = encrypt_password(data['password'])
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?",
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=? AND deleted_at IS NULL",
                                    (device_name, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
                                     encrypted_snmp_community, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=?",
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=? AND deleted_at IS NULL",
                                    (device_name, data['ip'], data['username'], data.get('low_memory', False),
                                     encrypted_snmp_community, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval, data['id']))
@@ -3168,6 +3179,18 @@ def handle_devices():
                     
                     return jsonify({'status': 'success'})
                 else:
+                    # Skontroluj či IP nepatrí zariadeniu v koši
+                    existing_deleted = conn.execute(
+                        'SELECT id, name FROM devices WHERE ip = ? AND deleted_at IS NOT NULL', (data['ip'],)
+                    ).fetchone()
+                    if existing_deleted:
+                        return jsonify({
+                            'status': 'error',
+                            'error': 'ip_in_trash',
+                            'device_id': existing_deleted['id'],
+                            'message': f"Zariadenie s IP {data['ip']} je v koši ({existing_deleted['name']}). Obnovte ho alebo počkajte na vymazanie."
+                        }), 409
+
                     cursor = conn.cursor()
                     encrypted_password = encrypt_password(data['password'])
                     encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
@@ -3185,16 +3208,213 @@ def handle_devices():
 @login_required
 def delete_device(device_id):
     with get_db_connection() as conn:
-        conn.execute("DELETE FROM devices WHERE id = ?", (device_id,))
+        device = conn.execute('SELECT id, name, ip FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
+        if not device:
+            return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+
+        device_name = device['name']
+        device_ip = device['ip']
+
+        # Skontrolovať bežiace operácie
+        if device_ip in backup_tasks:
+            return jsonify({'status': 'error', 'message': 'Prebieha záloha tohto zariadenia'}), 409
+        if device_id in _running_manual_updates:
+            return jsonify({'status': 'error', 'message': 'Prebieha manuálna aktualizácia'}), 409
+        if device_id in _running_scheduled_updates:
+            return jsonify({'status': 'error', 'message': 'Prebieha naplánovaná aktualizácia'}), 409
+        for group in _manual_bulk_groups.values():
+            if device_id == group.get('current_device_id') or device_id in group.get('remaining_ids', []):
+                return jsonify({'status': 'error', 'message': 'Zariadenie je súčasťou hromadnej aktualizácie'}), 409
+
+        # Zrušiť pending updater schedules
+        conn.execute("UPDATE update_schedule SET status = 'cancelled' WHERE device_id = ? AND status = 'pending'", (device_id,))
+
+        # Vypočítať purge_after
+        retention_row = conn.execute("SELECT value FROM settings WHERE key = 'deleted_device_retention_days'").fetchone()
+        retention_days = int(retention_row['value'] if retention_row else 7)
+        now = datetime.now(timezone.utc)
+        purge_after = now + timedelta(days=retention_days)
+
+        # Soft-delete
+        conn.execute("UPDATE devices SET deleted_at = ?, purge_after = ? WHERE id = ?",
+                     (now.isoformat(), purge_after.isoformat(), device_id))
         conn.commit()
-    add_log('warning', f"Zariadenie bolo odstránené.")
+
+    # Vyčistiť SNMP in-memory stav
+    with snmp_task_lock:
+        snmp_task_state.pop(device_id, None)
+
+    # Vyčistiť ostatné in-memory štruktúry
+    _cert_expiry_notified.pop(device_id, None)
+    _recent_updates.discard(device_id)
+
+    add_log('warning', f"Zariadenie {device_name} ({device_ip}) bolo presunuté do koša", device_ip)
+    return jsonify({'status': 'success', 'purge_after': purge_after.isoformat()})
+
+
+@app.route('/api/devices/deleted', methods=['GET'])
+@login_required
+def get_deleted_devices():
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            'SELECT id, name, ip, deleted_at, purge_after FROM devices WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC'
+        ).fetchall()
+        devices = []
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            try:
+                purge_dt = datetime.fromisoformat(row['purge_after'])
+                if purge_dt.tzinfo is None:
+                    purge_dt = purge_dt.replace(tzinfo=timezone.utc)
+                remaining = max(0, (purge_dt - now).total_seconds())
+            except Exception:
+                remaining = 0
+            devices.append({
+                'id': row['id'],
+                'name': row['name'],
+                'ip': row['ip'],
+                'deleted_at': row['deleted_at'],
+                'purge_after': row['purge_after'],
+                'remaining_seconds': int(remaining)
+            })
+    return jsonify(devices)
+
+
+@app.route('/api/devices/<int:device_id>/restore', methods=['POST'])
+@login_required
+def restore_device(device_id):
+    with get_db_connection() as conn:
+        device = conn.execute(
+            'SELECT id, name, ip, snmp_interval_minutes, monitoring_paused FROM devices WHERE id = ? AND deleted_at IS NOT NULL',
+            (device_id,)
+        ).fetchone()
+        if not device:
+            return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené v koši'}), 404
+
+        conn.execute("UPDATE devices SET deleted_at = NULL, purge_after = NULL WHERE id = ?", (device_id,))
+
+        global_interval_row = conn.execute("SELECT value FROM settings WHERE key = 'snmp_check_interval_minutes'").fetchone()
+        global_interval = int(global_interval_row['value'] if global_interval_row else 10)
+        conn.commit()
+
+    device_name = device['name']
+    device_ip = device['ip']
+
+    # Obnoviť SNMP scheduling — rovnaká logika ako start_all_snmp_timers()
+    if not device['monitoring_paused']:
+        device_interval = device['snmp_interval_minutes'] or 0
+        effective_interval = device_interval if device_interval > 0 else global_interval
+        effective_interval = max(effective_interval, 1)
+        schedule_snmp_task(device_id, effective_interval, delay_seconds=30, reason="restore_from_trash")
+    else:
+        pause_snmp_task(device_id, reason="restore_paused")
+
+    add_log('info', f"Zariadenie {device_name} ({device_ip}) bolo obnovené z koša", device_ip)
     return jsonify({'status': 'success'})
+
+
+def purge_device(device_id):
+    """Definitívne vymaže zariadenie a všetky súvisiace dáta. Vracia True ak úspešné."""
+    try:
+        with get_db_connection() as conn:
+            device = conn.execute('SELECT id, name, ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+            if not device:
+                return True  # Už neexistuje, idempotentné
+
+            device_name = device['name']
+            device_ip = device['ip']
+            retention_row = conn.execute("SELECT value FROM settings WHERE key = 'deleted_device_retention_days'").fetchone()
+            retention_days = int(retention_row['value'] if retention_row else 7)
+
+            # 1. DB cleanup
+            conn.execute('DELETE FROM ping_history WHERE device_id = ?', (device_id,))
+            conn.execute('DELETE FROM snmp_history WHERE device_id = ?', (device_id,))
+            conn.execute('DELETE FROM update_schedule WHERE device_id = ?', (device_id,))
+            conn.execute('DELETE FROM logs WHERE device_ip = ?', (device_ip,))
+
+            # 2. Lokálne backup súbory
+            file_pattern = f"_{device_ip}_"
+            try:
+                if os.path.isdir(BACKUP_DIR):
+                    for f in os.listdir(BACKUP_DIR):
+                        if file_pattern in f:
+                            os.remove(os.path.join(BACKUP_DIR, f))
+            except Exception as e:
+                add_log('error', f"Purge: chyba pri mazaní lokálnych backupov pre {device_ip}: {e}", device_ip)
+
+            # 3. FTP backup súbory (best-effort)
+            try:
+                settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+                settings = decrypt_sensitive_settings_map(settings)
+                if all(settings.get(k) for k in ['ftp_server', 'ftp_username', 'ftp_password']):
+                    from ftplib import FTP
+                    with FTP(settings['ftp_server'], timeout=15) as ftp:
+                        ftp.login(settings['ftp_username'], settings['ftp_password'])
+                        if settings.get('ftp_directory'):
+                            ftp.cwd(settings['ftp_directory'])
+                        try:
+                            ftp_files = [f for f in ftp.nlst() if file_pattern in f]
+                            for f in ftp_files:
+                                try:
+                                    ftp.delete(f)
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+            except Exception as e:
+                add_log('warning', f"Purge: FTP mazanie zlyhalo pre {device_ip}: {e}", device_ip)
+                # Best-effort — pokračujeme ďalej
+
+            # 4. In-memory cleanup
+            with snmp_task_lock:
+                snmp_task_state.pop(device_id, None)
+            _cert_expiry_notified.pop(device_id, None)
+            _running_manual_updates.pop(device_id, None)
+            _running_scheduled_updates.pop(device_id, None)
+            _recent_updates.discard(device_id)
+            backup_tasks.pop(device_ip, None)
+
+            # 5. Vymazať samotné zariadenie (posledný krok)
+            conn.execute('DELETE FROM devices WHERE id = ?', (device_id,))
+            conn.commit()
+
+        # 6. Pushover notifikácia
+        send_pushover_notification(
+            f"Zariadenie {device_name} ({device_ip}) bolo definitívne odstránené po {retention_days}-dňovej lehote",
+            title="MikroTik Manager - Zariadenie vymazané"
+        )
+
+        add_log('info', f"Zariadenie {device_name} ({device_ip}) bolo definitívne vymazané (purge)")
+        return True
+
+    except Exception as e:
+        add_log('error', f"Purge zariadenia {device_id} zlyhal: {e}")
+        return False
+
+
+@app.route('/api/devices/<int:device_id>/purge', methods=['DELETE'])
+@login_required
+def purge_device_endpoint(device_id):
+    with get_db_connection() as conn:
+        device = conn.execute(
+            'SELECT id FROM devices WHERE id = ? AND deleted_at IS NOT NULL',
+            (device_id,)
+        ).fetchone()
+        if not device:
+            return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené v koši'}), 404
+
+    success = purge_device(device_id)
+    if success:
+        return jsonify({'status': 'success'})
+    else:
+        return jsonify({'status': 'error', 'message': 'Purge čiastočne zlyhal, skúste znova'}), 500
+
 
 @app.route('/api/backup/<int:device_id>', methods=['POST'])
 @login_required
 def backup_device(device_id):
     with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device: return jsonify({'status': 'error', 'message': 'Zariadenie nebolo nájdené.'}), 404
     if device['ip'] in backup_tasks: return jsonify({'status': 'error', 'message': 'Záloha už prebieha.'}), 409
     backup_tasks[device['ip']] = True
@@ -3205,7 +3425,7 @@ def backup_device(device_id):
 @login_required
 def backup_all_devices():
     with get_db_connection() as conn:
-        devices = [dict(row) for row in conn.execute('SELECT * FROM devices ORDER BY name').fetchall()]
+        devices = [dict(row) for row in conn.execute('SELECT * FROM devices WHERE deleted_at IS NULL ORDER BY name').fetchall()]
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     
     # Získame nastavenie oneskorenia medzi zálohami (predvolené 30 sekúnd)
@@ -3298,7 +3518,7 @@ def check_snmp(device_id):
     if not device:
         with get_db_connection() as conn:
             device = conn.execute(
-                'SELECT id, snmp_interval_minutes FROM devices WHERE id = ?',
+                'SELECT id, snmp_interval_minutes FROM devices WHERE id = ? AND deleted_at IS NULL',
                 (device_id,)
             ).fetchone()
             if not device:
@@ -3337,7 +3557,7 @@ def snmp_refresh_all_devices():
     with get_db_connection() as conn:
         devices = [
             get_device_with_decrypted_password(dict(row))
-            for row in conn.execute('SELECT id, ip, name, snmp_community FROM devices ORDER BY name').fetchall()
+            for row in conn.execute('SELECT id, ip, name, snmp_community FROM devices WHERE deleted_at IS NULL ORDER BY name').fetchall()
         ]
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     
@@ -3407,7 +3627,7 @@ def run_sequential_snmp_refresh(devices, delay_seconds):
                 
                 # Uložíme do databázy
                 with get_db_connection() as conn:
-                    conn.execute("UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ?", 
+                    conn.execute("UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ? AND deleted_at IS NULL",
                                (json.dumps(snmp_data), status, current_time.isoformat(), device_id))
                     conn.commit()
                 
@@ -3507,6 +3727,16 @@ def handle_settings():
                         return jsonify({'status': 'error', 'message': 'SNMP health check interval musí byť 1-1440 minút'}), 400
                 except (ValueError, TypeError):
                     return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre SNMP health check interval'}), 400
+
+            # Validácia uchovávania zmazaných zariadení
+            deleted_retention = request.json.get('deleted_device_retention_days')
+            if deleted_retention is not None:
+                try:
+                    deleted_retention_int = int(deleted_retention)
+                    if deleted_retention_int < 1 or deleted_retention_int > 90:
+                        return jsonify({'status': 'error', 'message': 'Uchovávanie zmazaných zariadení musí byť 1-90 dní'}), 400
+                except (ValueError, TypeError):
+                    return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre uchovávanie zmazaných zariadení'}), 400
             
             # Načítame pôvodné nastavenia pre porovnanie zmien
             old_settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
@@ -3641,7 +3871,7 @@ def get_snmp_timers_status():
     """Diagnostika stavu SNMP timerov"""
     try:
         with get_db_connection() as conn:
-            devices = conn.execute('SELECT id, name, ip, snmp_interval_minutes, last_snmp_check, monitoring_paused FROM devices').fetchall()
+            devices = conn.execute('SELECT id, name, ip, snmp_interval_minutes, last_snmp_check, monitoring_paused FROM devices WHERE deleted_at IS NULL').fetchall()
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             global_interval = int(settings.get('snmp_check_interval_minutes', 10))
 
@@ -3862,9 +4092,9 @@ def scheduled_backup_job():
         add_log('info', "Spúšťam naplánovanú úlohu zálohovania...")
         # Použijeme sekvenčné zálohovanie aj pre plánované úlohy
         with get_db_connection() as conn:
-            devices = [dict(row) for row in conn.execute('SELECT * FROM devices').fetchall()]
+            devices = [dict(row) for row in conn.execute('SELECT * FROM devices WHERE deleted_at IS NULL').fetchall()]
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
-        
+
         backup_delay = int(settings.get('backup_delay_seconds', 30))
         available_devices = [device for device in devices if device['ip'] not in backup_tasks]
         
@@ -4044,7 +4274,7 @@ def perform_snmp_poll(device_id, reason="scheduler"):
     try:
         with get_db_connection() as conn:
             device_row = conn.execute(
-                'SELECT id, name, ip, snmp_community, monitoring_paused, last_snmp_data, snmp_interval_minutes FROM devices WHERE id = ?',
+                'SELECT id, name, ip, snmp_community, monitoring_paused, last_snmp_data, snmp_interval_minutes FROM devices WHERE id = ? AND deleted_at IS NULL',
                 (device_id,)
             ).fetchone()
 
@@ -4075,12 +4305,12 @@ def perform_snmp_poll(device_id, reason="scheduler"):
         with get_db_connection() as conn:
             if has_valid_metrics:
                 conn.execute(
-                    "UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ?",
+                    "UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ? AND deleted_at IS NULL",
                     (json.dumps(snmp_data), status, timestamp.isoformat(), device_id)
                 )
             else:
                 conn.execute(
-                    "UPDATE devices SET status = ?, last_snmp_check = ? WHERE id = ?",
+                    "UPDATE devices SET status = ?, last_snmp_check = ? WHERE id = ? AND deleted_at IS NULL",
                     (status, timestamp.isoformat(), device_id)
                 )
             conn.commit()
@@ -4128,7 +4358,7 @@ def trigger_immediate_snmp_check_for_device(device_id, reason="ping_observed_onl
     try:
         with get_db_connection() as conn:
             device = conn.execute(
-                'SELECT name, ip, snmp_interval_minutes, monitoring_paused FROM devices WHERE id = ?',
+                'SELECT name, ip, snmp_interval_minutes, monitoring_paused FROM devices WHERE id = ? AND deleted_at IS NULL',
                 (device_id,)
             ).fetchone()
             if not device:
@@ -4156,7 +4386,7 @@ def check_snmp_timers_health():
     """Kontroluje zdravie SNMP úloh a reštartuje chýbajúce alebo zaseknuté."""
     try:
         with get_db_connection() as conn:
-            devices = conn.execute('SELECT id, name, ip, snmp_interval_minutes, last_snmp_check, monitoring_paused FROM devices').fetchall()
+            devices = conn.execute('SELECT id, name, ip, snmp_interval_minutes, last_snmp_check, monitoring_paused FROM devices WHERE deleted_at IS NULL').fetchall()
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             global_interval = int(settings.get('snmp_check_interval_minutes', 10))
         ensure_snmp_scheduler_running()
@@ -4219,7 +4449,7 @@ def start_all_snmp_timers():
         with get_db_connection() as conn:
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             global_interval = int(settings.get('snmp_check_interval_minutes', 10))
-            devices = conn.execute('SELECT id, name, snmp_interval_minutes, monitoring_paused FROM devices').fetchall()
+            devices = conn.execute('SELECT id, name, snmp_interval_minutes, monitoring_paused FROM devices WHERE deleted_at IS NULL').fetchall()
         ensure_snmp_scheduler_running()
         device_count = len(devices)
         if device_count == 0:
@@ -4397,7 +4627,7 @@ def _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_do
         return False
 
     with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         _emit('step_error', step=1)
         _fail('Zariadenie nenájdené v databáze')
@@ -4441,7 +4671,7 @@ def run_scheduled_update(schedule_id):
         try:
             with get_db_connection() as conn:
                 row = conn.execute(
-                    'SELECT us.*, d.ip, d.name FROM update_schedule us JOIN devices d ON d.id = us.device_id WHERE us.id = ?',
+                    'SELECT us.*, d.ip, d.name FROM update_schedule us JOIN devices d ON d.id = us.device_id AND d.deleted_at IS NULL WHERE us.id = ?',
                     (schedule_id,)
                 ).fetchone()
             if not row:
@@ -4740,7 +4970,7 @@ def run_device_update(device_id):
     with app.app_context():
         try:
             with get_db_connection() as conn:
-                device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+                device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
             if not device:
                 _running_manual_updates.pop(device_id, None)
                 return
@@ -4980,7 +5210,7 @@ def run_device_update_os(device_id):
     with app.app_context():
         try:
             with get_db_connection() as conn:
-                device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+                device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
             if not device:
                 _running_manual_updates.pop(device_id, None)
                 return
@@ -5124,7 +5354,7 @@ def run_device_update_firmware(device_id):
     with app.app_context():
         try:
             with get_db_connection() as conn:
-                device = conn.execute('SELECT * FROM devices WHERE id = ?', (device_id,)).fetchone()
+                device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
             if not device:
                 _running_manual_updates.pop(device_id, None)
                 return
@@ -5395,10 +5625,27 @@ def run_scheduled_update_bulk(schedule_id, group_id, all_rows_sorted):
                 if updated:
                     run_scheduled_update(row['id'])
 
+def check_deleted_devices_for_purge():
+    """Skontroluje soft-deleted zariadenia a spustí purge pre expirované."""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        with get_db_connection() as conn:
+            expired = conn.execute(
+                'SELECT id, name, ip FROM devices WHERE deleted_at IS NOT NULL AND purge_after <= ?',
+                (now,)
+            ).fetchall()
+        for device in expired:
+            debug_log('terminal', f"Purge: zariadenie {device['name']} ({device['ip']}) - lehota uplynula")
+            purge_device(device['id'])
+    except Exception as e:
+        logger.error(f"check_deleted_devices_for_purge error: {e}")
+
+
 def run_scheduler():
     while True:
         schedule.run_pending()
         check_update_schedules()
+        check_deleted_devices_for_purge()
         time.sleep(60)
 
 def scheduled_log_cleanup():
@@ -5500,7 +5747,7 @@ def save_ping_result(device_id, ping_result):
                   ping_result['packet_loss'], ping_result['status']))
             
             # Aktualizujeme stav zariadenia v devices tabuľke
-            cursor.execute('UPDATE devices SET status = ? WHERE id = ?', (ping_result['status'], device_id))
+            cursor.execute('UPDATE devices SET status = ? WHERE id = ? AND deleted_at IS NULL', (ping_result['status'], device_id))
             
             conn.commit()
             
@@ -5745,7 +5992,7 @@ def ping_monitoring_loop():
                 cursor.execute('''
                     SELECT id, name, ip, ping_interval_seconds, ping_retry_interval_seconds, status
                     FROM devices
-                    WHERE monitoring_paused = 0 OR monitoring_paused IS NULL
+                    WHERE (monitoring_paused = 0 OR monitoring_paused IS NULL) AND deleted_at IS NULL
                 ''')
                 devices = cursor.fetchall()
                 
@@ -5883,7 +6130,7 @@ def ping_monitoring_loop():
                             
                             # Aktualizujeme stav v databáze
                             with get_db_connection() as conn:
-                                conn.execute('UPDATE devices SET status = ? WHERE id = ?', 
+                                conn.execute('UPDATE devices SET status = ? WHERE id = ? AND deleted_at IS NULL',
                                              (device_status_tracker[device_id]['status'], device_id))
                                 conn.commit()
                             
@@ -5944,8 +6191,8 @@ def monitoring_device_settings(device_id):
         try:
             with get_db_connection() as conn:
                 device = conn.execute('''
-                    SELECT id, name, ip, ping_interval_seconds, ping_retry_interval_seconds, snmp_interval_minutes, monitoring_paused 
-                    FROM devices WHERE id = ?
+                    SELECT id, name, ip, ping_interval_seconds, ping_retry_interval_seconds, snmp_interval_minutes, monitoring_paused
+                    FROM devices WHERE id = ? AND deleted_at IS NULL
                 ''', (device_id,)).fetchone()
                 
                 if not device:
@@ -5997,17 +6244,17 @@ def monitoring_device_settings(device_id):
             
             with get_db_connection() as conn:
                 # Get old SNMP interval before update
-                old_device = conn.execute('SELECT snmp_interval_minutes FROM devices WHERE id = ?', (device_id,)).fetchone()
+                old_device = conn.execute('SELECT snmp_interval_minutes FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
                 old_snmp_interval = old_device[0] if old_device else 0
-                
+
                 conn.execute('''
-                    UPDATE devices 
+                    UPDATE devices
                     SET ping_interval_seconds = ?, ping_retry_interval_seconds = ?, snmp_interval_minutes = ?
-                    WHERE id = ?
+                    WHERE id = ? AND deleted_at IS NULL
                 ''', (ping_interval, ping_retry_interval, snmp_interval, device_id))
                 conn.commit()
-                
-                device = conn.execute('SELECT name, ip FROM devices WHERE id = ?', (device_id,)).fetchone()
+
+                device = conn.execute('SELECT name, ip FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
                 if device:
                     add_log('info', f"Monitoring nastavenia aktualizované pre {device[1]} ({device[0]}): ping {ping_interval}s, retry {ping_retry_interval}s, SNMP {snmp_interval}min")
                 
@@ -6036,29 +6283,29 @@ def monitoring_device_pause_resume(device_id):
             cursor = conn.cursor()
             
             # Skontroluj či zariadenie existuje a získaj aktuálny stav
-            device_data = cursor.execute('SELECT name, ip, monitoring_paused FROM devices WHERE id = ?', (device_id,)).fetchone()
+            device_data = cursor.execute('SELECT name, ip, monitoring_paused FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
             if not device_data:
                 return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
-            
+
             device_name, device_ip, current_paused = device_data
-            
+
             # Toggle stav - ak je NULL alebo 0, nastav na 1, inak nastav na 0
             new_paused = 0 if current_paused else 1
-            
+
             # Aktualizuj monitoring_paused status
             cursor.execute('''
-                UPDATE devices 
+                UPDATE devices
                 SET monitoring_paused = ?
-                WHERE id = ?
+                WHERE id = ? AND deleted_at IS NULL
             ''', (new_paused, device_id))
             conn.commit()
-            
+
             # Zastav/spusti SNMP timer pre toto zariadenie
             if new_paused:
                 stop_snmp_timer_for_device(device_id)
             else:
                 # Získaj správny interval pre toto zariadenie pred spustením timera
-                device_info = cursor.execute('SELECT snmp_interval_minutes FROM devices WHERE id = ?', (device_id,)).fetchone()
+                device_info = cursor.execute('SELECT snmp_interval_minutes FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
                 device_interval = device_info[0] if device_info and device_info[0] else 0
                 
                 # Ak device nemá vlastný interval, použij globálny
@@ -6089,8 +6336,8 @@ def manual_ping_device(device_id):
     """Manuálny ping zariadenia"""
     try:
         with get_db_connection() as conn:
-            device = conn.execute('SELECT ip, name FROM devices WHERE id = ?', (device_id,)).fetchone()
-            
+            device = conn.execute('SELECT ip, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
+
             if not device:
                 return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
             
@@ -6132,7 +6379,7 @@ def debug_monitoring_settings():
             devices = conn.execute('''
                 SELECT id, name, ip, ping_interval_seconds, ping_retry_interval_seconds,
                        (SELECT MAX(timestamp) FROM ping_history WHERE device_id = devices.id) as last_ping
-                FROM devices
+                FROM devices WHERE deleted_at IS NULL
             ''').fetchall()
             
             device_info = []
@@ -6183,11 +6430,14 @@ def get_ping_history(device_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            # Overiť že zariadenie nie je v koši
+            if not cursor.execute('SELECT id FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone():
+                return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
             # Posledných 24 hodín
             day_ago = datetime.now() - timedelta(hours=24)
             cursor.execute('''
                 SELECT timestamp, avg_latency, packet_loss, status
-                FROM ping_history 
+                FROM ping_history
                 WHERE device_id = ? AND timestamp > ?
                 ORDER BY timestamp ASC
             ''', (device_id, day_ago.isoformat()))
@@ -6216,9 +6466,9 @@ def get_current_ping_status(device_id):
             cursor = conn.cursor()
             
             # Získaj zariadenie a ping timeout nastavenie
-            cursor.execute('SELECT ip FROM devices WHERE id = ?', (device_id,))
+            cursor.execute('SELECT ip FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,))
             result = cursor.fetchone()
-            
+
             if not result:
                 return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
             
@@ -6280,6 +6530,9 @@ def get_snmp_history(device_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            # Overiť že zariadenie nie je v koši
+            if not cursor.execute('SELECT id FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone():
+                return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
             # Posledných 24 hodín
             day_ago = datetime.now() - timedelta(hours=24)
             cursor.execute('''
@@ -6319,7 +6572,10 @@ def get_availability_history(device_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+            # Overiť že zariadenie nie je v koši
+            if not cursor.execute('SELECT id FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone():
+                return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+
             availability_data = []
             for i in range(7):
                 date = datetime.now() - timedelta(days=i)
@@ -6381,13 +6637,17 @@ def get_monitoring_history(device_id):
         start_time = now - time_mappings[time_range]
         
         with get_db_connection() as conn:
-            # Ping dáta s optimalizáciou pre veľké datasety
             cursor = conn.cursor()
-            
+            # Overiť že zariadenie nie je v koši
+            if not cursor.execute('SELECT id FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone():
+                return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+
+            # Ping dáta s optimalizáciou pre veľké datasety
+
             # Pokročilý sampling pre extrémne veľké datasety (až 365 dní s 1s intervalmi)
             # PROBLÉM: rowid % sampling je neefektívny pre milióny záznamov
             # RIEŠENIE: časovo-based sampling + inteligentná hustota pre rôzne časti rozsahu
-            
+
             # Najprv zistíme celkový počet záznamov v rozsahu
             cursor.execute('''
                 SELECT COUNT(*) FROM ping_history 
@@ -6668,7 +6928,7 @@ def snmp_status():
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             global_interval = int(settings.get('snmp_check_interval_minutes', 10))
             
-            devices = [dict(row) for row in conn.execute('SELECT id, ip, name, snmp_interval_minutes, last_snmp_check FROM devices ORDER BY name').fetchall()]
+            devices = [dict(row) for row in conn.execute('SELECT id, ip, name, snmp_interval_minutes, last_snmp_check FROM devices WHERE deleted_at IS NULL ORDER BY name').fetchall()]
             current_time = datetime.now()
             
             status_info = []

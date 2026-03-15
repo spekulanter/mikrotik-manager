@@ -6933,6 +6933,7 @@ def stop_all_backups():
         })
 
 @app.route('/api/snmp/status', methods=['GET'])
+@login_required
 def snmp_status():
     """Debug endpoint - zobrazí SNMP stav všetkých zariadení"""
     try:

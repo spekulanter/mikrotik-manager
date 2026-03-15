@@ -973,6 +973,9 @@
                                     <option value="notify_cert_expiry">🔐 TLS certifikát expiruje</option>
                                     <option value="notify_new_routeros_version">📣 Nová verzia RouterOS (RSS)</option>
                                 </optgroup>
+                                <optgroup label="Koš">
+                                    <option value="notify_device_purged">🗑️ Zariadenie automaticky vymazané z koša</option>
+                                </optgroup>
                             </select>
                             <button type="button" id="testPushoverBtn"
                                 class="btn bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-5 rounded-lg flex items-center gap-2 whitespace-nowrap">
@@ -1461,7 +1464,10 @@
             notify_cert_expiry: "🔐 Automatická obnova TLS certifikátu",
             
             // RSS
-            notify_new_routeros_version: "📣 Nová verzia RouterOS (z RSS feedu)"
+            notify_new_routeros_version: "📣 Nová verzia RouterOS (z RSS feedu)",
+
+            // Koš
+            notify_device_purged: "🗑️ Zariadenie automaticky vymazané z koša"
         };
 
         // Show notification toast

@@ -59,7 +59,7 @@ BOOLEAN_SETTING_KEYS = {
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
     'notify_version_change', 'notify_failed_login', 'notify_failed_2fa', 'notify_password_recovery_failure', 'quiet_hours_enabled', 'availability_monitoring_enabled',
     'debug_terminal', 'notify_cert_expiry', 'notify_new_routeros_version',
-    'updater_backup_before_update'
+    'updater_backup_before_update', 'notify_device_purged'
 }
 
 SETTING_LABELS = {
@@ -111,6 +111,7 @@ SETTING_LABELS = {
     'notify_failed_2fa': 'Notifikácia: neúspešné 2FA overenie',
     'notify_password_recovery_failure': 'Notifikácia: neúspešná obnova hesla',
     'notify_new_routeros_version': 'Notifikácia: nová verzia RouterOS (RSS)',
+    'notify_device_purged': 'Notifikácia: zariadenie automaticky vymazané z koša',
     'updater_backup_before_update': 'Záloha pred aktualizáciou',
     'updater_post_backup_delay': 'Pauza po zálohe pred aktualizáciou',
     'viewport': 'Režim zobrazenia',
@@ -924,6 +925,7 @@ def init_database():
             'notify_failed_2fa': 'true',
             'notify_password_recovery_failure': 'true',
             'notify_new_routeros_version': 'true',
+            'notify_device_purged': 'true',
             'temp_critical_threshold': '75',
             'cpu_critical_threshold': '85',
             'memory_critical_threshold': '90',
@@ -3313,7 +3315,7 @@ def restore_device(device_id):
     return jsonify({'status': 'success'})
 
 
-def purge_device(device_id):
+def purge_device(device_id, manual=False):
     """Definitívne vymaže zariadenie a všetky súvisiace dáta. Vracia True ak úspešné."""
     try:
         with get_db_connection() as conn:
@@ -3378,11 +3380,13 @@ def purge_device(device_id):
             conn.execute('DELETE FROM devices WHERE id = ?', (device_id,))
             conn.commit()
 
-        # 6. Pushover notifikácia
-        send_pushover_notification(
-            f"Zariadenie {device_name} ({device_ip}) bolo definitívne odstránené po {retention_days}-dňovej lehote",
-            title="MikroTik Manager - Zariadenie vymazané"
-        )
+        # 6. Pushover notifikácia — len pri automatickom purge po lehote
+        if not manual:
+            send_pushover_notification(
+                f"Zariadenie {device_name} ({device_ip}) bolo definitívne odstránené po {retention_days}-dňovej lehote",
+                title="MikroTik Manager - Zariadenie vymazané",
+                notification_key='notify_device_purged'
+            )
 
         add_log('info', f"Zariadenie {device_name} ({device_ip}) bolo definitívne vymazané (purge)")
         return True
@@ -3403,7 +3407,7 @@ def purge_device_endpoint(device_id):
         if not device:
             return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené v koši'}), 404
 
-    success = purge_device(device_id)
+    success = purge_device(device_id, manual=True)
     if success:
         return jsonify({'status': 'success'})
     else:
@@ -3859,9 +3863,17 @@ def test_notification():
         'notify_version_change':        ("🆕 Test: Zmena verzie OS\nZariadenie: Router-Test (192.168.1.1)\nStarý: 7.21 → Nový: 7.22", "Test – Zmena Verzie OS"),
         'notify_cert_expiry':           ("🔐 Test: TLS certifikát expiruje\nZariadenie: Router-Test (192.168.1.1)\nCertifikát expiruje za 5 dní.", "Test – TLS Certifikát"),
         'notify_new_routeros_version':  ("📣 Test: Nová verzia RouterOS\nVerzia: 7.22\nDátum: 09.03.2026 10:38", "Test – Nová Verzia RouterOS"),
+        'notify_device_purged':         ("🗑️ Test: Zariadenie definitívne odstránené\nZariadenie: Router-Test (192.168.1.1) bolo definitívne odstránené po 7-dňovej lehote", "Test – Zariadenie Vymazané z Koša"),
     }
 
-    msg, title = test_messages.get(notif_type, test_messages['general'])
+    if notif_type == 'notify_device_purged':
+        with get_db_connection() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key='deleted_device_retention_days'").fetchone()
+            retention_days = int(row['value'] if row else 7)
+        msg = f"🗑️ Test: Zariadenie definitívne odstránené\nZariadenie: Router-Test (192.168.1.1) bolo definitívne odstránené po {retention_days}-dňovej lehote"
+        title = "Test – Zariadenie Vymazané z Koša"
+    else:
+        msg, title = test_messages.get(notif_type, test_messages['general'])
     send_pushover_notification(msg, title=title)
     return jsonify({'status': 'success'})
 

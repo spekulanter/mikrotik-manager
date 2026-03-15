@@ -2135,6 +2135,7 @@
                                 data-custom-select data-placeholder="Všetky typy">
                                 <option value="">Všetky typy</option>
                                 <option value="backup">Zálohovanie</option>
+                                <option value="update">Aktualizácie</option>
                                 <option value="notification">Notifikácie</option>
                                 <option value="status">Online/Offline</option>
                                 <option value="device">Zariadenie</option>
@@ -2197,6 +2198,7 @@
                             data-custom-select data-placeholder="Všetky typy">
                             <option value="">Všetky typy</option>
                             <option value="backup">Zálohovanie</option>
+                            <option value="update">Aktualizácie</option>
                             <option value="notification">Notifikácie</option>
                             <option value="status">Online/Offline</option>
                             <option value="device">Zariadenie</option>
@@ -2827,6 +2829,7 @@
                         data-custom-select data-placeholder="Všetky typy">
                         <option value="">Všetky typy</option>
                         <option value="backup">Zálohovanie</option>
+                        <option value="update">Aktualizácie</option>
                         <option value="notification">Notifikácie</option>
                         <option value="status">Online/Offline</option>
                         <option value="device">Zariadenie</option>
@@ -3572,6 +3575,14 @@
                 if (maintenanceKeywords.some(keyword => msgLower.includes(keyword))) return 'system';
                 // Pushover notifikácie majú prioritu a zostávajú v kategórii notification
                 if (msgLower.includes('notifikácia') || msgLower.includes('notification') || msgLower.includes('pushover')) return 'notification';
+                // Aktualizácie (updater modul) – pred backup aj device, aby sa predišlo falošným zhodám
+                const updateKeywords = [
+                    'naplánovaný update', 'manuálny update',
+                    'routeros update', 'firmware update',
+                    'hromadný naplánovaný', 'záloha pred update',
+                    'aktualizáci'
+                ];
+                if (updateKeywords.some(keyword => msgLower.includes(keyword))) return 'update';
                 // Všetky zálohovacie správy vrátane "spúšťam pokročilú zálohu" (okrem Pushover)
                 const extendedBackupKeywords = [
                     'spúšťam čistenie starých záloh',

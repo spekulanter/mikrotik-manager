@@ -1923,6 +1923,37 @@
             color: #1e3a8a !important;
         }
 
+        /* Card data values (val-* spans) in light theme – slightly darker gray */
+        body.light-theme #devicesGrid .card span.text-gray-300 {
+            color: #4e6070 !important;
+        }
+
+        /* Card device name in light theme – same blue-gray as table headers */
+        body.light-theme #devicesGrid .card h3.text-white {
+            color: #3a7595 !important;
+        }
+
+        /* Table headers blue-gray-white tint in dark theme */
+        #devicesTableContainer table thead {
+            color: #b8cce0;
+        }
+
+        /* Slightly brighter table cell text in dark theme only */
+        #devicesTableContainer table td {
+            color: #d6dae2;
+        }
+        body.light-theme #devicesTableContainer table td {
+            color: #4e6070 !important;
+        }
+
+        /* Device name column – stand out in both themes */
+        #devicesTableContainer table td:first-child {
+            color: #ffffff;
+        }
+        body.light-theme #devicesTableContainer table td:first-child {
+            color: #2d6882 !important;
+        }
+
         /* Column resize handle */
         #devicesTableContainer th {
             position: relative;
@@ -3720,7 +3751,7 @@
                 const lastBackupDisplay = device.last_backup ? formatLocalDate(device.last_backup) : 'Nikdy';
 
                 row.innerHTML = `
-                    <td class="pl-2 pr-2.5 py-2 font-medium text-white text-left">
+                    <td class="pl-2 pr-2.5 py-2 font-semibold text-white text-left">
                         <div class="flex items-center gap-2.5">
                             <span class="status-indicator ${statusClass} flex-shrink-0" title="${deviceStatus}"><i class="fas fa-circle text-[10px]"></i></span>
                             <div class="line-clamp-2 leading-tight" title="${device.name}">${device.name}</div>

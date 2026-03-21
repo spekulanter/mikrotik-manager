@@ -1851,7 +1851,7 @@
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold">Nastavenia monitoringu</h3>
+                <h3 class="text-lg font-bold" style="color:#38bdf8 !important;">Nastavenia monitoringu</h3>
                 <button id="closeSettingsModal" class="text-gray-400 hover:text-white">
                     <i class="fas fa-times"></i>
                 </button>
@@ -1865,7 +1865,7 @@
 
                 <div class="mb-4">
                     <label for="pingInterval" class="block text-sm font-medium mb-2">
-                        Ping interval (sekundy)
+                        <i class="fas fa-satellite-dish text-emerald-400 text-xs mr-1"></i>Ping interval (sekundy)
                     </label>
                     <input type="number" id="pingInterval" name="ping_interval_seconds" min="0" max="86400"
                         class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
@@ -1880,7 +1880,7 @@
 
                 <div class="mb-4">
                     <label for="retryInterval" class="block text-sm font-medium mb-2">
-                        Retry interval pri výpadku (sekundy)
+                        <i class="fas fa-arrows-rotate text-orange-400 text-xs mr-1"></i>Retry interval pri výpadku (sekundy)
                     </label>
                     <input type="number" id="retryInterval" name="ping_retry_interval_seconds" min="0" max="120"
                         class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
@@ -1895,7 +1895,7 @@
 
                 <div class="mb-6">
                     <label for="snmpInterval" class="block text-sm font-medium mb-2">
-                        SNMP interval (minúty)
+                        <i class="fas fa-chart-line text-purple-400 text-xs mr-1"></i>SNMP interval (minúty)
                     </label>
                     <input type="number" id="snmpInterval" name="snmp_interval_minutes" min="0" max="1440"
                         class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none">

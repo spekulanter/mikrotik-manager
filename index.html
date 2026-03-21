@@ -1254,6 +1254,13 @@
             padding-right: 0.25rem;
         }
 
+        @media (max-width: 768px) {
+            #deviceForm {
+                padding-top: 12px;
+                padding-bottom: 12px;
+            }
+        }
+
         @media (min-width: 1024px) {
             .device-form-scroll {
                 max-height: none;
@@ -1274,14 +1281,254 @@
             border-color: var(--border-color) !important;
         }
 
-        /* Intervaly sekcia v zariadení - svetlá téma */
-        body.light-theme .interval-card {
-            background-color: #dce7f8 !important;
-            border-color: #b8c9e6 !important;
+        /* Intervaly sekcia v zariadení - svetlá téma (handled in redesign block below) */
+
+        /* Požadované služby sekcia - svetlá téma */
+        body.light-theme .required-services-card {
+            background-color: #dce8f8 !important;
+            border-color: #7bb3e0 !important;
         }
 
-        body.light-theme .interval-card h3 {
-            color: var(--text-color) !important;
+        body.light-theme .required-services-card .text-sky-300 {
+            color: #0369a1 !important;
+        }
+
+        body.light-theme .required-services-card .text-gray-500 {
+            color: #4b5563 !important;
+        }
+
+        body.light-theme .required-services-card .text-gray-400 {
+            color: #374151 !important;
+        }
+
+        body.light-theme .required-services-card span.inline-flex {
+            background-color: #c8daf5 !important;
+            border-color: #93b8e0 !important;
+            color: #1e3a5f !important;
+        }
+
+        /* ===================== DEVICE MODAL REDESIGN ===================== */
+
+        /* Header */
+        .device-modal-header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0c1a2e 100%);
+            border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+        .device-modal-header::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at top left, rgba(56, 189, 248, 0.08) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .device-modal-icon-wrap {
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
+            box-shadow: 0 0 16px rgba(14, 165, 233, 0.35);
+            flex-shrink: 0;
+        }
+
+        /* Section titles */
+        .device-form-section-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+        }
+
+        /* Field labels */
+        .device-field-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 5px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #cbd5e1;
+        }
+        .device-field-label i { font-size: 0.7rem; width: 13px; }
+
+        /* Inputs */
+        .device-input {
+            background: rgba(15, 23, 42, 0.6) !important;
+            border: 1px solid rgba(71, 85, 105, 0.6) !important;
+            color: #f1f5f9 !important;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .device-input:focus {
+            outline: none !important;
+            border-color: rgba(56, 189, 248, 0.6) !important;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1) !important;
+        }
+        .device-input::placeholder { color: #475569 !important; }
+
+        /* Low memory checkbox label */
+        .device-lowmem-label {
+            padding: 7px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(71, 85, 105, 0.4);
+            background: rgba(15, 23, 42, 0.3);
+            font-size: 0.82rem;
+            color: #94a3b8;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .device-lowmem-label:hover {
+            background: rgba(15, 23, 42, 0.5);
+            border-color: rgba(100, 116, 139, 0.6);
+        }
+
+        /* Interval card */
+        .interval-card {
+            background: rgba(15, 23, 42, 0.4) !important;
+            border-color: rgba(56, 189, 248, 0.12) !important;
+        }
+
+        /* Service badges */
+        .device-service-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            letter-spacing: 0.02em;
+        }
+        .device-service-badge i { font-size: 0.65rem; }
+
+        /* Buttons */
+        .device-btn-cancel {
+            background: rgba(65, 73, 86, 0.8) !important;
+            border: 1px solid rgba(100, 116, 139, 0.3) !important;
+            color: #94a3b8 !important;
+            transition: background 0.2s, color 0.2s !important;
+        }
+        .device-btn-cancel:hover {
+            background: rgba(53, 61, 72, 0.9) !important;
+            color: #cbd5e1 !important;
+        }
+        .device-btn-save {
+            background: linear-gradient(135deg, #0284c7, #1d4ed8) !important;
+            border: 1px solid rgba(56, 189, 248, 0.3) !important;
+            color: #fff !important;
+            box-shadow: 0 2px 12px rgba(2, 132, 199, 0.3) !important;
+            transition: box-shadow 0.2s, filter 0.2s !important;
+        }
+        .device-btn-save:hover {
+            filter: brightness(1.1) !important;
+            box-shadow: 0 4px 18px rgba(2, 132, 199, 0.45) !important;
+        }
+
+        /* ---- LIGHT THEME overrides ---- */
+        body.light-theme .device-modal-header {
+            background: linear-gradient(135deg, #deeafa 0%, #e8f3fd 60%, #d4e8f8 100%);
+            border-bottom: 1px solid #b8c9e6;
+        }
+        body.light-theme .device-modal-header::before {
+            background: radial-gradient(ellipse at top left, rgba(3, 105, 161, 0.06) 0%, transparent 60%);
+        }
+        body.light-theme .device-modal-header h2,
+        body.light-theme .device-modal-header #deviceModalTitle {
+            color: #1f2937 !important;
+        }
+        body.light-theme .device-modal-header .text-sky-300\/70 {
+            color: #0369a1 !important;
+            opacity: 0.85;
+        }
+        body.light-theme .device-modal-icon-wrap {
+            background: linear-gradient(135deg, #3ba8e8, #1f86d8);
+            box-shadow: 0 0 12px rgba(59, 168, 232, 0.3);
+        }
+        body.light-theme .device-field-label { color: #1e3a5f; }
+        body.light-theme .device-form-section-title { color: #0369a1; border-bottom-color: rgba(3,105,161,0.15); }
+        body.light-theme .device-input {
+            background: #e3edfa !important;
+            border-color: #b8c9e6 !important;
+            color: #1f2937 !important;
+        }
+        body.light-theme .device-input:focus {
+            border-color: #0369a1 !important;
+            box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.12) !important;
+        }
+        body.light-theme .device-input::placeholder { color: #7ea8d0 !important; }
+        body.light-theme .device-lowmem-label {
+            background: rgba(186, 215, 242, 0.3);
+            border-color: rgba(120, 170, 220, 0.5);
+            color: #1e3a5f;
+        }
+        body.light-theme .device-lowmem-label:hover {
+            background: rgba(186, 215, 242, 0.5);
+        }
+        body.light-theme .interval-card {
+            background: #dce7f8 !important;
+            border-color: #b8c9e6 !important;
+        }
+        body.light-theme .device-service-badge {
+            background: #c8daf5 !important;
+            border-color: #93b8e0 !important;
+            color: #1e3a5f !important;
+        }
+        body.light-theme .device-btn-cancel {
+            background: #c8d9ef !important;
+            border-color: #93b8e0 !important;
+            color: #374151 !important;
+        }
+        body.light-theme .device-btn-cancel:hover {
+            background: #b8cce4 !important;
+            color: #1e3a5f !important;
+        }
+        body.light-theme .device-btn-save {
+            background: linear-gradient(135deg, #3ba8e8, #1f86d8) !important;
+            border-color: transparent !important;
+            box-shadow: 0 2px 6px rgba(31, 134, 216, 0.2) !important;
+            filter: none !important;
+        }
+        body.light-theme .device-btn-save:hover {
+            background: linear-gradient(135deg, #1f86d8, #186fb6) !important;
+            box-shadow: 0 4px 12px rgba(24, 111, 182, 0.28) !important;
+            filter: none !important;
+        }
+
+        /* ---- MOBILE overrides (device modal) ---- */
+        @media (max-width: 768px) {
+            .device-modal-header {
+                padding: 12px 20px;
+            }
+            .device-modal-icon-wrap {
+                width: 36px;
+                height: 36px;
+                border-radius: 10px;
+            }
+            .device-modal-icon-wrap i {
+                font-size: 1rem;
+            }
+            .device-modal-header h2 {
+                font-size: 1rem !important;
+                line-height: 1.3;
+            }
+            .device-modal-header p {
+                font-size: 0.7rem;
+                margin-top: 1px;
+            }
+            .device-btn-cancel,
+            .device-btn-save {
+                padding: 10px 16px !important;
+                font-size: 0.85rem !important;
+            }
+            .device-btn-save {
+                padding-left: 20px !important;
+                padding-right: 20px !important;
+            }
         }
 
         /* 2FA modály - svetlý režim texty */
@@ -2250,95 +2497,161 @@
 
     <!-- Modals -->
     <div id="deviceModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
-        <div class="card p-8 rounded-lg w-full max-w-4xl modal-content device-modal-content">
-            <div class="mb-4">
-                <h2 class="text-2xl font-bold text-white">Pridať/Upraviť zariadenie</h2>
+        <div class="card rounded-xl w-full max-w-4xl modal-content device-modal-content overflow-hidden">
+
+            <!-- Modal header -->
+            <div class="device-modal-header px-8 py-5 flex items-center gap-4">
+                <div class="device-modal-icon-wrap flex items-center justify-center w-11 h-11 rounded-xl">
+                    <i class="fas fa-router text-xl text-white"></i>
+                </div>
+                <div>
+                    <h2 id="deviceModalTitle" class="text-xl font-bold text-white leading-tight">Pridať/Upraviť zariadenie</h2>
+                    <p class="text-xs text-sky-300/70 mt-0.5">Konfigurácia pripojenia a monitorovania</p>
+                </div>
             </div>
-            <form id="deviceForm" class="space-y-6">
+
+            <form id="deviceForm" class="px-8 pb-7 pt-6 space-y-5">
                 <input type="hidden" id="deviceId">
 
-                <div class="device-form-scroll space-y-6 pr-1">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="space-y-4">
+                <div class="device-form-scroll space-y-5 pr-1">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                        <!-- Ľavý stĺpec - základné údaje -->
+                        <div class="space-y-3">
+                            <div class="device-form-section-title">
+                                <i class="fas fa-server text-sky-400 text-xs"></i>
+                                <span>Základné údaje</span>
+                            </div>
                             <div>
-                                <label for="deviceName" class="block mb-1 font-semibold">Názov zariadenia</label>
+                                <label for="deviceName" class="device-field-label">
+                                    <i class="fas fa-tag text-sky-400"></i>Názov zariadenia
+                                </label>
                                 <input type="text" id="deviceName"
-                                    class="w-full p-3 rounded bg-gray-800 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                    class="device-input w-full p-3 rounded-lg"
                                     required>
                             </div>
                             <div>
-                                <label for="deviceIp" class="block mb-1 font-semibold">IP Adresa</label>
+                                <label for="deviceIp" class="device-field-label">
+                                    <i class="fas fa-network-wired text-emerald-400"></i>IP Adresa
+                                </label>
                                 <input type="text" id="deviceIp"
-                                    class="w-full p-3 rounded bg-gray-800 border border-gray-600" required>
+                                    class="device-input w-full p-3 rounded-lg" required>
                             </div>
                             <div>
-                                <label for="deviceUsername" class="block mb-1 font-semibold">Používateľské meno</label>
+                                <label for="deviceUsername" class="device-field-label">
+                                    <i class="fas fa-user text-violet-400"></i>Používateľské meno
+                                </label>
                                 <input type="text" id="deviceUsername"
-                                    class="w-full p-3 rounded bg-gray-800 border border-gray-600" required>
+                                    class="device-input w-full p-3 rounded-lg" required>
                             </div>
                             <div>
-                                <label for="devicePassword" class="block mb-1 font-semibold">Heslo</label>
+                                <label for="devicePassword" class="device-field-label">
+                                    <i class="fas fa-key text-yellow-400"></i>Heslo
+                                </label>
                                 <input type="password" id="devicePassword"
-                                    class="w-full p-3 rounded bg-gray-800 border border-gray-600"
+                                    class="device-input w-full p-3 rounded-lg"
                                     placeholder="Zadajte heslo pre SSH pripojenie" autocomplete="off">
                             </div>
                             <div>
-                                <label for="deviceSnmpCommunity" class="block mb-1 font-semibold">SNMP Community</label>
+                                <label for="deviceSnmpCommunity" class="device-field-label">
+                                    <i class="fas fa-wifi text-purple-400"></i>SNMP Community
+                                </label>
                                 <div class="password-input-container">
                                     <input type="password" id="deviceSnmpCommunity"
-                                        class="w-full p-3 pr-10 rounded bg-gray-800 border border-gray-600"
+                                        class="device-input w-full p-3 pr-10 rounded-lg"
                                         placeholder="public" autocomplete="off">
                                     <i class="fas fa-eye password-toggle" data-target="deviceSnmpCommunity"></i>
                                 </div>
                             </div>
+                            <label for="deviceLowMemory" class="device-lowmem-label flex items-center gap-2.5 cursor-pointer select-none">
+                                <input type="checkbox" id="deviceLowMemory"
+                                    class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
+                                <span class="flex items-center gap-1.5">
+                                    <i class="fas fa-memory text-orange-400 text-xs"></i>
+                                    Zariadenie s nízkou pamäťou (16MB)
+                                </span>
+                            </label>
                         </div>
 
-                        <div class="space-y-4 p-4 rounded-lg border border-gray-700 bg-gray-800/60 interval-card">
-                            <h3 class="text-lg font-semibold text-white mb-1">Intervaly</h3>
+                        <!-- Pravý stĺpec - intervaly -->
+                        <div class="interval-card space-y-3 p-4 rounded-xl border">
+                            <div class="device-form-section-title">
+                                <i class="fas fa-sliders text-sky-400 text-xs"></i>
+                                <span>Intervaly monitorovania</span>
+                            </div>
                             <div>
-                                <label for="devicePingInterval" class="block mb-1 font-semibold">Ping interval
-                                    (sekundy)</label>
+                                <label for="devicePingInterval" class="device-field-label">
+                                    <i class="fas fa-satellite-dish text-emerald-400"></i>Ping interval (sekundy)
+                                </label>
                                 <input type="number" id="devicePingInterval"
-                                    class="w-full p-3 rounded bg-gray-800 border border-gray-600" value="0" min="0"
+                                    class="device-input w-full p-3 rounded-lg" value="0" min="0"
                                     max="86400" oninput="validateDevicePingInterval(this)">
                                 <small class="text-gray-400 block mt-1 italic">Ovplyvňuje graf: Ping Latencia</small>
-                                <small class="text-gray-400 block">0 = použiť globálne nastavenie, 20-86400 sekúnd
-                                    (minimálne 20s, max 24 hodín).</small>
+                                <small class="text-gray-400 block">0 = globálne nastavenie &nbsp;·&nbsp; 20–86400 sekúnd</small>
                             </div>
                             <div>
-                                <label for="devicePingRetryInterval" class="block mb-1 font-semibold">Retry interval pri
-                                    výpadku (sekundy)</label>
+                                <label for="devicePingRetryInterval" class="device-field-label">
+                                    <i class="fas fa-arrows-rotate text-orange-400"></i>Retry interval pri výpadku (sekundy)
+                                </label>
                                 <input type="number" id="devicePingRetryInterval"
-                                    class="w-full p-3 rounded bg-gray-800 border border-gray-600" value="0" min="0"
+                                    class="device-input w-full p-3 rounded-lg" value="0" min="0"
                                     max="120" oninput="validateDeviceRetryInterval(this)">
-                                <small class="text-gray-400 block mt-1 italic">Počas výpadku sa zariadenie pingá týmto
-                                    intervalom, kým sa nepotvrdí návrat online.</small>
-                                <small class="text-gray-400 block">0 = globálne nastavenie zo sekcie Nastavenia, 5-120
-                                    sekúnd.</small>
+                                <small class="text-gray-400 block mt-1 italic">Interval pingovania počas výpadku.</small>
+                                <small class="text-gray-400 block">0 = globálne nastavenie &nbsp;·&nbsp; 5–120 sekúnd</small>
                             </div>
                             <div>
-                                <label for="deviceSnmpInterval" class="block mb-1 font-semibold">SNMP monitoring
-                                    interval (minúty)</label>
+                                <label for="deviceSnmpInterval" class="device-field-label">
+                                    <i class="fas fa-chart-line text-purple-400"></i>SNMP monitoring interval (minúty)
+                                </label>
                                 <input type="number" id="deviceSnmpInterval"
-                                    class="w-full p-3 rounded bg-gray-800 border border-gray-600" value="0" min="0"
+                                    class="device-input w-full p-3 rounded-lg" value="0" min="0"
                                     max="1440">
-                                <small class="text-gray-400 block mt-1">0 = použiť globálne nastavenie, 1-1440 = vlastný
-                                    interval v minútach</small>
+                                <small class="text-gray-400 block mt-1">0 = globálne nastavenie &nbsp;·&nbsp; 1–1440 minút</small>
                             </div>
                         </div>
                     </div>
 
-                    <div class="flex items-center">
-                        <input type="checkbox" id="deviceLowMemory"
-                            class="h-4 w-4 rounded text-sky-500 focus:ring-sky-500">
-                        <label for="deviceLowMemory" class="ml-2">Zariadenie s nízkou pamäťou (16MB)</label>
+                    <!-- Požadované služby -->
+                    <div class="required-services-card rounded-xl border border-sky-800/50 bg-sky-950/30 p-4">
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="flex items-center justify-center w-6 h-6 rounded-md bg-sky-500/20">
+                                <i class="fas fa-circle-check text-sky-400 text-xs"></i>
+                            </div>
+                            <span class="text-sm font-semibold text-sky-300">Požadované služby na MikroTik zariadení</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="device-service-badge">
+                                <i class="fas fa-terminal text-emerald-400"></i>api
+                            </span>
+                            <span class="device-service-badge">
+                                <i class="fas fa-lock text-yellow-400"></i>ssh
+                            </span>
+                            <span class="device-service-badge">
+                                <i class="fas fa-globe text-blue-400"></i>www
+                            </span>
+                            <span class="device-service-badge">
+                                <i class="fas fa-shield-halved text-sky-400"></i>www-ssl
+                            </span>
+                            <span class="device-service-badge">
+                                <i class="fas fa-chart-bar text-purple-400"></i>snmp (v2c)
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2.5 italic">
+                            IP Services: <span class="text-gray-400 not-italic font-mono">/ip/service</span>
+                            &nbsp;·&nbsp; SNMP: <span class="text-gray-400 not-italic font-mono">/snmp</span>
+                        </p>
                     </div>
                 </div>
 
-                <div class="flex justify-end gap-4 pt-2">
+                <div class="flex justify-end gap-3 pt-1">
                     <button type="button" id="cancelDeviceBtn"
-                        class="btn bg-[#414956] hover:bg-[#353d48] py-2 px-4 rounded-lg">Zrušiť</button>
-                    <button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Uložiť</button>
+                        class="device-btn-cancel btn flex items-center gap-2 py-2.5 px-5 rounded-lg font-medium">
+                        <i class="fas fa-xmark text-sm"></i>Zrušiť
+                    </button>
+                    <button type="submit"
+                        class="device-btn-save btn flex items-center gap-2 py-2.5 px-6 rounded-lg font-bold">
+                        <i class="fas fa-floppy-disk text-sm"></i>Uložiť zariadenie
+                    </button>
                 </div>
             </form>
         </div>

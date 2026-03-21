@@ -1636,18 +1636,41 @@
         body.light-theme tr,
         body.light-theme th,
         body.light-theme td {
-            background-color: #e3edfa !important;
+            background-color: #f0f6fd !important;
             color: var(--text-color) !important;
             border-color: var(--border-color) !important;
         }
 
         body.light-theme th {
-            background-color: #c8d6f3 !important;
+            background: linear-gradient(145deg, #f4f8fe 0%, #e8f1fb 100%) !important;
             font-weight: 600 !important;
+            border-bottom: 1px solid #c3d4eb !important;
+            color: #1e3a8a !important;
+        }
+
+        /* Column resize handle */
+        #devicesTableContainer th {
+            position: relative;
+            overflow: visible;
+        }
+        .col-resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 6px;
+            cursor: col-resize;
+            z-index: 10;
+            border-right: 2px solid transparent;
+            transition: border-color 0.15s;
+        }
+        .col-resize-handle:hover,
+        .col-resize-handle.dragging {
+            border-right-color: #3b82f6;
         }
 
         body.light-theme tr:nth-child(even) td {
-            background-color: #dae5f8 !important;
+            background-color: #e8f1fb !important;
         }
 
         body.light-theme tr:hover td {
@@ -1991,7 +2014,7 @@
                         <i class="fas fa-sun" id="theme-icon"></i>
                     </button>
                 </div>
-                <div id="userStatus" class="flex items-center gap-2 mr-1 sm:mr-0">
+                <div id="userStatus" class="flex items-center gap-2 mr-1 sm:mr-1">
                     <!-- Táto časť sa naplní dynamicky cez JavaScript -->
                 </div>
             </div>
@@ -4009,6 +4032,43 @@
             };
 
             initTableSort();
+
+            const initColumnResize = () => {
+                const table = document.querySelector('#devicesTableContainer table');
+                if (!table) return;
+                table.style.tableLayout = 'auto';
+                const headers = table.querySelectorAll('thead th');
+                headers.forEach((th, index) => {
+                    if (index === headers.length - 1) return; // vynechaj stĺpec Akcie
+                    const handle = document.createElement('div');
+                    handle.className = 'col-resize-handle';
+                    th.appendChild(handle);
+                    handle.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const startX = e.clientX;
+                        const startWidth = th.offsetWidth;
+                        handle.classList.add('dragging');
+                        document.body.style.cursor = 'col-resize';
+                        document.body.style.userSelect = 'none';
+                        const onMove = (e) => {
+                            const newWidth = Math.max(50, startWidth + e.clientX - startX);
+                            th.style.width = newWidth + 'px';
+                            th.style.minWidth = newWidth + 'px';
+                        };
+                        const onUp = () => {
+                            handle.classList.remove('dragging');
+                            document.body.style.cursor = '';
+                            document.body.style.userSelect = '';
+                            document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup', onUp);
+                        };
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                    });
+                });
+            };
+            initColumnResize();
 
             const loadDevices = async () => {
                 try {

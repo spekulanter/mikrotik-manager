@@ -1234,6 +1234,34 @@
             border: 2px solid var(--card-bg);
         }
 
+        /* SNMP modal – scrollbar rovnaký štýl ako activity log */
+        #snmpStatusModal .modal-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        #snmpStatusModal .modal-content::-webkit-scrollbar-track {
+            background: #1f2937;
+            border-radius: 4px;
+        }
+        #snmpStatusModal .modal-content::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border-radius: 4px;
+            border: 1px solid #374151;
+        }
+        #snmpStatusModal .modal-content::-webkit-scrollbar-thumb:hover {
+            background-color: #6b7280;
+        }
+
+        body.light-theme #snmpStatusModal .modal-content::-webkit-scrollbar-track {
+            background: #dce8f8;
+        }
+        body.light-theme #snmpStatusModal .modal-content::-webkit-scrollbar-thumb {
+            background-color: #94a3b8;
+            border: 1px solid #bfcfe8;
+        }
+        body.light-theme #snmpStatusModal .modal-content::-webkit-scrollbar-thumb:hover {
+            background-color: #64748b;
+        }
+
         .modal-content.no-outer-scrollbar::-webkit-scrollbar {
             width: 0;
             background: transparent;
@@ -3102,25 +3130,25 @@
     </div>
 
     <div id="snmpStatusModal"
-        class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-4">
-        <div class="card p-8 rounded-lg w-full max-w-4xl modal-content max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold text-white">🛡️ SNMP Monitoring Stav</h2>
+        class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-2 sm:p-4">
+        <div class="card p-4 sm:p-8 rounded-lg w-full max-w-4xl modal-content max-h-[92vh] sm:max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-3 sm:mb-6">
+                <h2 class="text-base sm:text-2xl font-bold text-white">🛡️ SNMP Monitoring Stav</h2>
                 <div class="flex gap-2">
                     <button id="refreshSnmpStatusBtn"
-                        class="btn bg-gray-600 hover:bg-gray-700 text-white p-2 rounded-lg text-sm opacity-70 hover:opacity-100 transition-opacity"
+                        class="btn bg-gray-600 hover:bg-gray-700 text-white w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity"
                         title="Obnoviť SNMP stav">
                         <i class="fas fa-sync-alt text-xs"></i>
                     </button>
-                    <button id="closeSnmpStatusBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white p-2 rounded-lg">
-                        <i class="fas fa-times"></i>
+                    <button id="closeSnmpStatusBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-times text-sm"></i>
                     </button>
                 </div>
             </div>
             <div id="snmpStatusContent">
-                <div class="flex justify-center items-center py-8">
-                    <i class="fas fa-spinner fa-spin text-2xl text-sky-500 mr-3"></i>
-                    <span class="text-lg">Načítavam SNMP stav...</span>
+                <div class="flex justify-center items-center py-4 sm:py-8">
+                    <i class="fas fa-spinner fa-spin text-xl sm:text-2xl text-sky-500 mr-3"></i>
+                    <span class="text-sm sm:text-lg">Načítavam SNMP stav...</span>
                 </div>
             </div>
         </div>
@@ -4812,16 +4840,16 @@
 
                     // Vytvoríme obsah pre modál (rovnaký kód ako v hlavnom event listeneri)
                     let content = `
-                <div class="bg-gray-800 p-4 rounded-lg mb-6 border border-gray-600">
-                    <h3 class="text-lg font-semibold text-sky-400 mb-3">📊 Globálne informácie</h3>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
+                <div class="bg-gray-800 p-3 sm:p-4 rounded-lg mb-3 sm:mb-6 border border-gray-600">
+                    <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-3">📊 Globálne informácie</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
                         <div><strong>Globálny interval:</strong> <span class="text-green-400">${status.global_interval} minút</span></div>
                         <div><strong>Čas kontroly:</strong> <span class="text-gray-300">${new Date(status.current_time).toLocaleString('sk-SK')}</span></div>
                     </div>
                 </div>
-                
-                <h3 class="text-lg font-semibold text-sky-400 mb-4">🔧 Stav zariadení</h3>
-                <div class="grid gap-4">
+
+                <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-4">🔧 Stav zariadení</h3>
+                <div class="grid gap-2 sm:gap-4">
             `;
 
                     status.devices.forEach(device => {
@@ -4833,12 +4861,12 @@
                         const statusText = device.is_due ? 'TREBA KONTROLA' : 'Čaká';
 
                         content += `
-                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-600">
-                        <div class="flex justify-between items-center mb-3">
-                            <h4 class="font-bold text-sky-300">${device.name}</h4>
-                            <span class="font-mono text-sm text-gray-400">${device.ip}</span>
+                    <div class="bg-gray-800 p-3 sm:p-4 rounded-lg border border-gray-600">
+                        <div class="flex justify-between items-center mb-2 sm:mb-3">
+                            <h4 class="font-bold text-sm sm:text-base text-sky-300">${device.name}</h4>
+                            <span class="font-mono text-xs sm:text-sm text-gray-400">${device.ip}</span>
                         </div>
-                        <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-3 text-xs sm:text-sm">
                             <div><strong>Interval:</strong> <span class="text-gray-300">${intervalText}</span></div>
                             <div><strong>Posledná kontrola:</strong> <span class="text-gray-300">${device.last_check}</span></div>
                             <div><strong>Ďalšia kontrola:</strong> <span class="text-gray-300">${device.next_check}</span></div>
@@ -5033,16 +5061,16 @@
 
                     // Vytvoríme obsah pre modál
                     let content = `
-                <div class="bg-gray-800 p-4 rounded-lg mb-6 border border-gray-600">
-                    <h3 class="text-lg font-semibold text-sky-400 mb-3">📊 Globálne informácie</h3>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
+                <div class="bg-gray-800 p-3 sm:p-4 rounded-lg mb-3 sm:mb-6 border border-gray-600">
+                    <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-3">📊 Globálne informácie</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
                         <div><strong>Globálny interval:</strong> <span class="text-green-400">${status.global_interval} minút</span></div>
                         <div><strong>Čas kontroly:</strong> <span class="text-gray-300">${new Date(status.current_time).toLocaleString('sk-SK')}</span></div>
                     </div>
                 </div>
-                
-                <h3 class="text-lg font-semibold text-sky-400 mb-4">🔧 Stav zariadení</h3>
-                <div class="grid gap-4">
+
+                <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-4">🔧 Stav zariadení</h3>
+                <div class="grid gap-2 sm:gap-4">
             `;
 
                     status.devices.forEach(device => {
@@ -5054,12 +5082,12 @@
                         const statusText = device.is_due ? 'TREBA KONTROLA' : 'Čaká';
 
                         content += `
-                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-600">
-                        <div class="flex justify-between items-center mb-3">
-                            <h4 class="font-bold text-sky-300">${device.name}</h4>
-                            <span class="font-mono text-sm text-gray-400">${device.ip}</span>
+                    <div class="bg-gray-800 p-3 sm:p-4 rounded-lg border border-gray-600">
+                        <div class="flex justify-between items-center mb-2 sm:mb-3">
+                            <h4 class="font-bold text-sm sm:text-base text-sky-300">${device.name}</h4>
+                            <span class="font-mono text-xs sm:text-sm text-gray-400">${device.ip}</span>
                         </div>
-                        <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-3 text-xs sm:text-sm">
                             <div><strong>Interval:</strong> <span class="text-gray-300">${intervalText}</span></div>
                             <div><strong>Posledná kontrola:</strong> <span class="text-gray-300">${device.last_check}</span></div>
                             <div><strong>Ďalšia kontrola:</strong> <span class="text-gray-300">${device.next_check}</span></div>

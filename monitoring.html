@@ -341,6 +341,11 @@
             }
         }
 
+        /* Prevent background scroll when modal is open */
+        body.modal-open {
+            overflow: hidden;
+        }
+
         /* Modal v svetlej téme */
         body.light-theme #deviceSettingsModal>div {
             background-color: #f6f8fc !important;

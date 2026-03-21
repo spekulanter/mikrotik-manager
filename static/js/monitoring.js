@@ -3801,6 +3801,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Show modal
             deviceSettingsModal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
         } catch (error) {
             console.error('Chyba pri načítaní nastavení:', error);
             alert('Chyba pri načítaní nastavení zariadenia');
@@ -3809,6 +3810,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const closeModal = () => {
         deviceSettingsModal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
     };
 
     closeSettingsModal.addEventListener('click', closeModal);

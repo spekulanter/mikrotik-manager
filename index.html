@@ -3158,8 +3158,8 @@
     </div>
 
     <div id="snmpStatusModal"
-        class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-2 sm:p-4">
-        <div class="card p-4 sm:p-8 rounded-lg w-full max-w-4xl modal-content max-h-[92vh] sm:max-h-[90vh] overflow-y-auto">
+        class="fixed inset-0 bg-black bg-opacity-75 flex items-start sm:items-center justify-center hidden z-50 p-2 pt-4 sm:p-4">
+        <div class="card p-4 sm:p-8 rounded-lg w-full max-w-4xl modal-content max-h-[96vh] sm:max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-3 sm:mb-6">
                 <h2 class="text-base sm:text-2xl font-bold text-white">🛡️ SNMP Monitoring Stav</h2>
                 <div class="flex gap-2">
@@ -4085,6 +4085,8 @@
             window.addEventListener('popstate', () => {
                 if (!logsModal?.classList.contains('hidden')) {
                     _closeLogsModalDOM();
+                } else if (!snmpStatusModal?.classList.contains('hidden')) {
+                    _closeSnmpModalDOM();
                 }
             });
 
@@ -4323,13 +4325,26 @@
                 document.body.classList.add('modal-open');
             };
 
+            const _closeSnmpModalDOM = () => {
+                snmpStatusModal.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+            };
+
             const closeModal = () => {
                 deviceModal.classList.add('hidden');
                 settingsModal.classList.add('hidden');
                 manageAccountModal.classList.add('hidden');
-                snmpStatusModal.classList.add('hidden');
-                document.body.classList.remove('modal-open');
+                if (!snmpStatusModal.classList.contains('hidden')) {
+                    if (history.state?.snmpModal) {
+                        history.back();
+                    } else {
+                        _closeSnmpModalDOM();
+                    }
+                } else {
+                    document.body.classList.remove('modal-open');
+                }
             };
+
 
             window.allDevicesData = [];
             window.currentSortColumn = 'name';
@@ -5108,6 +5123,7 @@
                 // Otvoríme modál s loading stavom
                 snmpStatusModal.classList.remove('hidden');
                 document.body.classList.add('modal-open');
+                history.pushState({ snmpModal: true }, '', '#snmp');
                 document.getElementById('snmpStatusContent').innerHTML = `
             <div class="flex justify-center items-center py-8">
                 <i class="fas fa-spinner fa-spin text-2xl text-sky-500 mr-3"></i>

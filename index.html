@@ -2304,7 +2304,7 @@
         <!-- Header with user info -->
         <div class="flex justify-between items-center mb-3 md:mb-6">
             <div class="flex items-center gap-4">
-                <h1 class="text-xl font-bold text-white flex items-center">
+                <h1 id="appTitle" class="text-xl font-bold text-white flex items-center sm:cursor-default cursor-pointer">
                     <i class="fas fa-network-wired text-sky-400 mr-2"></i>
                     MikroTik Manager
                 </h1>
@@ -2367,14 +2367,10 @@
                             <i class="fas fa-arrows-rotate"></i> Aktualizátor
                         </button>
                         <button id="settingsBtn"
-                            class="btn bg-gray-600 hover:bg-gray-700 text-white w-9 h-9 rounded-lg flex items-center justify-center text-sm"
+                            class="btn bg-gray-600 hover:bg-gray-700 text-white sm:w-9 sm:h-9 rounded-lg flex items-center justify-center gap-2 text-sm"
                             title="Nastavenia" aria-label="Nastavenia">
                             <i class="fas fa-cog"></i>
-                        </button>
-                        <button id="activityQuickBtn"
-                            class="btn bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm sm:hidden"
-                            aria-label="Zobraziť aktivitu">
-                            <i class="fas fa-clipboard-list"></i> Aktivita
+                            <span class="sm:hidden">Nastavenia</span>
                         </button>
                     </div>
                 </div>
@@ -3324,7 +3320,7 @@
             const logsModalList = document.getElementById('logsModalList');
             const closeLogsModalBtn = document.getElementById('closeLogsModalBtn');
             const logsExpandBtn = document.getElementById('logsExpandBtn');
-            const activityQuickBtn = document.getElementById('activityQuickBtn');
+            const activityQuickBtn = document.getElementById('appTitle');
             const logsModalRefreshBtn = document.getElementById('logsModalRefreshBtn');
             const logsModalExportBtn = document.getElementById('logsModalExportBtn');
             const logsModalFilterBtn = document.getElementById('logsModalFilterBtn');
@@ -4068,7 +4064,7 @@
                 ['deviceFilter', 'deviceFilterMobile', 'deviceFilterModal', 'typeFilter', 'typeFilterMobile', 'typeFilterModal'].forEach(updateCustomSelectDisplay);
             };
 
-            const closeLogsModal = () => {
+            const _closeLogsModalDOM = () => {
                 if (!logsModal) return;
                 logsModal.classList.add('hidden');
                 logsModalFilterBtn?.setAttribute('aria-expanded', 'false');
@@ -4077,15 +4073,32 @@
                 document.body.classList.remove('modal-open');
             };
 
+            const closeLogsModal = () => {
+                if (!logsModal) return;
+                if (history.state?.logsModal) {
+                    history.back(); // popstate zatvorí DOM
+                } else {
+                    _closeLogsModalDOM();
+                }
+            };
+
+            window.addEventListener('popstate', () => {
+                if (!logsModal?.classList.contains('hidden')) {
+                    _closeLogsModalDOM();
+                }
+            });
+
             const openLogsModal = () => {
                 if (!logsModal) return;
                 logsModal.classList.remove('hidden');
+                const filterOpen = localStorage.getItem('logsModalFilterOpen') !== 'false';
                 if (logsModalFilters) {
-                    logsModalFilters.classList.remove('hidden');
+                    logsModalFilters.classList.toggle('hidden', !filterOpen);
                 }
                 if (logsModalFilterBtn) {
-                    logsModalFilterBtn.setAttribute('aria-expanded', 'true');
-                    logsModalFilterBtn.classList.add('ring-2', 'ring-purple-300');
+                    logsModalFilterBtn.setAttribute('aria-expanded', filterOpen ? 'true' : 'false');
+                    logsModalFilterBtn.classList.toggle('ring-2', filterOpen);
+                    logsModalFilterBtn.classList.toggle('ring-purple-300', filterOpen);
                 }
                 document.body.classList.add('modal-open');
                 closeAllCustomSelects();
@@ -4095,7 +4108,21 @@
                 applyLogFilters(); // Apply current filters to modal
 
                 syncFilterControls();
+                history.pushState({ logsModal: true }, '', '#activity');
             };
+
+            // Swipe right to close (mobile)
+            let _swipeTouchStartX = 0;
+            let _swipeTouchStartY = 0;
+            logsModal?.addEventListener('touchstart', (e) => {
+                _swipeTouchStartX = e.touches[0].clientX;
+                _swipeTouchStartY = e.touches[0].clientY;
+            }, { passive: true });
+            logsModal?.addEventListener('touchend', (e) => {
+                const dx = e.changedTouches[0].clientX - _swipeTouchStartX;
+                const dy = Math.abs(e.changedTouches[0].clientY - _swipeTouchStartY);
+                if (dx > 80 && dy < 60) closeLogsModal();
+            }, { passive: true });
 
             // Extract log element creation logic for reuse
             const createLogElement = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
@@ -5209,6 +5236,7 @@
                 logsModalFilterBtn.setAttribute('aria-expanded', willShow ? 'true' : 'false');
                 logsModalFilterBtn.classList.toggle('ring-2', willShow);
                 logsModalFilterBtn.classList.toggle('ring-purple-300', willShow);
+                localStorage.setItem('logsModalFilterOpen', willShow ? 'true' : 'false');
                 if (willShow) {
                     syncFilterControls();
                 }

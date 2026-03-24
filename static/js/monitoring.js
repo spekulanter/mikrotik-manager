@@ -4022,4 +4022,5 @@ document.addEventListener('DOMContentLoaded', () => {
     // Export for zoom-aware uptime/latency recalculation
     window.updateHeaderMetrics = updateHeaderMetrics;
     window.setPingHistoryForUptime = (history) => { lastPingHistory = history; };
+    window.getChartColorTheme = getChartColorTheme;
 });

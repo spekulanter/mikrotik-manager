@@ -2302,6 +2302,7 @@
             if (!hasActiveZoom || !isRealZoom) {
                 // Check if this chart is permanently expanded - if so, skip this logic
                 if (window._expandedCharts && window._expandedCharts.has(chartId)) {
+                    enableZoomAnimation(chart, 400);
                     chart.update('active');
                     return;
                 }
@@ -2402,6 +2403,7 @@
             }
 
             // Update chart
+            enableZoomAnimation(chart, 400);
             chart.update('active');
             addDebugLog(`✅ Reset dokončený pre ${chartId}`);
 
@@ -3259,9 +3261,85 @@
                         // Process data - different charts use different field names
                         let newData = [];
                         if (chartId === 'pingChart') {
-                            newData = data.map(item => ({
+                            // Inline segment-splitting logika (rovnaká ako updatePingChart)
+                            const pingColors = (typeof window.getChartColorTheme === 'function')
+                                ? window.getChartColorTheme().ping
+                                : { onlineBorder: '#10b981', onlineBackground: 'rgba(16,185,129,0.1)',
+                                    offlineFill: 'rgba(239,68,68,0.3)', offlineBorder: 'rgba(239,68,68,0.6)' };
+
+                            const pingDatasets = [];
+                            let onlineSegments = [], offlineSegments = [];
+                            let currentOnlineSeg = [], currentOfflineSeg = [];
+                            let lastStat = null;
+
+                            data.forEach(point => {
+                                if (!point.timestamp) return;
+                                const ts = new Date(point.timestamp).getTime();
+                                if (!Number.isFinite(ts)) return;
+                                const isOnline = point.status === 'online' && point.avg_latency !== null;
+
+                                if (isOnline) {
+                                    if (lastStat === 'offline' && currentOfflineSeg.length > 0) {
+                                        offlineSegments.push(currentOfflineSeg); currentOfflineSeg = [];
+                                    }
+                                    currentOnlineSeg.push({ x: ts, y: point.avg_latency });
+                                } else {
+                                    if (lastStat === 'online' && currentOnlineSeg.length > 0) {
+                                        onlineSegments.push(currentOnlineSeg); currentOnlineSeg = [];
+                                    }
+                                    currentOfflineSeg.push({ x: ts, y: null });
+                                }
+                                lastStat = isOnline ? 'online' : 'offline';
+                            });
+                            if (currentOnlineSeg.length > 0) onlineSegments.push(currentOnlineSeg);
+                            if (currentOfflineSeg.length > 0) offlineSegments.push(currentOfflineSeg);
+
+                            // Min/max latencia z online segmentov
+                            let maxLat = 0, minLat = Infinity;
+                            onlineSegments.forEach(seg => seg.forEach(p => {
+                                if (p.y > maxLat) maxLat = p.y;
+                                if (p.y < minLat) minLat = p.y;
+                            }));
+                            if (maxLat === 0) { maxLat = 50; minLat = 1; }
+                            if (minLat === Infinity) minLat = Math.max(1, maxLat * 0.1);
+
+                            // Nastav výšku offline segmentov
+                            offlineSegments.forEach(seg => seg.forEach(p => { p.y = maxLat; }));
+
+                            // Online datasety
+                            onlineSegments.forEach((seg, i) => {
+                                pingDatasets.push({
+                                    label: i === 0 ? 'Ping Latencia (ms)' : '',
+                                    data: seg, borderColor: pingColors.onlineBorder,
+                                    backgroundColor: pingColors.onlineBackground,
+                                    tension: 0.12, fill: true, pointRadius: 0, pointHoverRadius: 0,
+                                    borderWidth: 2.5, spanGaps: false, order: 1
+                                });
+                            });
+
+                            // Offline datasety (bottom invisible + top fill)
+                            offlineSegments.forEach(seg => {
+                                pingDatasets.push({
+                                    label: '', data: seg.map(p => ({ x: p.x, y: minLat })),
+                                    borderColor: 'transparent', backgroundColor: 'transparent',
+                                    borderWidth: 0, pointRadius: 0, pointHoverRadius: 0,
+                                    fill: false, tension: 0, spanGaps: false, order: 3
+                                });
+                                pingDatasets.push({
+                                    label: '', data: seg,
+                                    backgroundColor: pingColors.offlineFill, borderColor: pingColors.offlineBorder,
+                                    borderWidth: 1, fill: '-1', pointRadius: 0, pointHoverRadius: 0,
+                                    tension: 0, spanGaps: false, order: 2
+                                });
+                            });
+
+                            // Priradíme datasety priamo na graf
+                            targetChart.data.datasets = pingDatasets;
+
+                            // newData pre axis calculations — všetky timestampy
+                            newData = data.filter(item => item.timestamp).map(item => ({
                                 x: new Date(item.timestamp).getTime(),
-                                y: item.avg_latency // ping data uses avg_latency
+                                y: item.avg_latency !== null ? item.avg_latency : 0
                             }));
                         } else if (chartId === 'cpuChart') {
                             // CPU data from SNMP - need to check field names
@@ -3353,8 +3431,8 @@
 
                         addDebugLog(`🔄 Spracoval som ${newData.length}/${data.length} platných bodov pre ${chartId}`);
 
-                        // For memory chart, datasets are already set above
-                        if (chartId !== 'memoryChart' && targetChart.data.datasets[0] && newData.length > 0) {
+                        // For memory and ping charts, datasets are already set above
+                        if (chartId !== 'memoryChart' && chartId !== 'pingChart' && targetChart.data.datasets[0] && newData.length > 0) {
                             targetChart.data.datasets[0].data = newData;
                         }
 
@@ -3442,6 +3520,7 @@
 
                             // Update chart with native Chart.js curve animation for all transitions
                             // (performance-heavy max-range case is handled by early return in resetZoom)
+                            enableZoomAnimation(targetChart, 400);
                             targetChart.update('active');
 
                             // Apply Y-axis optimization for ping chart after loading new data
@@ -3537,6 +3616,7 @@
                                 // Update time format for the new zoom level
                                 updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
 
+                                enableZoomAnimation(chart, 400);
                                 chart.update('active');
                             }
                             window._pendingZoomTarget = null;
@@ -3561,6 +3641,7 @@
                                 }
 
                                 updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
+                                enableZoomAnimation(chart, 400);
                                 chart.update('active');
                             }
                             window._pendingZoomTarget = null;
@@ -3582,6 +3663,7 @@
                         }
 
                         updateSingleChartTimeFormat(targetChart, targetMin, targetMax);
+                        enableZoomAnimation(targetChart, 400);
                         targetChart.update('active');
                     }
                 }
@@ -3606,6 +3688,21 @@
 
         // Load debug settings on initialization
         loadDebugSettings();
+        // Dočasne obnoví Chart.js animácie pre zoom operácie
+        // (disableChartAnimationsForRangeChange v monitoring.js permanentne nastaví duration=0)
+        function enableZoomAnimation(targetChart, durationMs) {
+            if (!targetChart || !targetChart.options) return;
+            const dur = durationMs || 400;
+            if (!targetChart.options.animation) targetChart.options.animation = {};
+            targetChart.options.animation.duration = dur;
+            targetChart.options.animation.easing = 'easeOutCubic';
+            // Zabezpečí animáciu aj pri zmene osi (scales) — nie len dát
+            if (!targetChart.options.transitions) targetChart.options.transitions = {};
+            targetChart.options.transitions.active = {
+                animation: { duration: dur, easing: 'easeOutCubic' }
+            };
+        }
+
         // Add custom zoom functionality to charts
         function addCustomZoom(chart) {
             const canvas = chart.canvas;
@@ -3935,6 +4032,7 @@
                             if (!targetChart) return;
                             targetChart.options.scales.x.min = minX;
                             targetChart.options.scales.x.max = maxX;
+                            enableZoomAnimation(targetChart, 400);
                             targetChart.update('active');
                             const sub = targetChart.options.plugins.subtitle;
                             if (sub) {
@@ -3946,6 +4044,7 @@
                     } else {
                         chart.options.scales.x.min = minX;
                         chart.options.scales.x.max = maxX;
+                        enableZoomAnimation(chart, 400);
                         chart.update('active'); // Use 'active' mode for animation
 
                         const subtitle = chart.options.plugins.subtitle;

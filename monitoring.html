@@ -2032,14 +2032,6 @@
         let currentChart = null;
 
         function resetZoom(chartId) {
-            // debug: removed (only active terminal lifecycle logs remain)
-
-            // Check if this chart is permanently expanded and should not be reset
-            if (window._expandedCharts && window._expandedCharts.has(chartId)) {
-
-                return;
-            }
-
             // Simple debouncing - prevent too frequent calls
             const now = Date.now();
             if (!window._lastResetZoomTimes) {
@@ -2070,7 +2062,6 @@
             }
 
             // Check if this is a real zoom (user selected range) vs full time range display
-            // If we just loaded a larger time range, the chart will have min/max set but it's not a "zoom"
             let currentTimeRange = typeof window.currentTimeRange !== 'undefined' ? window.currentTimeRange : '24h';
 
             // CRITICAL: For individual chart zoom-out, use per-chart time range instead of global
@@ -2079,57 +2070,32 @@
                 currentTimeRange = window._chartTimeRanges.get(chartId);
 
             } else {
-                // First time this chart is being zoomed - use the CURRENT GLOBAL range as starting point
-                // (Previously forced to '30m', which caused zoom-out to always progress from 30m regardless of user selection)
+                // First time this chart is being zoomed out.
+                // IMPORTANT: Don't trust window.currentTimeRange — it may have been overwritten by
+                // persistZoomRange() when another chart expanded (e.g. pingChart → 1y).
+                // Instead, detect the actual data range in THIS chart.
+                let chartDataMin = Infinity, chartDataMax = -Infinity;
+                if (chart.data && chart.data.datasets) {
+                    chart.data.datasets.forEach(ds => {
+                        if (ds.data) ds.data.forEach(p => {
+                            const raw = p.x || p;
+                            // Handle both timestamps (number) and Date objects (SNMP charts)
+                            const x = (raw instanceof Date) ? raw.getTime() : (typeof raw === 'number' ? raw : null);
+                            if (x !== null) {
+                                if (x < chartDataMin) chartDataMin = x;
+                                if (x > chartDataMax) chartDataMax = x;
+                            }
+                        });
+                    });
+                }
+                if (chartDataMin < Infinity && chartDataMax > -Infinity) {
+                    const dataRangeMs = chartDataMax - chartDataMin;
+                    currentTimeRange = getTimeRangeForMs(dataRangeMs);
+                }
                 window._chartTimeRanges.set(chartId, currentTimeRange);
 
             }
 
-            // CRITICAL: For individual chart zoom-out, we must detect the ACTUAL current range of THIS specific chart
-            // Do not use the global currentTimeRange as it may have been changed by other charts
-            if (hasActiveZoom) {
-                const currentMin = chart.options.scales.x.min;
-                const currentMax = chart.options.scales.x.max;
-
-                if (typeof currentMin === 'number' && typeof currentMax === 'number' &&
-                    !isNaN(currentMin) && !isNaN(currentMax) && currentMin < currentMax) {
-                    // Get the range that was explicitly set for this chart
-                    const perChartRange = window._chartTimeRanges.get(chartId);
-
-                    if (perChartRange) {
-                        // Use the explicitly set per-chart range instead of detecting from data
-                        // This prevents loops when data range is smaller than requested range
-                        currentTimeRange = perChartRange;
-
-                    } else {
-                        // Fallback: detect range from data only if no explicit range is set
-                        const actualRange = currentMax - currentMin;
-                        const detectedRange = getTimeRangeForMs(actualRange);
-                        currentTimeRange = detectedRange;
-                        // Update per-chart tracking with detected range
-                        window._chartTimeRanges.set(chartId, detectedRange);
-
-                    }
-                } else {
-
-                }
-            } else {
-
-            }
-
-            // For permanently expanded charts, use their actual range instead of global range
-            if ((window._expandedCharts && window._expandedCharts.has(chartId)) ||
-                (window._wasExpanded && window._wasExpanded.has(chartId))) {
-                if (!hasActiveZoom) {
-                    // Clear expanded state if there's no active zoom
-                    if (window._expandedCharts) {
-                        window._expandedCharts.delete(chartId);
-                    }
-                    if (window._wasExpanded) {
-                        window._wasExpanded.delete(chartId);
-                    }
-                }
-            }
 
             const timeRangeMs = getTimeRangeMs(currentTimeRange);
             const currentTime = new Date().getTime();
@@ -2143,28 +2109,9 @@
                 // Consider it a real zoom if the range is significantly smaller than the requested time range
                 // Allow 20% tolerance to account for gap elimination and optimization
                 isRealZoom = currentRange < (timeRangeMs * 0.8);
-
-
             }
 
-            // Additional check for valid zoom values
-            let hasValidZoom = false;
             if (hasActiveZoom && isRealZoom) {
-                const currentMin = chart.options.scales.x.min;
-                const currentMax = chart.options.scales.x.max;
-                hasValidZoom = typeof currentMin === 'number' && typeof currentMax === 'number' &&
-                    !isNaN(currentMin) && !isNaN(currentMax) && currentMin < currentMax;
-
-
-
-                if (!hasValidZoom) {
-                    // Clear invalid zoom
-                    chart.options.scales.x.min = undefined;
-                    chart.options.scales.x.max = undefined;
-                }
-            }
-
-            if (hasActiveZoom && hasValidZoom && isRealZoom) {
 
                 // Progressive zoom out - instead of jumping to full range, expand zoom by steps
                 const currentMin = chart.options.scales.x.min;
@@ -2300,12 +2247,6 @@
             // Reset to dynamic time formatting based on requested time range (not just data range)
             // Apply this logic when there's no real zoom active (including full time range display)
             if (!hasActiveZoom || !isRealZoom) {
-                // Check if this chart is permanently expanded - if so, skip this logic
-                if (window._expandedCharts && window._expandedCharts.has(chartId)) {
-                    enableZoomAnimation(chart, 400);
-                    chart.update('active');
-                    return;
-                }
 
                 // When zoom is completely reset or showing full time range, show the full requested time range on axis
                 // even if data only covers part of it (e.g., show 30 days on axis but data only for last 7 days)
@@ -2455,17 +2396,7 @@
                 addDebugLog(`🔄 Vymazané per-chart time ranges - všetky grafy späť na default`);
             }
 
-            // Clear permanently expanded charts when global time range changes
-            if (window._expandedCharts) {
-                window._expandedCharts.clear();
-            }
-
-            // Clear wasExpanded flags when global time range changes
-            if (window._wasExpanded) {
-                window._wasExpanded.clear();
-            }
-
-            // Clear old zoom window state 
+            // Clear old zoom window state
             window._pingZoomInWindow = null;
 
             ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(chartId => {
@@ -2583,10 +2514,6 @@
             ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(chartId => {
                 const chart = Chart.getChart(chartId);
                 if (chart) {
-                    // Skip permanently expanded charts unless global time range changed
-                    if (window._expandedCharts && window._expandedCharts.has(chartId)) {
-                        return;
-                    }
                     applyFullTimeRangeToChart(chart);
                 }
             });
@@ -2604,14 +2531,6 @@
             if (window._singleChartZoomOut && chart.canvas && chart.canvas.id === window._singleChartZoomOut) {
                 if (typeof addDebugLog === 'function') {
                     addDebugLog(`🔧 applyFullTimeRangeToChart: preskakujem - single zoom-out mode`);
-                }
-                return;
-            }
-
-            // Skip if this chart is permanently expanded
-            if (window._expandedCharts && chart.canvas && window._expandedCharts.has(chart.canvas.id)) {
-                if (typeof addDebugLog === 'function') {
-                    addDebugLog(`🔧 applyFullTimeRangeToChart: preskakujem - permanently expanded`);
                 }
                 return;
             }
@@ -3575,99 +3494,6 @@
                 });
 
             return true;
-        }
-
-        // Load additional data when zoom-out requires larger time range
-        // Funkcia pre načítavanie dodatočných dát pre zoom-out
-        function loadAdditionalDataForZoom(newRange, targetChart, targetMin, targetMax) {
-            if (typeof window.currentDeviceId !== 'undefined' && window.currentDeviceId) {
-
-                // Store zoom target for after data loads
-                if (targetChart && targetMin !== undefined && targetMax !== undefined) {
-                    window._pendingZoomTarget = {
-                        chartId: targetChart.canvas.id,
-                        min: targetMin,
-                        max: targetMax
-                    };
-                }
-
-                // Temporarily update the global range for data loading
-                const originalGlobalRange = window.currentTimeRange;
-                window.currentTimeRange = newRange;
-
-                // Load data for the larger range using the monitoring.js function
-                if (typeof window.loadHistoricalData === 'function') {
-                    window.loadHistoricalData(window.currentDeviceId).then(() => {
-
-                        // Apply pending zoom to target chart
-                        if (window._pendingZoomTarget) {
-                            const chart = Chart.getChart(window._pendingZoomTarget.chartId);
-                            if (chart) {
-                                chart.options.scales.x.min = window._pendingZoomTarget.min;
-                                chart.options.scales.x.max = window._pendingZoomTarget.max;
-
-                                // Update subtitle for successful zoom out
-                                const subtitle = chart.options.plugins.subtitle;
-                                if (subtitle) {
-                                    subtitle.text = 'Zoom aktívny s rozšírenými dátami - dvojité kliknutie pre reset';
-                                    subtitle.color = '#fbbf24';
-                                }
-
-                                // Update time format for the new zoom level
-                                updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
-
-                                enableZoomAnimation(chart, 400);
-                                chart.update('active');
-                            }
-                            window._pendingZoomTarget = null;
-                        }
-
-                        // Restore original global range after loading
-                        window.currentTimeRange = originalGlobalRange;
-                    }).catch(error => {
-                        console.error('Error loading additional data for zoom:', error);
-
-                        // Clear pending zoom on error and apply basic zoom
-                        if (window._pendingZoomTarget) {
-                            const chart = Chart.getChart(window._pendingZoomTarget.chartId);
-                            if (chart) {
-                                chart.options.scales.x.min = window._pendingZoomTarget.min;
-                                chart.options.scales.x.max = window._pendingZoomTarget.max;
-
-                                const subtitle = chart.options.plugins.subtitle;
-                                if (subtitle) {
-                                    subtitle.text = 'Zoom aktívny s dostupnými dátami - dvojité kliknutie pre reset';
-                                    subtitle.color = '#fbbf24';
-                                }
-
-                                updateSingleChartTimeFormat(chart, window._pendingZoomTarget.min, window._pendingZoomTarget.max);
-                                enableZoomAnimation(chart, 400);
-                                chart.update('active');
-                            }
-                            window._pendingZoomTarget = null;
-                        }
-
-                        // Restore original range on error
-                        window.currentTimeRange = originalGlobalRange;
-                    });
-                } else {
-                    // Fallback: just apply zoom with available data
-                    if (targetChart && targetMin !== undefined && targetMax !== undefined) {
-                        targetChart.options.scales.x.min = targetMin;
-                        targetChart.options.scales.x.max = targetMax;
-
-                        const subtitle = targetChart.options.plugins.subtitle;
-                        if (subtitle) {
-                            subtitle.text = 'Zoom aktívny s dostupnými dátami - dvojité kliknutie pre reset';
-                            subtitle.color = '#fbbf24';
-                        }
-
-                        updateSingleChartTimeFormat(targetChart, targetMin, targetMax);
-                        enableZoomAnimation(targetChart, 400);
-                        targetChart.update('active');
-                    }
-                }
-            }
         }
 
         // Debug helper functions (integrated with our debug system)

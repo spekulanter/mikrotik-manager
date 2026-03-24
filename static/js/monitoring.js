@@ -2277,7 +2277,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!chart?.canvas) return false;
         if (window._userZoomActive) return true;
         if (window._singleChartZoomOut && chart.canvas.id === window._singleChartZoomOut) return true;
-        if (window._expandedCharts && window._expandedCharts.has(chart.canvas.id)) return true;
         return false;
     };
 

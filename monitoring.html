@@ -3518,11 +3518,43 @@
         // (disableChartAnimationsForRangeChange v monitoring.js permanentne nastaví duration=0)
         function enableZoomAnimation(targetChart, durationMs) {
             if (!targetChart || !targetChart.options) return;
+
+            const chartId = targetChart.canvas ? targetChart.canvas.id : 'unknown';
+
+            // Pravidlo 1: Viditeľný rozsah >30d → bez animácie
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+            const scales = targetChart.options.scales;
+            let visibleRangeMs = null;
+            if (scales && scales.x && scales.x.min != null && scales.x.max != null) {
+                visibleRangeMs = scales.x.max - scales.x.min;
+                const visibleDays = (visibleRangeMs / (24 * 60 * 60 * 1000)).toFixed(1);
+                if (visibleRangeMs > THIRTY_DAYS_MS) {
+                    addDebugLog(`🎬 enableZoomAnimation(${chartId}): SKIP — viditeľný rozsah ${visibleDays}d > 30d`);
+                    return;
+                }
+            }
+
+            // Pravidlo 2: Príliš veľa bodov v pamäti → Chart.js nedokáže animovať plynulo
+            const MAX_POINTS_FOR_ANIMATION = 5000;
+            let totalPoints = 0;
+            if (targetChart.data && targetChart.data.datasets) {
+                for (const ds of targetChart.data.datasets) {
+                    totalPoints += (ds.data ? ds.data.length : 0);
+                }
+            }
+            if (totalPoints > MAX_POINTS_FOR_ANIMATION) {
+                const visibleDays = visibleRangeMs ? (visibleRangeMs / (24 * 60 * 60 * 1000)).toFixed(1) : '?';
+                addDebugLog(`🎬 enableZoomAnimation(${chartId}): SKIP — ${totalPoints} bodov > ${MAX_POINTS_FOR_ANIMATION} (viditeľné ${visibleDays}d)`);
+                return;
+            }
+
+            const visibleDays = visibleRangeMs ? (visibleRangeMs / (24 * 60 * 60 * 1000)).toFixed(1) : '?';
+            addDebugLog(`🎬 enableZoomAnimation(${chartId}): OK — ${totalPoints} bodov, ${visibleDays}d → animácia ${durationMs || 400}ms`);
+
             const dur = durationMs || 400;
             if (!targetChart.options.animation) targetChart.options.animation = {};
             targetChart.options.animation.duration = dur;
             targetChart.options.animation.easing = 'easeOutCubic';
-            // Zabezpečí animáciu aj pri zmene osi (scales) — nie len dát
             if (!targetChart.options.transitions) targetChart.options.transitions = {};
             targetChart.options.transitions.active = {
                 animation: { duration: dur, easing: 'easeOutCubic' }
@@ -3851,11 +3883,49 @@
                     }
 
 
+                    const zoomRangeMs = maxX - minX;
+                    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+                    const MAX_POINTS = 5000;
+                    const zoomDays = (zoomRangeMs / (24 * 60 * 60 * 1000)).toFixed(1);
+                    addDebugLog(`🔍 handleZoomSelection(${chart.canvas.id}): zoom okno = ${zoomDays}d (${new Date(minX).toLocaleString()} → ${new Date(maxX).toLocaleString()})`);
+
+                    // Orezanie dát na viditeľný rozsah — umožní animácie pri zoom-in z veľkých datasetov
+                    const trimChartData = (targetChart) => {
+                        if (!targetChart || !targetChart.data || !targetChart.data.datasets) return;
+                        if (zoomRangeMs > THIRTY_DAYS_MS) return; // >30d — neorezávať
+
+                        let totalBefore = 0;
+                        targetChart.data.datasets.forEach(ds => { totalBefore += (ds.data ? ds.data.length : 0); });
+                        if (totalBefore <= MAX_POINTS) return; // Už je málo bodov
+
+                        const buffer = zoomRangeMs * 0.1; // 10% buffer na okrajoch
+                        const trimMin = minX - buffer;
+                        const trimMax = maxX + buffer;
+
+                        targetChart.data.datasets.forEach(ds => {
+                            if (!ds.data || ds.data.length === 0) return;
+                            ds.data = ds.data.filter(p => {
+                                const px = (p.x instanceof Date) ? p.x.getTime() : (typeof p.x === 'number' ? p.x : null);
+                                if (px === null) return true; // gap marker alebo neznámy formát — ponechať
+                                return px >= trimMin && px <= trimMax;
+                            });
+                        });
+
+                        // Odstráň prázdne datasety — Chart.js ich inak stále spracúva
+                        const datasetsBefore = targetChart.data.datasets.length;
+                        targetChart.data.datasets = targetChart.data.datasets.filter(ds => ds.data && ds.data.length > 0);
+
+                        let totalAfter = 0;
+                        targetChart.data.datasets.forEach(ds => { totalAfter += (ds.data ? ds.data.length : 0); });
+                        addDebugLog(`✂️ trimChartData(${targetChart.canvas.id}): ${totalBefore} → ${totalAfter} bodov, ${datasetsBefore} → ${targetChart.data.datasets.length} datasetov`);
+                    };
+
                     // Apply zoom with animation – global or individual mode
                     if (window._globalZoomMode) {
                         ['pingChart', 'cpuChart', 'temperatureChart', 'memoryChart'].forEach(id => {
                             const targetChart = Chart.getChart(id);
                             if (!targetChart) return;
+                            trimChartData(targetChart);
                             targetChart.options.scales.x.min = minX;
                             targetChart.options.scales.x.max = maxX;
                             enableZoomAnimation(targetChart, 400);
@@ -3868,10 +3938,11 @@
                             updateSingleChartTimeFormat(targetChart, minX, maxX);
                         });
                     } else {
+                        trimChartData(chart);
                         chart.options.scales.x.min = minX;
                         chart.options.scales.x.max = maxX;
                         enableZoomAnimation(chart, 400);
-                        chart.update('active'); // Use 'active' mode for animation
+                        chart.update('active');
 
                         const subtitle = chart.options.plugins.subtitle;
                         if (subtitle) {

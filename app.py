@@ -4511,6 +4511,7 @@ def setup_scheduler(log_schedule_info=False):
     # SNMP checks are now handled by individual timers - no scheduler needed
     # Only keep essential scheduled tasks
     schedule.every().day.at("03:00").do(scheduled_log_cleanup)  # Čistenie starých logov každý deň o 3:00
+    schedule.every().day.at("10:00").do(fetch_mikrotik_rss)  # Denná kontrola novej verzie RouterOS z RSS feedu
     schedule.every().day.at("09:00").do(check_certificates_expiry)  # Denná kontrola a automatická obnova SSL certifikátov
     
     snmp_health_enabled = settings.get('snmp_health_check_enabled', 'true').lower() == 'true'

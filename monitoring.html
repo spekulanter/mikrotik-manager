@@ -2176,7 +2176,7 @@
                         chart.options.scales.x.max = undefined;
 
                         // Restore original visual time range when reaching full data range
-                        restoreOriginalVisualTimeRange();
+                        restoreOriginalVisualTimeRange(chartId);
 
                         const subtitle = chart.options.plugins.subtitle;
                         if (subtitle) {
@@ -2198,7 +2198,7 @@
                         updateSingleChartTimeFormat(chart, newMin, newMax);
 
                         // Update visual time range indication for progressive zoom-out
-                        updateVisualTimeRangeIndicatorForZoomOut(newMin, newMax);
+                        updateVisualTimeRangeIndicatorForZoomOut(newMin, newMax, chartId);
                     }
                 } else {
                     // Fallback: no data available, just clear zoom
@@ -2339,7 +2339,7 @@
                     // Nechaj _originalActiveButton nedotknutý – ak neskôr zmenší používateľ rozsah, vie sa obnoviť
                     addDebugLog && addDebugLog('🛡️ Zachovaný vizuálny interval 1y (neobnovený pôvodný)');
                 } else {
-                    restoreOriginalVisualTimeRange();
+                    restoreOriginalVisualTimeRange(chartId);
                 }
             }
 
@@ -3430,7 +3430,7 @@
 
                             // Update visual time range indicator to reflect the new range
                             // Don't reset _originalActiveButton here - we're expanding to larger range
-                            updateTimeRangeButtonsVisually(targetRange);
+                            updateTimeRangeButtonsVisually(targetRange, chartId);
 
                             // Persist the expanded range so F5 reload keeps it
                             if (typeof window.persistZoomRange === 'function') {
@@ -3955,7 +3955,7 @@
                     }
 
                     // Add visual time range indication (safe - does not affect existing logic)
-                    updateVisualTimeRangeIndicator(minX, maxX);
+                    updateVisualTimeRangeIndicator(minX, maxX, chart.canvas.id);
 
                     // Track zoom-in window for uptime/latency recalculation
                     // Set only when ping chart is affected (global mode or drag on pingChart itself)
@@ -4191,7 +4191,7 @@
         });
 
         // Safe visual time range indication for zoom-in (uses existing active button styling)
-        function updateVisualTimeRangeIndicator(minX, maxX) {
+        function updateVisualTimeRangeIndicator(minX, maxX, chartId) {
             // Only visual indication - does NOT change window.currentTimeRange or affect zoom-out logic
             if (!minX || !maxX) return;
 
@@ -4232,12 +4232,12 @@
 
             // Apply visual indication using existing .active class system
             if (visualRange) {
-                updateTimeRangeButtonsVisually(visualRange);
+                updateTimeRangeButtonsVisually(visualRange, chartId);
             }
         }
 
         // Enhanced visual time range indication for zoom-out (handles larger ranges properly)
-        function updateVisualTimeRangeIndicatorForZoomOut(minX, maxX) {
+        function updateVisualTimeRangeIndicatorForZoomOut(minX, maxX, chartId) {
             // Enhanced logic for zoom-out that properly handles larger time ranges
             if (!minX || !maxX) return;
 
@@ -4279,13 +4279,13 @@
 
             // Apply visual indication using existing .active class system
             if (visualRange) {
-                updateTimeRangeButtonsVisually(visualRange);
+                updateTimeRangeButtonsVisually(visualRange, chartId);
             }
 
         }
 
         // Helper to visually update time range buttons using existing active styling
-        function updateTimeRangeButtonsVisually(visualRange) {
+        function updateTimeRangeButtonsVisually(visualRange, chartId) {
             // Remove active class from all buttons
             const timeRangeButtons = document.querySelectorAll('.time-range-btn');
             timeRangeButtons.forEach(btn => {
@@ -4309,10 +4309,37 @@
                     }
                 }
             });
+            // Also update the per-chart card labels (top-right "Posledných X hodín")
+            updateChartCardTimeLabels(visualRange, chartId);
+        }
+
+        // Update the time range label shown in the top-right corner of each chart card.
+        // If chartId is provided and we are in individual zoom mode, only that card is updated.
+        function updateChartCardTimeLabels(timeRange, chartId) {
+            const label = getTimeRangeLabel(timeRange);
+            if (chartId && !window._globalZoomMode) {
+                // Individual mode: update only the card that contains this chart canvas
+                const canvas = document.getElementById(chartId);
+                if (canvas) {
+                    const card = canvas.closest('.card');
+                    if (card) {
+                        const subtitle = card.querySelector('.text-gray-400');
+                        if (subtitle) subtitle.textContent = label;
+                    }
+                }
+            } else {
+                // Global mode or no chartId: update all chart cards (skip Availability chart)
+                document.querySelectorAll('.card').forEach(card => {
+                    if (card.querySelector('.chart-container') && !card.textContent.includes('Availability')) {
+                        const subtitle = card.querySelector('.text-gray-400');
+                        if (subtitle) subtitle.textContent = label;
+                    }
+                });
+            }
         }
 
         // Restore original active button when zoom is reset
-        function restoreOriginalVisualTimeRange() {
+        function restoreOriginalVisualTimeRange(chartId) {
             // Remove active class from all buttons
             const timeRangeButtons = document.querySelectorAll('.time-range-btn');
             timeRangeButtons.forEach(btn => {
@@ -4325,11 +4352,13 @@
             });
 
             // Restore original active button
+            let restoredRange = null;
             if (window._originalActiveButton) {
                 const originalBtn = document.querySelector(`[data-range="${window._originalActiveButton}"]`);
                 if (originalBtn) {
                     originalBtn.classList.add('active');
                 }
+                restoredRange = window._originalActiveButton;
                 window._originalActiveButton = null;
             } else {
                 // Fallback: try to determine current active range from window.currentTimeRange
@@ -4338,7 +4367,12 @@
                     if (currentBtn) {
                         currentBtn.classList.add('active');
                     }
+                    restoredRange = window.currentTimeRange;
                 }
+            }
+            // Restore card label(s) to the original time range
+            if (restoredRange) {
+                updateChartCardTimeLabels(restoredRange, chartId);
             }
         }
 

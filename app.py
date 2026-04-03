@@ -2859,7 +2859,8 @@ def api_updater_run_bulk_update():
     _manual_bulk_groups[bulk_group_id] = {
         'device_ids': device_ids,
         'remaining_ids': device_ids[1:],
-        'current_device_id': device_ids[0]
+        'current_device_id': device_ids[0],
+        'cancelled_ids': set()
     }
     threading.Thread(target=run_manual_bulk_update, args=(device_ids, bulk_group_id), daemon=True).start()
     return jsonify({'status': 'success', 'bulk_group_id': bulk_group_id, 'queued_ids': device_ids[1:]})
@@ -2877,6 +2878,19 @@ def api_updater_running_bulk_queue():
             'current_device_id': group.get('current_device_id')
         })
     return jsonify({'groups': groups})
+
+
+@app.route('/api/updater/bulk-cancel/<int:device_id>', methods=['DELETE'])
+@login_required
+def api_updater_bulk_cancel(device_id):
+    """Zruší čakajúce zariadenie z manuálnej hromadnej bulk fronty."""
+    for group_id, group in list(_manual_bulk_groups.items()):
+        remaining = group.get('remaining_ids', [])
+        if device_id in remaining:
+            group.setdefault('cancelled_ids', set()).add(device_id)
+            group['remaining_ids'] = [d for d in remaining if d != device_id]
+            return jsonify({'status': 'success', 'device_id': device_id})
+    return jsonify({'status': 'error', 'message': 'Zariadenie nie je v čakajúcom fronte'}), 404
 
 
 @app.route('/')
@@ -5513,8 +5527,16 @@ def run_manual_bulk_update(device_ids, bulk_group_id):
             delay = 60
         try:
             for i, device_id in enumerate(device_ids):
+                cancelled = _manual_bulk_groups[bulk_group_id].get('cancelled_ids', set())
+                if device_id in cancelled:
+                    _manual_bulk_groups[bulk_group_id]['remaining_ids'] = [
+                        d for d in device_ids[i + 1:] if d not in cancelled
+                    ]
+                    continue
                 _manual_bulk_groups[bulk_group_id]['current_device_id'] = device_id
-                _manual_bulk_groups[bulk_group_id]['remaining_ids'] = device_ids[i + 1:]
+                _manual_bulk_groups[bulk_group_id]['remaining_ids'] = [
+                    d for d in device_ids[i + 1:] if d not in cancelled
+                ]
                 run_device_update(device_id)
                 if i < len(device_ids) - 1:
                     time.sleep(delay)

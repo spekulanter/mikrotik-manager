@@ -2403,9 +2403,29 @@
         function setWaitingCell(id) {
             _bulkWaitingDeviceIds.add(id);
             const statusEl = document.getElementById(`status-${id}`);
-            if (statusEl) statusEl.innerHTML = `<span style="color:#a78bfa; opacity:0.75;">⟳ Čaká...</span>`;
+            if (statusEl) statusEl.innerHTML =
+                `<span style="color:#a78bfa; opacity:0.75;">⟳ Čaká...</span>` +
+                ` <button onclick="event.stopPropagation(); cancelBulkDevice(${id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:5px 7px;margin-left:2px;line-height:1;" title="Zrušiť z fronty"><i class="fas fa-times"></i></button>`;
             // Sync card
             syncCard(`status-${id}`);
+        }
+
+        async function cancelBulkDevice(deviceId) {
+            showConfirm('Zrušiť zariadenie z čakajúcej fronty?', async () => {
+                try {
+                    const res = await fetch(`/api/updater/bulk-cancel/${deviceId}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        _bulkWaitingDeviceIds.delete(deviceId);
+                        showToast('Zariadenie odstránené z fronty.', 'info');
+                        await fetchDeviceDetails(deviceId);
+                    } else {
+                        showToast(data.message || 'Nepodarilo sa zrušiť.', 'warning');
+                    }
+                } catch (e) {
+                    showToast('Chyba pri rušení zariadenia.', 'danger');
+                }
+            });
         }
 
         function renderTableShells() {

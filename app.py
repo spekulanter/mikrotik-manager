@@ -2255,9 +2255,9 @@ def _do_renew_certificate(ip, username, password, days):
     # 4. Podpísanie certifikátu
     http_api('POST', 'certificate/sign', {'number': cert_id}, timeout=30)
 
-    # 5. Overenie, či bol certifikát podpísaný (trusted=true, RouterBOARD môže trvať 5–15s)
+    # 5. Overenie, či bol certifikát podpísaný (trusted=true, RouterBOARD môže trvať 5–30s)
     signed = False
-    for attempt in range(6):
+    for attempt in range(10):
         time.sleep(3)
         res, err = http_api('GET', f'certificate/{cert_id}')
         if isinstance(res, dict) and res.get('trusted') == 'true':
@@ -2267,12 +2267,18 @@ def _do_renew_certificate(ip, username, password, days):
     if not signed:
         return False, 'Certifikát sa nepodarilo podpísať v časovom limite.'
 
-    # 6. Aktivácia certifikátu pre www-ssl službu
-    res, err = http_api('POST', 'ip/service/set', {
-        'numbers': 'www-ssl',
-        'certificate': 'WebCert',
-        'disabled': 'no'
-    })
+    # 6. Aktivácia certifikátu pre www-ssl službu (pomalé zariadenia potrebujú viac času)
+    res, err = None, None
+    for attempt in range(3):
+        res, err = http_api('POST', 'ip/service/set', {
+            'numbers': 'www-ssl',
+            'certificate': 'WebCert',
+            'disabled': 'no'
+        }, timeout=45)
+        if not err:
+            break
+        if attempt < 2:
+            time.sleep(5)
 
     if err:
         return False, f'Chyba pri nastavení služby www-ssl: {err}'

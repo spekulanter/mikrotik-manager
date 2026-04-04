@@ -136,19 +136,20 @@
         }
 
         /* Tlačidlá v headeri - svetlá téma */
-        body.light-theme .btn {
+        body.light-theme .btn:not(#cancelSettingsBtn) {
             background-color: var(--accent-color) !important;
             color: #ffffff !important;
             border: 1px solid var(--accent-color) !important;
         }
 
-        body.light-theme .btn:hover {
+        body.light-theme .btn:not(#cancelSettingsBtn):hover {
             background-color: var(--accent-color-hover) !important;
             color: #ffffff !important;
             border-color: var(--accent-color-hover) !important;
         }
 
-        body.light-theme header button {
+        body.light-theme header button,
+        body.light-theme #cancelSettingsBtn {
             background: linear-gradient(135deg, #eef2f7, #d5dde8) !important;
             color: var(--text-color) !important;
             border: 1px solid #b8c9e6 !important;
@@ -160,7 +161,8 @@
             color: #000000 !important;
         }
 
-        body.light-theme header button:hover {
+        body.light-theme header button:hover,
+        body.light-theme #cancelSettingsBtn:hover {
             background: linear-gradient(135deg, #d5dde8, #b8c5d7) !important;
             color: var(--text-color) !important;
             border-color: #b8c5d7 !important;
@@ -188,7 +190,12 @@
 
         body.light-theme [class*="bg-blue-900/30"] {
             background-color: #e6f0ff !important;
-            border-color: #b7cff9 !important;
+            border-color: #6daaf0 !important;
+        }
+
+        body.light-theme [class*="bg-purple-900"] {
+            background-color: #f0e8ff !important;
+            border-color: #a78bfa !important;
         }
 
         body.light-theme [class*="text-blue-200"],
@@ -196,18 +203,27 @@
             color: #1b3656 !important;
         }
 
+        body.light-theme .text-purple-200 {
+            color: #3b1278 !important;
+        }
+
         body.light-theme [class*="text-blue-300"],
         body.light-theme .text-blue-300 {
             color: #0f2740 !important;
         }
 
-        body.light-theme .text-blue-400 {
+        body.light-theme .text-blue-400,
+        body.light-theme .section-card .text-sky-400 {
             color: #0b3b73 !important;
         }
 
+        body.light-theme .text-purple-400 {
+            color: #6d28d9 !important;
+        }
+
         body.light-theme [class*="bg-green-900/30"] {
-            background-color: #e8f7ed !important;
-            border-color: #b9e3c5 !important;
+            background-color: #d4edda !important;
+            border-color: #6abf82 !important;
         }
 
         body.light-theme [class*="text-green-200"],
@@ -216,13 +232,15 @@
         }
 
         body.light-theme [class*="text-green-300"],
-        body.light-theme .text-green-300 {
+        body.light-theme .text-green-300,
+        body.light-theme .text-green-400,
+        body.light-theme .text-emerald-400 {
             color: #195b38 !important;
         }
 
         body.light-theme [class*="bg-yellow-900/30"] {
-            background-color: #fff7e5 !important;
-            border-color: #f2d48a !important;
+            background-color: #fef3c7 !important;
+            border-color: #f59e0b !important;
         }
 
         body.light-theme [class*="text-yellow-200"],
@@ -236,7 +254,7 @@
 
         body.light-theme [class*="bg-orange-900/30"] {
             background-color: #fff1e6 !important;
-            border-color: #f7c7a3 !important;
+            border-color: #fb923c !important;
         }
 
         body.light-theme .text-orange-200 {
@@ -999,9 +1017,9 @@
 
                     <div>
                         <h3 class="text-lg font-semibold mb-3">Otestovať notifikáciu</h3>
-                        <div class="flex gap-3">
+                        <div class="flex flex-col sm:flex-row gap-3">
                             <select id="testNotifType"
-                                class="flex-1 p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm">
+                                class="flex-1 min-w-0 p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-sm">
                                 <option value="general">🔔 Všeobecná (základná)</option>
                                 <optgroup label="Dostupnosť zariadení">
                                     <option value="notify_device_offline">🔴 Zariadenie offline (ICMP)</option>

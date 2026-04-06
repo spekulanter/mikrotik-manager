@@ -1744,6 +1744,39 @@
             color: #0ea5e9 !important;
         }
 
+        /* Account modal header */
+        .account-modal-header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0c1a2e 100%);
+            border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+        .account-modal-header::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at top left, rgba(56, 189, 248, 0.08) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .account-modal-icon-wrap {
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
+            box-shadow: 0 0 16px rgba(14, 165, 233, 0.35);
+            flex-shrink: 0;
+        }
+        body.light-theme .account-modal-header {
+            background: linear-gradient(135deg, #deeafa 0%, #e8f3fd 60%, #d4e8f8 100%);
+            border-bottom: 1px solid #b8c9e6;
+        }
+        body.light-theme .account-modal-header::before {
+            background: radial-gradient(ellipse at top left, rgba(3, 105, 161, 0.06) 0%, transparent 60%);
+        }
+        body.light-theme .account-modal-header h2 { color: #1f2937 !important; }
+        body.light-theme .account-modal-header .text-sky-300\/70 { color: #0369a1 !important; opacity: 0.85; }
+        body.light-theme .account-modal-icon-wrap {
+            background: linear-gradient(135deg, #3ba8e8, #1f86d8);
+            box-shadow: 0 0 12px rgba(59, 168, 232, 0.3);
+        }
+
         body.light-theme #closeSettingsBtn.btn.bg-gray-600 {
             background-color: #e2e8f0 !important;
             color: var(--text-color) !important;
@@ -3002,105 +3035,151 @@
 
     <div id="manageAccountModal"
         class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
-        <div class="card p-8 rounded-lg w-full max-w-2xl modal-content max-h-[90vh] overflow-y-auto">
-            <h2 class="text-2xl font-bold text-white mb-6">👤 Správa používateľského účtu</h2>
-            <div id="accountManageMessage" class="hidden p-3 rounded-md mb-4 text-sm"></div>
+        <div class="card rounded-xl w-full max-w-lg modal-content overflow-hidden">
 
-            <!-- Tabs -->
-            <div class="flex border-b border-gray-600 mb-6">
-                <button id="tabUsername"
-                    class="account-tab active px-4 py-2 text-sky-400 border-b-2 border-sky-400">Používateľské
-                    meno</button>
-                <button id="tabPassword"
-                    class="account-tab px-4 py-2 text-gray-400 border-b-2 border-transparent hover:text-sky-400">Heslo</button>
-                <button id="tab2FA"
-                    class="account-tab px-4 py-2 text-gray-400 border-b-2 border-transparent hover:text-sky-400">2FA</button>
-            </div>
-
-            <!-- Username Tab -->
-            <div id="tabUsernameContent" class="tab-content">
-                <form id="changeUsernameForm" class="space-y-4">
-                    <div>
-                        <label for="currentUsernameDisplay" class="block mb-1 font-semibold">Aktuálne používateľské
-                            meno</label>
-                        <input type="text" id="currentUsernameDisplay"
-                            class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-gray-400" readonly>
+            <!-- Modal header -->
+            <div class="account-modal-header px-6 py-4 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="account-modal-icon-wrap flex items-center justify-center w-10 h-10 rounded-xl">
+                        <i class="fas fa-user-shield text-lg text-white"></i>
                     </div>
                     <div>
-                        <label for="newUsername" class="block mb-1 font-semibold">Nové používateľské meno</label>
-                        <input type="text" id="newUsername"
-                            class="w-full p-2 rounded bg-gray-800 border border-gray-600" required
-                            placeholder="Len písmená, číslice, _ a -" pattern="[a-zA-Z0-9_-]+">
-                        <small class="text-gray-400 text-xs">Minimálne 3 znaky, maximálne 50 znakov</small>
-                    </div>
-                    <div>
-                        <label for="confirmPasswordUsername" class="block mb-1 font-semibold">Potvrdenie hesla</label>
-                        <input type="password" id="confirmPasswordUsername"
-                            class="w-full p-2 rounded bg-gray-800 border border-gray-600" required>
-                    </div>
-                    <div class="flex justify-end gap-4 mt-6">
-                        <button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Zmeniť
-                            používateľské meno</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Password Tab -->
-            <div id="tabPasswordContent" class="tab-content hidden">
-                <form id="changePasswordForm" class="space-y-4">
-                    <div>
-                        <label for="oldPassword" class="block mb-1 font-semibold">Staré heslo</label>
-                        <div class="password-input-container">
-                            <input type="password" id="oldPassword"
-                                class="w-full p-2 pr-10 rounded bg-gray-800 border border-gray-600" required>
-                            <i class="fas fa-eye password-toggle" data-target="oldPassword"></i>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="newPassword" class="block mb-1 font-semibold">Nové heslo</label>
-                        <div class="password-input-container">
-                            <input type="password" id="newPassword"
-                                class="w-full p-2 pr-10 rounded bg-gray-800 border border-gray-600" required>
-                            <i class="fas fa-eye password-toggle" data-target="newPassword"></i>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="newPasswordConfirm" class="block mb-1 font-semibold">Potvrdenie nového hesla</label>
-                        <div class="password-input-container">
-                            <input type="password" id="newPasswordConfirm"
-                                class="w-full p-2 pr-10 rounded bg-gray-800 border border-gray-600" required>
-                            <i class="fas fa-eye password-toggle" data-target="newPasswordConfirm"></i>
-                        </div>
-                    </div>
-                    <div class="flex justify-end gap-4 mt-6">
-                        <button type="submit" class="btn btn-primary font-bold py-2 px-4 rounded-lg">Zmeniť
-                            heslo</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- 2FA Tab -->
-            <div id="tab2FAContent" class="tab-content hidden">
-                <div id="backup2faControls" class="space-y-4">
-                    <div class="bg-gray-800 p-4 rounded-lg">
-                        <h3 class="text-lg font-semibold text-white mb-2">📱 Záložné kódy</h3>
-                        <p class="text-gray-400 text-sm mb-3">Záložné kódy umožňujú prístup k vášmu účtu aj keď nemáte k
-                            dispozícii svoje zariadenie s autentifikátorom.</p>
-                        <div id="backupCodesInfo" class="mb-3">
-                            <p class="text-sm text-gray-300">Zostáva vám: <span id="remainingCodes"
-                                    class="font-semibold text-sky-400">-</span> kódov</p>
-                        </div>
-                        <button id="generateBackupCodesBtn"
-                            class="btn bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg">
-                            <i class="fas fa-key mr-2"></i>Regenerovať záložné kódy
-                        </button>
+                        <h2 class="text-lg font-bold text-white leading-tight">Správa používateľského účtu</h2>
+                        <p class="text-xs text-sky-300/70 mt-0.5">Zabezpečenie a prihlásenie</p>
                     </div>
                 </div>
+                <button type="button" id="cancelAccountManageBtn"
+                    class="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white transition-colors flex-shrink-0">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
             </div>
 
-            <div class="flex justify-end gap-4 pt-6 border-t border-gray-700 mt-6">
-                <button type="button" id="cancelAccountManageBtn"
-                    class="btn bg-gray-600 hover:bg-gray-700 py-2 px-4 rounded-lg">Zatvoriť</button>
+            <div class="px-6 pb-6 pt-5">
+                <div id="accountManageMessage" class="hidden p-3 rounded-md mb-4 text-sm"></div>
+
+                <!-- Tabs -->
+                <div class="flex border-b border-gray-700 mb-5">
+                    <button id="tabUsername"
+                        class="account-tab active px-4 py-2 text-sky-400 border-b-2 border-sky-400 flex items-center gap-1.5 text-sm font-medium">
+                        <i class="fas fa-user-pen text-xs"></i>Meno
+                    </button>
+                    <button id="tabPassword"
+                        class="account-tab px-4 py-2 text-gray-400 border-b-2 border-transparent hover:text-sky-400 flex items-center gap-1.5 text-sm font-medium">
+                        <i class="fas fa-key text-xs"></i>Heslo
+                    </button>
+                    <button id="tab2FA"
+                        class="account-tab px-4 py-2 text-gray-400 border-b-2 border-transparent hover:text-sky-400 flex items-center gap-1.5 text-sm font-medium">
+                        <i class="fas fa-shield-halved text-xs"></i>2FA
+                    </button>
+                </div>
+
+                <!-- Fixed-height wrapper prevents modal resize on tab switch -->
+                <div style="min-height: 335px;">
+
+                    <!-- Username Tab -->
+                    <div id="tabUsernameContent" class="tab-content">
+                        <form id="changeUsernameForm" class="space-y-3">
+                            <div>
+                                <label for="currentUsernameDisplay" class="device-field-label">
+                                    <i class="fas fa-user text-gray-500"></i>Aktuálne používateľské meno
+                                </label>
+                                <input type="text" id="currentUsernameDisplay"
+                                    class="device-input w-full p-2.5 rounded-lg opacity-60 cursor-default" readonly>
+                            </div>
+                            <div>
+                                <label for="newUsername" class="device-field-label">
+                                    <i class="fas fa-user-pen text-violet-400"></i>Nové používateľské meno
+                                </label>
+                                <input type="text" id="newUsername"
+                                    class="device-input w-full p-2.5 rounded-lg" required
+                                    placeholder="Len písmená, číslice, _ a -" pattern="[a-zA-Z0-9_-]+">
+                                <small class="text-gray-500 text-xs mt-1 block">Minimálne 3 znaky, maximálne 50 znakov</small>
+                            </div>
+                            <div>
+                                <label for="confirmPasswordUsername" class="device-field-label">
+                                    <i class="fas fa-lock text-yellow-400"></i>Potvrdenie hesla
+                                </label>
+                                <div class="password-input-container">
+                                    <input type="password" id="confirmPasswordUsername"
+                                        class="device-input w-full p-2.5 pr-10 rounded-lg" required>
+                                    <i class="fas fa-eye password-toggle" data-target="confirmPasswordUsername"></i>
+                                </div>
+                            </div>
+                            <div class="flex justify-end pt-1">
+                                <button type="submit" class="device-btn-save btn flex items-center gap-2 py-2 px-5 rounded-lg font-bold text-sm">
+                                    <i class="fas fa-floppy-disk text-xs"></i>Zmeniť meno
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Password Tab -->
+                    <div id="tabPasswordContent" class="tab-content hidden">
+                        <form id="changePasswordForm" class="space-y-3">
+                            <div>
+                                <label for="oldPassword" class="device-field-label">
+                                    <i class="fas fa-lock text-gray-400"></i>Staré heslo
+                                </label>
+                                <div class="password-input-container">
+                                    <input type="password" id="oldPassword"
+                                        class="device-input w-full p-2.5 pr-10 rounded-lg" required>
+                                    <i class="fas fa-eye password-toggle" data-target="oldPassword"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="newPassword" class="device-field-label">
+                                    <i class="fas fa-key text-emerald-400"></i>Nové heslo
+                                </label>
+                                <div class="password-input-container">
+                                    <input type="password" id="newPassword"
+                                        class="device-input w-full p-2.5 pr-10 rounded-lg" required>
+                                    <i class="fas fa-eye password-toggle" data-target="newPassword"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="newPasswordConfirm" class="device-field-label">
+                                    <i class="fas fa-key text-yellow-400"></i>Potvrdenie nového hesla
+                                </label>
+                                <div class="password-input-container">
+                                    <input type="password" id="newPasswordConfirm"
+                                        class="device-input w-full p-2.5 pr-10 rounded-lg" required>
+                                    <i class="fas fa-eye password-toggle" data-target="newPasswordConfirm"></i>
+                                </div>
+                            </div>
+                            <div class="flex justify-end pt-1">
+                                <button type="submit" class="device-btn-save btn flex items-center gap-2 py-2 px-5 rounded-lg font-bold text-sm">
+                                    <i class="fas fa-floppy-disk text-xs"></i>Zmeniť heslo
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 2FA Tab -->
+                    <div id="tab2FAContent" class="tab-content hidden">
+                        <div id="backup2faControls" class="space-y-3">
+                            <div class="device-form-section-title mb-3">
+                                <i class="fas fa-shield-halved text-violet-400"></i>
+                                <span>Záložné kódy</span>
+                            </div>
+                            <div class="bg-gray-800 p-4 rounded-lg border border-gray-700/60">
+                                <p class="text-gray-400 text-sm mb-4">Záložné kódy umožňujú prístup k vášmu účtu aj keď nemáte k
+                                    dispozícii svoje zariadenie s autentifikátorom.</p>
+                                <div id="backupCodesInfo" class="mb-4">
+                                    <p class="text-sm text-gray-300 flex items-center gap-2">
+                                        <i class="fas fa-hashtag text-sky-400 text-xs"></i>
+                                        Zostáva vám:&nbsp;<span id="remainingCodes"
+                                            class="font-semibold text-sky-400">-</span>&nbsp;kódov
+                                    </p>
+                                </div>
+                                <button id="generateBackupCodesBtn"
+                                    class="btn bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                                    <i class="fas fa-rotate text-xs"></i>Regenerovať záložné kódy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
     </div>
@@ -5507,10 +5586,6 @@
                     if (result.status === 'success') {
                         messageDiv.classList.add('bg-green-900/50', 'text-green-300');
                         changePasswordForm.reset();
-                        setTimeout(() => {
-                            closeModal();
-                            messageDiv.classList.add('hidden');
-                        }, 2000);
                     } else {
                         messageDiv.classList.add('bg-red-900/50', 'text-red-300');
                     }
@@ -5538,12 +5613,7 @@
                     if (result.status === 'success') {
                         messageDiv.classList.add('bg-green-900/50', 'text-green-300');
                         changeUsernameForm.reset();
-                        setTimeout(() => {
-                            closeModal();
-                            messageDiv.classList.add('hidden');
-                            // Refresh user status to show updated username
-                            loadUserStatus();
-                        }, 2000);
+                        loadUserStatus();
                     } else {
                         messageDiv.classList.add('bg-red-900/50', 'text-red-300');
                     }

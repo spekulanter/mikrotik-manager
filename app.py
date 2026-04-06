@@ -1884,6 +1884,9 @@ def verify_2fa():
 @login_required
 def logout():
     logout_user()
+    next_page = request.args.get('next', '')
+    if next_page == 'password-recovery':
+        return redirect(url_for('password_recovery'))
     return redirect(url_for('login'))
 
 @app.route('/backups')

@@ -1929,6 +1929,33 @@
             color: #0f172a !important;
         }
 
+        /* Recovery confirm modal – light theme */
+        body.light-theme #recoveryConfirmModal .card {
+            background: #f0f6ff !important;
+        }
+        body.light-theme #recoveryConfirmModal .border-b {
+            border-color: #c8d9ef !important;
+        }
+        body.light-theme #recoveryConfirmModal h3 {
+            color: #1f2937 !important;
+        }
+        body.light-theme #recoveryConfirmModal p.text-gray-300 {
+            color: #374151 !important;
+        }
+        body.light-theme #recoveryConfirmModal .bg-amber-900\/20 {
+            background: #fef3c7 !important;
+            border-color: #f59e0b !important;
+        }
+        body.light-theme #recoveryConfirmModal .text-amber-300 {
+            color: #92400e !important;
+        }
+        body.light-theme #recoveryConfirmModal .text-amber-400 {
+            color: #b45309 !important;
+        }
+        body.light-theme #recoveryConfirmModal .bg-amber-500\/15 {
+            background: #fde68a !important;
+        }
+
         /* SNMP modal obsah v svetlej téme */
         body.light-theme #snmpStatusContent,
         body.light-theme #snmpStatusContent div,
@@ -3117,9 +3144,13 @@
                     <div id="tabPasswordContent" class="tab-content hidden">
                         <form id="changePasswordForm" class="space-y-3">
                             <div>
-                                <label for="oldPassword" class="device-field-label">
-                                    <i class="fas fa-lock text-gray-400"></i>Staré heslo
-                                </label>
+                                <div class="flex items-center justify-between mb-[5px]">
+                                    <label for="oldPassword" class="device-field-label !mb-0">
+                                        <i class="fas fa-lock text-gray-400"></i>Staré heslo
+                                    </label>
+                                    <button type="button" onclick="showRecoveryConfirm()"
+                                        class="text-xs text-sky-400 hover:text-sky-300 transition-colors leading-none">(obnoviť heslo)</button>
+                                </div>
                                 <div class="password-input-container">
                                     <input type="password" id="oldPassword"
                                         class="device-input w-full p-2.5 pr-10 rounded-lg" required>
@@ -3232,6 +3263,36 @@
             <div class="flex justify-end">
                 <button id="closeBackupCodesBtn"
                     class="btn btn-primary font-bold py-2 px-4 rounded-lg">Dokončiť</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recovery Confirm Modal -->
+    <div id="recoveryConfirmModal"
+        class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-[60]">
+        <div class="card rounded-xl w-full max-w-sm modal-content overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-700 flex items-center gap-3">
+                <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-amber-500/15 flex-shrink-0">
+                    <i class="fas fa-arrow-right-from-bracket text-amber-400"></i>
+                </div>
+                <h3 class="font-bold text-white text-base">Obnova hesla</h3>
+            </div>
+            <div class="px-6 py-5 space-y-3">
+                <p class="text-sm text-gray-300">Pre obnovu hesla je potrebné sa <strong class="text-white">odhlásiť</strong>. Po obnovení hesla sa budete musieť znovu prihlásiť.</p>
+                <div class="rounded-lg bg-amber-900/20 border border-amber-700/40 px-4 py-3 flex items-start gap-2">
+                    <i class="fas fa-triangle-exclamation text-amber-400 text-xs mt-0.5 flex-shrink-0"></i>
+                    <p class="text-xs text-amber-300">Obnova funguje cez Pushover notifikáciu – uistite sa, že máte Pushover nastavený a prístupný.</p>
+                </div>
+                <div class="flex gap-3 pt-1">
+                    <button type="button" onclick="hideRecoveryConfirm()"
+                        class="device-btn-cancel btn flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-medium text-sm">
+                        <i class="fas fa-xmark text-xs"></i>Zrušiť
+                    </button>
+                    <button type="button" onclick="window.location.href='/logout?next=password-recovery'"
+                        class="device-btn-save btn flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-bold text-sm">
+                        <i class="fas fa-arrow-right-from-bracket text-xs"></i>Odhlásiť a obnoviť
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -4978,6 +5039,16 @@
             document.getElementById('cancelDeviceBtn').addEventListener('click', closeModal);
             document.getElementById('cancelSettingsBtn').addEventListener('click', closeModal);
             document.getElementById('cancelAccountManageBtn').addEventListener('click', closeModal);
+
+            // === Recovery Confirm Modal ===
+            function showRecoveryConfirm() {
+                document.getElementById('recoveryConfirmModal').classList.remove('hidden');
+            }
+            function hideRecoveryConfirm() {
+                document.getElementById('recoveryConfirmModal').classList.add('hidden');
+            }
+            window.showRecoveryConfirm = showRecoveryConfirm;
+            window.hideRecoveryConfirm = hideRecoveryConfirm;
             document.getElementById('closeSnmpStatusBtn').addEventListener('click', closeModal);
             document.getElementById('refreshSnmpStatusBtn').addEventListener('click', async () => {
                 const btn = document.getElementById('refreshSnmpStatusBtn');

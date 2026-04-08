@@ -1235,31 +1235,31 @@
         }
 
         /* SNMP modal – scrollbar rovnaký štýl ako activity log */
-        #snmpStatusModal .modal-content::-webkit-scrollbar {
+        #snmpStatusContent::-webkit-scrollbar {
             width: 8px;
         }
-        #snmpStatusModal .modal-content::-webkit-scrollbar-track {
+        #snmpStatusContent::-webkit-scrollbar-track {
             background: #1f2937;
             border-radius: 4px;
         }
-        #snmpStatusModal .modal-content::-webkit-scrollbar-thumb {
+        #snmpStatusContent::-webkit-scrollbar-thumb {
             background-color: #4b5563;
             border-radius: 4px;
             border: 1px solid #374151;
         }
-        #snmpStatusModal .modal-content::-webkit-scrollbar-thumb:hover {
+        #snmpStatusContent::-webkit-scrollbar-thumb:hover {
             background-color: #6b7280;
         }
 
-        body.light-theme #snmpStatusModal .modal-content::-webkit-scrollbar-track {
-            background: #dce8f8;
+        body.light-theme #snmpStatusContent::-webkit-scrollbar-track {
+            background: #cddbf2;
         }
-        body.light-theme #snmpStatusModal .modal-content::-webkit-scrollbar-thumb {
+        body.light-theme #snmpStatusContent::-webkit-scrollbar-thumb {
+            background-color: #b8c9e6;
+            border: 1px solid #cddbf2;
+        }
+        body.light-theme #snmpStatusContent::-webkit-scrollbar-thumb:hover {
             background-color: #94a3b8;
-            border: 1px solid #bfcfe8;
-        }
-        body.light-theme #snmpStatusModal .modal-content::-webkit-scrollbar-thumb:hover {
-            background-color: #64748b;
         }
 
         .modal-content.no-outer-scrollbar::-webkit-scrollbar {
@@ -2053,6 +2053,74 @@
         body.light-theme #snmpStatusModal .bg-gray-600 {
             background-color: #eaf1fb !important;
         }
+
+        /* SNMP modal header buttons – light theme */
+        body.light-theme #snmpStatusModal .device-modal-header button {
+            background: rgba(0, 0, 0, 0.08) !important;
+            color: #1e3a5f !important;
+        }
+        body.light-theme #snmpStatusModal .device-modal-header button:hover {
+            background: rgba(0, 0, 0, 0.16) !important;
+            color: #0f172a !important;
+        }
+
+        /* SNMP modal – light theme card overrides */
+        body.light-theme #snmpStatusContent .bg-sky-950\/20 {
+            background: #e0f0fd !important;
+            border-color: #7dd3fc !important;
+        }
+        body.light-theme #snmpStatusContent .bg-gray-800\/40 {
+            background: #eaf1fb !important;
+            border-color: #c0d4ec !important;
+        }
+        body.light-theme #snmpStatusContent .bg-red-950\/10 {
+            background: #fef2f2 !important;
+            border-color: #fca5a5 !important;
+        }
+        /* mini-karty (Interval / Posledná / Ďalšia) */
+        body.light-theme #snmpStatusContent .bg-gray-900\/40 {
+            background: rgba(210, 226, 244, 0.45) !important;
+        }
+        body.light-theme #snmpStatusContent .bg-sky-900\/50,
+        body.light-theme #snmpStatusContent .bg-sky-900\/40 { background: #bae6fd !important; border-color: #7dd3fc !important; }
+        body.light-theme #snmpStatusContent .bg-gray-800\/60 { background: #dde8f5 !important; border-color: #b0c8e4 !important; }
+
+        /* Texty – stupnica od tmavej po svetlú */
+        body.light-theme #snmpStatusContent .text-gray-500 { color: #7b8fa3 !important; }
+        body.light-theme #snmpStatusContent .text-gray-400 { color: #5c7080 !important; }
+        body.light-theme #snmpStatusContent .text-gray-300,
+        body.light-theme #snmpStatusContent .text-gray-200 { color: #3d5166 !important; }
+
+        /* Názov zariadenia – rovnaká modrá ako v tabuľke */
+        body.light-theme #snmpStatusContent .font-bold.text-white { color: #2d6882 !important; }
+        /* Interval hodnota (20 min) – stredná modrá, nie čierna */
+        body.light-theme #snmpStatusContent .font-mono.font-semibold.text-white { color: #2d6882 !important; }
+        /* Fallback pre zvyšné text-white prvky */
+        body.light-theme #snmpStatusContent .text-white { color: #3d5166 !important; }
+
+        body.light-theme #snmpStatusContent .text-sky-300,
+        body.light-theme #snmpStatusContent .text-sky-400 { color: #0e6fa3 !important; }
+
+        /* Globálny interval badge */
+        body.light-theme #snmpStatusContent .bg-sky-900\/30 { background: #cce9f9 !important; border-color: #7dd3fc !important; }
+        body.light-theme #snmpStatusContent .text-sky-400 { color: #0e6fa3 !important; }
+
+        body.light-theme #snmpStatusContent .bg-emerald-900\/30 { background: #d0ead9 !important; border-color: #6fba8d !important; }
+        body.light-theme #snmpStatusContent .text-emerald-400 { color: #1a5c35 !important; }
+        body.light-theme #snmpStatusContent .text-emerald-300 { color: #1a5c35 !important; }
+        body.light-theme #snmpStatusContent .bg-red-900\/30 { background: #fee2e2 !important; border-color: #fca5a5 !important; }
+        body.light-theme #snmpStatusContent .text-red-400 { color: #b91c1c !important; }
+
+        /* Vlastný interval badge (fialový) */
+        body.light-theme #snmpStatusContent .bg-violet-900\/50 { background: #ede9fe !important; border-color: #c4b5fd !important; }
+        body.light-theme #snmpStatusContent .text-violet-300 { color: #5b21b6 !important; }
+
+        /* Ikonky v mini-kartách */
+        body.light-theme #snmpStatusContent .text-indigo-400 { color: #4338ca !important; }
+        body.light-theme #snmpStatusContent .text-amber-400 { color: #92660a !important; }
+
+        /* "19 zariadení" badge */
+        body.light-theme #snmpStatusContent .bg-gray-700\/60 { background: #d1dded !important; border-color: #b0c4db !important; }
 
         /* Debug Panel Styles */
         .debug-panel {
@@ -3299,24 +3367,37 @@
 
     <div id="snmpStatusModal"
         class="fixed inset-0 bg-black bg-opacity-75 flex items-start sm:items-center justify-center hidden z-50 p-2 pt-4 sm:p-4">
-        <div class="card p-4 sm:p-8 rounded-lg w-full max-w-4xl modal-content max-h-[96vh] sm:max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-3 sm:mb-6">
-                <h2 class="text-base sm:text-2xl font-bold text-white">🛡️ SNMP Monitoring Stav</h2>
-                <div class="flex gap-2">
+        <div class="card rounded-xl w-full max-w-4xl modal-content overflow-hidden flex flex-col" style="max-height: min(90vh, 820px);">
+
+            <!-- Header -->
+            <div class="device-modal-header px-5 sm:px-7 py-4 flex items-center justify-between gap-4 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="device-modal-icon-wrap flex items-center justify-center w-10 h-10 rounded-xl">
+                        <i class="fas fa-chart-bar text-base text-white"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-base sm:text-lg font-bold text-white leading-tight">SNMP Monitoring Stav</h2>
+                        <p class="text-xs text-sky-300/70 mt-0.5">Prehľad intervalov a stavu zariadení</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
                     <button id="refreshSnmpStatusBtn"
-                        class="btn bg-gray-600 hover:bg-gray-700 text-white w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+                        class="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white transition-colors"
                         title="Obnoviť SNMP stav">
                         <i class="fas fa-sync-alt text-xs"></i>
                     </button>
-                    <button id="closeSnmpStatusBtn" class="btn bg-gray-600 hover:bg-gray-700 text-white w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <button id="closeSnmpStatusBtn"
+                        class="flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white transition-colors">
                         <i class="fas fa-times text-sm"></i>
                     </button>
                 </div>
             </div>
-            <div id="snmpStatusContent">
-                <div class="flex justify-center items-center py-4 sm:py-8">
-                    <i class="fas fa-spinner fa-spin text-xl sm:text-2xl text-sky-500 mr-3"></i>
-                    <span class="text-sm sm:text-lg">Načítavam SNMP stav...</span>
+
+            <!-- Scrollable content -->
+            <div id="snmpStatusContent" class="overflow-y-auto p-4 sm:p-6 flex-1">
+                <div class="flex justify-center items-center py-12">
+                    <i class="fas fa-spinner fa-spin text-2xl text-sky-500 mr-3"></i>
+                    <span class="text-gray-400">Načítavam SNMP stav...</span>
                 </div>
             </div>
         </div>
@@ -5054,68 +5135,14 @@
                 const btn = document.getElementById('refreshSnmpStatusBtn');
                 const icon = btn.querySelector('i');
                 const contentDiv = document.getElementById('snmpStatusContent');
-
-                // Animácia len refresh tlačidla - žiadny overlay
                 icon.classList.add('fa-spin');
                 btn.disabled = true;
-
                 try {
                     const status = await api.get('snmp/status');
-
-                    // Vytvoríme obsah pre modál (rovnaký kód ako v hlavnom event listeneri)
-                    let content = `
-                <div class="bg-gray-800 p-3 sm:p-4 rounded-lg mb-3 sm:mb-6 border border-gray-600">
-                    <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-3">📊 Globálne informácie</h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
-                        <div><strong>Globálny interval:</strong> <span class="text-green-400">${status.global_interval} minút</span></div>
-                        <div><strong>Čas kontroly:</strong> <span class="text-gray-300">${new Date(status.current_time).toLocaleString('sk-SK')}</span></div>
-                    </div>
-                </div>
-
-                <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-4">🔧 Stav zariadení</h3>
-                <div class="grid gap-2 sm:gap-4">
-            `;
-
-                    status.devices.forEach(device => {
-                        const intervalText = device.interval_setting > 0
-                            ? `${device.interval_setting} min (vlastný)`
-                            : `${status.global_interval} min (globálny)`;
-                        const statusClass = device.is_due ? 'text-red-400' : 'text-green-400';
-                        const statusIcon = device.is_due ? '🔴' : '🟢';
-                        const statusText = device.is_due ? 'TREBA KONTROLA' : 'Čaká';
-
-                        content += `
-                    <div class="bg-gray-800 p-3 sm:p-4 rounded-lg border border-gray-600">
-                        <div class="flex justify-between items-center mb-2 sm:mb-3">
-                            <h4 class="font-bold text-sm sm:text-base text-sky-300">${device.name}</h4>
-                            <span class="font-mono text-xs sm:text-sm text-gray-400">${device.ip}</span>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-3 text-xs sm:text-sm">
-                            <div><strong>Interval:</strong> <span class="text-gray-300">${intervalText}</span></div>
-                            <div><strong>Posledná kontrola:</strong> <span class="text-gray-300">${device.last_check}</span></div>
-                            <div><strong>Ďalšia kontrola:</strong> <span class="text-gray-300">${device.next_check}</span></div>
-                            <div><strong>Stav:</strong> <span class="${statusClass}">${statusIcon} ${statusText}</span></div>
-                        </div>
-                    </div>
-                `;
-                    });
-
-                    content += `</div>`;
-
-                    // Priamo nastavíme nový obsah modálu - žiadne fade efekty
-                    contentDiv.innerHTML = content;
-
+                    contentDiv.innerHTML = buildSnmpContent(status);
                 } catch (error) {
-                    // Zobrazíme chybu bez fade efektov
-                    contentDiv.innerHTML = `
-                <div class="bg-red-900/20 border border-red-500 p-4 rounded-lg text-center">
-                    <i class="fas fa-exclamation-triangle text-red-400 text-2xl mb-2"></i>
-                    <p class="text-red-400 font-semibold">Chyba pri obnovovaní SNMP stavu</p>
-                    <p class="text-gray-400 text-sm mt-2">Skúste to znova alebo skontrolujte pripojenie k serveru.</p>
-                </div>
-            `;
+                    contentDiv.innerHTML = snmpErrorHtml('Chyba pri obnovovaní SNMP stavu');
                 } finally {
-                    // Vrátime tlačidlo do normálneho stavu
                     icon.classList.remove('fa-spin');
                     btn.disabled = false;
                 }
@@ -5269,72 +5296,123 @@
                     btn.disabled = false;
                 }
             });
+            // === Shared SNMP content builder ===
+            function buildSnmpContent(status) {
+                const intervalBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-900/40 border border-sky-700/40 text-sky-300 text-sm font-mono font-semibold"><i class="fas fa-clock text-xs"></i>${status.global_interval} min</span>`;
+                let content = `
+                    <div class="device-form-section-title mb-3">
+                        <i class="fas fa-globe text-sky-400"></i>
+                        <span>Globálne informácie</span>
+                    </div>
+                    <div class="rounded-xl border border-sky-800/30 bg-sky-950/20 p-4 mb-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="flex items-center gap-3">
+                            <div>
+                                <div class="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Globálny interval</div>
+                                ${intervalBadge}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div>
+                                <div class="text-xs text-gray-500 uppercase tracking-wider font-medium mb-1">Čas kontroly</div>
+                                <span class="text-gray-200 text-sm font-mono">${new Date(status.current_time).toLocaleString('sk-SK')}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="device-form-section-title mb-3">
+                        <i class="fas fa-server text-sky-400"></i>
+                        <span>Stav zariadení</span>
+                        <span class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-700/60 border border-gray-600/40 text-gray-400 text-xs font-medium">${status.devices.length} zariadení</span>
+                    </div>
+                    <div class="grid gap-2.5">
+                `;
+
+                status.devices.forEach(device => {
+                    const isCustom = device.interval_setting > 0;
+                    const intervalVal = isCustom ? device.interval_setting : status.global_interval;
+                    const isDue = device.is_due;
+
+                    const intervalTypeBadge = isCustom
+                        ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-900/50 border border-violet-700/40 text-violet-300 text-xs font-semibold"><i class="fas fa-sliders text-[10px]"></i>vlastný</span>`
+                        : `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-900/30 border border-sky-800/40 text-sky-400 text-xs font-medium"><i class="fas fa-globe text-[10px]"></i>globálny</span>`;
+
+                    const statusBadge = isDue
+                        ? `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/30 border border-red-700/40 text-red-400 text-xs font-semibold whitespace-nowrap"><i class="fas fa-circle-exclamation text-xs"></i>Treba kontrola</span>`
+                        : `<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/30 border border-emerald-700/40 text-emerald-400 text-xs font-semibold whitespace-nowrap"><i class="fas fa-circle-check text-xs"></i>OK</span>`;
+
+                    const borderColor = isDue ? 'border-red-800/40' : 'border-gray-700/50';
+                    const bgColor = isDue ? 'bg-red-950/10' : 'bg-gray-800/40';
+                    const accentColor = isDue ? 'bg-red-500' : 'bg-emerald-500';
+                    const nextCheckColor = isDue ? 'text-red-400 font-semibold' : 'text-emerald-300';
+
+                    content += `
+                    <div class="rounded-xl border ${borderColor} ${bgColor} overflow-hidden flex">
+                        <div class="w-1 ${accentColor} flex-shrink-0"></div>
+                        <div class="flex-1 p-3 sm:p-4">
+                            <div class="flex items-start justify-between gap-3 mb-3">
+                                <div class="min-w-0 flex-1">
+                                    <div class="font-bold text-base text-white leading-tight">${device.name}</div>
+                                    <div class="font-mono text-xs text-gray-500 mt-0.5">${device.ip}</div>
+                                </div>
+                                <div class="flex-shrink-0 mt-0.5">${statusBadge}</div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div class="flex items-center gap-2.5 bg-gray-900/40 rounded-lg px-3 py-2">
+                                    <i class="fas fa-timer text-indigo-400 text-sm flex-shrink-0"></i>
+                                    <div class="min-w-0">
+                                        <div class="text-xs text-gray-500 leading-none mb-1">Interval</div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="text-white font-mono text-sm font-semibold">${intervalVal} min</span>
+                                            ${intervalTypeBadge}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2.5 bg-gray-900/40 rounded-lg px-3 py-2">
+                                    <i class="fas fa-clock-rotate-left text-amber-400 text-sm flex-shrink-0"></i>
+                                    <div class="min-w-0">
+                                        <div class="text-xs text-gray-500 leading-none mb-1">Posledná</div>
+                                        <div class="text-gray-200 text-sm">${device.last_check}</div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2.5 bg-gray-900/40 rounded-lg px-3 py-2">
+                                    <i class="fas fa-circle-arrow-right ${isDue ? 'text-red-400' : 'text-emerald-400'} text-sm flex-shrink-0"></i>
+                                    <div class="min-w-0">
+                                        <div class="text-xs text-gray-500 leading-none mb-1">Ďalšia</div>
+                                        <div class="${nextCheckColor} text-sm">${device.next_check}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                });
+
+                content += `</div>`;
+                return content;
+            }
+
+            function snmpErrorHtml(msg) {
+                return `<div class="rounded-xl bg-red-900/20 border border-red-700/40 p-5 text-center">
+                    <i class="fas fa-triangle-exclamation text-red-400 text-2xl mb-3"></i>
+                    <p class="text-red-400 font-semibold text-sm">${msg}</p>
+                    <p class="text-gray-500 text-xs mt-1">Skúste obnoviť alebo skontrolujte pripojenie k serveru.</p>
+                </div>`;
+            }
+
             document.getElementById('snmpStatusBtn').addEventListener('click', async () => {
-                // Otvoríme modál s loading stavom
                 snmpStatusModal.classList.remove('hidden');
                 document.body.classList.add('modal-open');
                 history.pushState({ snmpModal: true }, '', '#snmp');
                 document.getElementById('snmpStatusContent').innerHTML = `
-            <div class="flex justify-center items-center py-8">
-                <i class="fas fa-spinner fa-spin text-2xl text-sky-500 mr-3"></i>
-                <span class="text-lg">Načítavam SNMP stav...</span>
-            </div>
-        `;
-
+                    <div class="flex justify-center items-center py-12">
+                        <i class="fas fa-spinner fa-spin text-2xl text-sky-500 mr-3"></i>
+                        <span class="text-gray-400">Načítavam SNMP stav...</span>
+                    </div>`;
                 try {
                     const status = await api.get('snmp/status');
-
-                    // Vytvoríme obsah pre modál
-                    let content = `
-                <div class="bg-gray-800 p-3 sm:p-4 rounded-lg mb-3 sm:mb-6 border border-gray-600">
-                    <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-3">📊 Globálne informácie</h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
-                        <div><strong>Globálny interval:</strong> <span class="text-green-400">${status.global_interval} minút</span></div>
-                        <div><strong>Čas kontroly:</strong> <span class="text-gray-300">${new Date(status.current_time).toLocaleString('sk-SK')}</span></div>
-                    </div>
-                </div>
-
-                <h3 class="text-sm sm:text-lg font-semibold text-sky-400 mb-2 sm:mb-4">🔧 Stav zariadení</h3>
-                <div class="grid gap-2 sm:gap-4">
-            `;
-
-                    status.devices.forEach(device => {
-                        const intervalText = device.interval_setting > 0
-                            ? `${device.interval_setting} min (vlastný)`
-                            : `${status.global_interval} min (globálny)`;
-                        const statusClass = device.is_due ? 'text-red-400' : 'text-green-400';
-                        const statusIcon = device.is_due ? '🔴' : '🟢';
-                        const statusText = device.is_due ? 'TREBA KONTROLA' : 'Čaká';
-
-                        content += `
-                    <div class="bg-gray-800 p-3 sm:p-4 rounded-lg border border-gray-600">
-                        <div class="flex justify-between items-center mb-2 sm:mb-3">
-                            <h4 class="font-bold text-sm sm:text-base text-sky-300">${device.name}</h4>
-                            <span class="font-mono text-xs sm:text-sm text-gray-400">${device.ip}</span>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-3 text-xs sm:text-sm">
-                            <div><strong>Interval:</strong> <span class="text-gray-300">${intervalText}</span></div>
-                            <div><strong>Posledná kontrola:</strong> <span class="text-gray-300">${device.last_check}</span></div>
-                            <div><strong>Ďalšia kontrola:</strong> <span class="text-gray-300">${device.next_check}</span></div>
-                            <div><strong>Stav:</strong> <span class="${statusClass}">${statusIcon} ${statusText}</span></div>
-                        </div>
-                    </div>
-                `;
-                    });
-
-                    content += `</div>`;
-
-                    // Nastavíme obsah modálu
-                    document.getElementById('snmpStatusContent').innerHTML = content;
-
+                    document.getElementById('snmpStatusContent').innerHTML = buildSnmpContent(status);
                 } catch (error) {
-                    document.getElementById('snmpStatusContent').innerHTML = `
-                <div class="bg-red-900/20 border border-red-500 p-4 rounded-lg text-center">
-                    <i class="fas fa-exclamation-triangle text-red-400 text-2xl mb-2"></i>
-                    <p class="text-red-400 font-semibold">Chyba pri načítaní SNMP stavu</p>
-                    <p class="text-gray-400 text-sm mt-2">Skúste to znova alebo skontrolujte pripojenie k serveru.</p>
-                </div>
-            `;
+                    document.getElementById('snmpStatusContent').innerHTML = snmpErrorHtml('Chyba pri načítaní SNMP stavu');
                 }
             });
 

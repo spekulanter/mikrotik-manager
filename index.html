@@ -3680,6 +3680,7 @@
                             document.getElementById('currentUsernameDisplay').value = data.username;
                             manageAccountModal.classList.remove('hidden');
                             document.body.classList.add('modal-open');
+                            history.pushState({ accountModal: true }, '', '#account');
                         });
                     }
                 } catch (error) {
@@ -4308,6 +4309,12 @@
                     _closeLogsModalDOM();
                 } else if (!snmpStatusModal?.classList.contains('hidden')) {
                     _closeSnmpModalDOM();
+                } else if (!deviceModal?.classList.contains('hidden')) {
+                    _closeDeviceModalDOM();
+                } else if (!settingsModal?.classList.contains('hidden')) {
+                    _closeSettingsModalDOM();
+                } else if (!manageAccountModal?.classList.contains('hidden')) {
+                    _closeAccountModalDOM();
                 }
             });
 
@@ -4528,6 +4535,7 @@
                 clearDeviceValidation();
                 deviceModal.classList.remove('hidden');
                 document.body.classList.add('modal-open');
+                history.pushState({ deviceModal: true }, '', '#device');
             };
 
             const openSettingsModal = async () => {
@@ -4544,6 +4552,7 @@
                 toggleSnmpHealthInterval();
                 settingsModal.classList.remove('hidden');
                 document.body.classList.add('modal-open');
+                history.pushState({ settingsModal: true }, '', '#settings');
             };
 
             const _closeSnmpModalDOM = () => {
@@ -4551,11 +4560,41 @@
                 document.body.classList.remove('modal-open');
             };
 
-            const closeModal = () => {
+            const _closeDeviceModalDOM = () => {
                 deviceModal.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+            };
+
+            const _closeSettingsModalDOM = () => {
                 settingsModal.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+            };
+
+            const _closeAccountModalDOM = () => {
                 manageAccountModal.classList.add('hidden');
-                if (!snmpStatusModal.classList.contains('hidden')) {
+                document.body.classList.remove('modal-open');
+            };
+
+            const closeModal = () => {
+                if (!deviceModal.classList.contains('hidden')) {
+                    if (history.state?.deviceModal) {
+                        history.back();
+                    } else {
+                        _closeDeviceModalDOM();
+                    }
+                } else if (!settingsModal.classList.contains('hidden')) {
+                    if (history.state?.settingsModal) {
+                        history.back();
+                    } else {
+                        _closeSettingsModalDOM();
+                    }
+                } else if (!manageAccountModal.classList.contains('hidden')) {
+                    if (history.state?.accountModal) {
+                        history.back();
+                    } else {
+                        _closeAccountModalDOM();
+                    }
+                } else if (!snmpStatusModal.classList.contains('hidden')) {
                     if (history.state?.snmpModal) {
                         history.back();
                     } else {

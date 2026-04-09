@@ -110,7 +110,7 @@
 
         /* GLOBÁLNE pravidlá pre všetky tlačidlá - ako v starej verzii */
         .btn {
-            transition: all 0.2s ease-in-out;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
 
         .btn:hover {
@@ -146,7 +146,7 @@
 
         /* Základné pravidlá pre tlačidlá */
         .btn {
-            transition: all 0.2s ease-in-out;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
 
         .btn-primary {
@@ -6141,17 +6141,21 @@
             // Funkcie pre prepínanie témy
             function initTheme() {
                 const savedTheme = localStorage.getItem('mikrotik-theme') || 'dark';
-                document.body.className = savedTheme === 'light' ? 'light-theme p-4 md:p-8' : 'p-4 md:p-8';
+                if (savedTheme === 'light') {
+                    document.body.classList.add('light-theme');
+                } else {
+                    document.body.classList.remove('light-theme');
+                }
                 updateThemeIcon();
             }
 
             function toggleTheme() {
                 const isLight = document.body.classList.contains('light-theme');
                 if (isLight) {
-                    document.body.className = 'p-4 md:p-8';
+                    document.body.classList.remove('light-theme');
                     localStorage.setItem('mikrotik-theme', 'dark');
                 } else {
-                    document.body.className = 'light-theme p-4 md:p-8';
+                    document.body.classList.add('light-theme');
                     localStorage.setItem('mikrotik-theme', 'light');
                 }
                 updateThemeIcon();

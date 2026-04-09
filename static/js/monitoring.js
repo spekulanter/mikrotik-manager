@@ -1121,8 +1121,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return {
                 legendLabels: '#1e293b',      // Slate-800 - tmavá pre legendy
                 subtitle: '#475569',           // Slate-600 - stredná pre subtitle
-                axisTicks: '#475569',          // Slate-600 - stredná pre axis ticks
-                gridLines: '#cbd5e1',          // Slate-300 - svetlá pre mriežku
+                axisTicks: '#334155',          // Slate-700 - tmavšia pre lepší kontrast
+                gridLines: '#8baed4',          // Stredná modro-šedá - výrazná mriežka pre light theme
                 axisTitle: '#334155'           // Slate-700 - tmavšia pre axis title
             };
         } else {

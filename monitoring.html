@@ -119,8 +119,13 @@
 
         body.light-theme .text-gray-400,
         body.light-theme .text-gray-300 {
-            color: #475569 !important;
-            /* Slate-600 - tmavšia pre lepšiu čitateľnosť */
+            color: #374151 !important;
+            /* Gray-700 - výraznejšia pre lepšiu čitateľnosť */
+        }
+
+        body.light-theme .text-gray-500 {
+            color: #4b5563 !important;
+            /* Gray-600 - ikony a sekundárny text */
         }
 
         body.light-theme .text-gray-200 {
@@ -130,6 +135,28 @@
         body.light-theme .text-sky-400,
         body.light-theme .text-sky-500 {
             color: var(--accent-color) !important;
+        }
+
+        /* Metrické hodnoty v svetlej téme - výraznejšie farby */
+        body.light-theme .text-blue-400 {
+            color: #1d6fbe !important;
+            /* Sýta modrá - dobre čitateľná na svetlom pozadí */
+        }
+
+        body.light-theme .text-green-400 {
+            color: #16803e !important;
+            /* Tmavo zelená - výraznejšia */
+        }
+
+        body.light-theme .text-yellow-500 {
+            color: #b45309 !important;
+            /* Tmavšia oranžovo-žltá */
+        }
+
+        body.light-theme .text-red-400,
+        body.light-theme .text-red-500 {
+            color: #b91c1c !important;
+            /* Tmavá červená */
         }
 
         /* Špecifické bg-gray tlačidlá pre monitoring */
@@ -144,19 +171,21 @@
             color: var(--text-color) !important;
         }
 
-        /* Blue buttons zostanú modré */
+        /* Obnoviť – sky blue gradient */
         body.light-theme .btn.bg-blue-600,
         body.light-theme button.btn.bg-blue-600 {
-            background-color: var(--accent-color) !important;
-            color: #ffffff !important;
+            background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
+            color: #f8fafc !important;
+            border: 1px solid rgba(14, 165, 233, 0.4) !important;
+            box-shadow: 0 4px 10px rgba(14, 165, 233, 0.25) !important;
         }
 
         body.light-theme .btn.bg-blue-600:hover,
         body.light-theme button.btn.bg-blue-600:hover {
-            background-color: var(--accent-color-hover) !important;
+            background: linear-gradient(135deg, #0284c7, #0ea5e9) !important;
             color: #ffffff !important;
             transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 6px 14px rgba(14, 165, 233, 0.3) !important;
         }
 
         body.light-theme .btn.bg-gray-600:hover,
@@ -251,10 +280,56 @@
         }
 
         body.light-theme .time-range-btn.active {
-            background: #0369a1 !important;
+            background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
+            color: #f8fafc !important;
+            border: none !important;
+            box-shadow: 0 2px 6px rgba(14, 165, 233, 0.3);
+        }
+
+        /* Pozastaviť – dark theme: tmavšia oranžovo-červená */
+        body:not(.light-theme) .btn.bg-yellow-600,
+        body:not(.light-theme) button.btn.bg-yellow-600 {
+            background: linear-gradient(135deg, #e8620a, #c41e1e) !important;
+        }
+
+        body:not(.light-theme) .btn.bg-yellow-600:hover,
+        body:not(.light-theme) button.btn.bg-yellow-600:hover {
+            background: linear-gradient(135deg, #d45508, #a81818) !important;
+        }
+
+        /* Pozastaviť – light theme: svetlejšia oranžovo-červená */
+        body.light-theme #pauseResumeBtn.bg-yellow-600 {
+            background: linear-gradient(135deg, #fd9a55, #f47535) !important;
             color: #ffffff !important;
             border: none !important;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 2px 6px rgba(253, 154, 85, 0.3) !important;
+        }
+
+        body.light-theme #pauseResumeBtn.bg-yellow-600:hover {
+            background: linear-gradient(135deg, #f47535, #e05e1e) !important;
+            box-shadow: 0 6px 12px rgba(244, 117, 53, 0.35) !important;
+        }
+
+        /* Spustiť – dark theme: tmavšia zelená */
+        body:not(.light-theme) #pauseResumeBtn.bg-green-600 {
+            background: linear-gradient(135deg, #16a34a, #0f7a35) !important;
+        }
+
+        body:not(.light-theme) #pauseResumeBtn.bg-green-600:hover {
+            background: linear-gradient(135deg, #0f7a35, #0a5c28) !important;
+        }
+
+        /* Spustiť – light theme: svetlejšia zelená */
+        body.light-theme #pauseResumeBtn.bg-green-600 {
+            background: linear-gradient(135deg, #4ee088, #2ecc6e) !important;
+            color: #ffffff !important;
+            border: none !important;
+            box-shadow: 0 2px 6px rgba(78, 224, 136, 0.3) !important;
+        }
+
+        body.light-theme #pauseResumeBtn.bg-green-600:hover {
+            background: linear-gradient(135deg, #2ecc6e, #22a858) !important;
+            box-shadow: 0 6px 12px rgba(46, 204, 110, 0.35) !important;
         }
 
         /* Ping status v svetlej téme - zachovať online/offline farby */

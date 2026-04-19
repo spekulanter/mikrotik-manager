@@ -178,7 +178,7 @@
             color: #4b5563 !important;
         }
 
-        body.light-theme [class*="bg-gray-800"]:not(input):not(select):not(textarea) {
+        body.light-theme [class*="bg-gray-800"]:not(input):not(select):not(textarea):not(header) {
             background-color: #eef2f7 !important;
             border-color: #cdd5e1 !important;
         }
@@ -276,11 +276,11 @@
 
         /* Presvitný header rovnako ako v tmavej téme */
         body.light-theme header.bg-gray-800\/50 {
-            background-color: rgba(255, 255, 255, 0.45) !important;
+            background-color: rgba(220, 234, 248, 0.40) !important;
             border-color: rgba(184, 201, 230, 0.7) !important;
             box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
         }
 
         /* Text v headeri - svetlá téma */

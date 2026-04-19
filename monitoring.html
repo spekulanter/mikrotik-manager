@@ -2268,7 +2268,7 @@
                         const subtitle = chart.options.plugins.subtitle;
                         if (subtitle) {
                             subtitle.text = 'Postupný zoom out - kliknite znovu pre ďalší krok';
-                            subtitle.color = '#fbbf24';
+                            subtitle.color = document.body.classList.contains('light-theme') ? '#b45309' : '#fbbf24';
                         }
 
                         // Update time format for new zoom level
@@ -2396,7 +2396,7 @@
                     } else if (!isShortRange && dataDays < requestedDays) {
                         // For long ranges, show horizon message
                         subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
-                        subtitle.color = '#fbbf24';
+                        subtitle.color = document.body.classList.contains('light-theme') ? '#b45309' : '#fbbf24';
                     } else {
                         subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
                         subtitle.color = '#9ca3af';
@@ -2562,7 +2562,7 @@
                         } else if (!isShortRange && dataDays < requestedDays) {
                             // For long ranges, show horizon message
                             subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
-                            subtitle.color = '#fbbf24';
+                            subtitle.color = document.body.classList.contains('light-theme') ? '#b45309' : '#fbbf24';
                         } else {
                             subtitle.text = `Zobrazené všetky dostupné dáta za ${getTimeRangeLabel(window.currentTimeRange)}`;
                             subtitle.color = '#9ca3af';
@@ -2708,7 +2708,7 @@
                 } else if (!isShortRange && dataDays < requestedDays) {
                     // For long ranges, show horizon message
                     subtitle.text = `Zobrazený ${getTimeRangeLabel(window.currentTimeRange)} horizont - dostupné ${dataDays}d dát z ${requestedDays}d`;
-                    subtitle.color = '#fbbf24';
+                    subtitle.color = document.body.classList.contains('light-theme') ? '#b45309' : '#fbbf24';
                     if (typeof addDebugLog === 'function') {
                         addDebugLog(`🔧 applyFullTimeRangeToChart: nastavujem HORIZONT s limitovanými dátami`);
                     }
@@ -3549,7 +3549,7 @@
                             const subtitle = targetChart.options.plugins.subtitle;
                             if (subtitle) {
                                 subtitle.text = `Žiadne dáta pre ${targetRange}`;
-                                subtitle.color = '#fbbf24';
+                                subtitle.color = document.body.classList.contains('light-theme') ? '#b45309' : '#fbbf24';
                             }
                         }
                     } else {
@@ -4010,7 +4010,7 @@
                             const sub = targetChart.options.plugins.subtitle;
                             if (sub) {
                                 sub.text = 'Zoom aktívny - dvojité kliknutie pre zoom out';
-                                sub.color = '#fbbf24';
+                                sub.color = document.body.classList.contains('light-theme') ? '#b45309' : '#fbbf24';
                             }
                             updateSingleChartTimeFormat(targetChart, minX, maxX);
                         });
@@ -4024,7 +4024,7 @@
                         const subtitle = chart.options.plugins.subtitle;
                         if (subtitle) {
                             subtitle.text = 'Zoom aktívny - dvojité kliknutie pre zoom out';
-                            subtitle.color = '#fbbf24';
+                            subtitle.color = document.body.classList.contains('light-theme') ? '#b45309' : '#fbbf24';
                         }
 
                         // Update time range and chart formatting with new zoom-in logic

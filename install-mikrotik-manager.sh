@@ -47,7 +47,6 @@ if [ -d "${APP_DIR}/.git" ]; then
     git fetch origin >/dev/null 2>&1
     git reset --hard origin/main >/dev/null 2>&1
     git clean -fd >/dev/null 2>&1
-    git pull origin main >/dev/null 2>&1
     msg_ok "Kód aktualizovaný na najnovšiu verziu."
     
     # Kontrola a vytvorenie Python Virtual Environment ak neexistuje

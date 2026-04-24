@@ -4197,12 +4197,17 @@ def bootstrap_import():
             os.chmod(os.path.join(DATA_DIR, 'secret.key'), 0o600)
 
             # Zálohy (ak existujú v ZIP)
+            import time as _time
             backup_entries = [n for n in names if n.startswith('backups/') and not n.endswith('/')]
             for entry in backup_entries:
                 dest_path = os.path.join(DATA_DIR, entry)
                 os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                info = zf.getinfo(entry)
                 with zf.open(entry) as src, open(dest_path, 'wb') as dst:
                     dst.write(src.read())
+                # Obnov pôvodný čas vytvorenia súboru zo ZIP metadát
+                mtime = _time.mktime(info.date_time + (0, 0, -1))
+                os.utime(dest_path, (mtime, mtime))
 
         logger.info(f"Bootstrap import: DB + kľúče nahradené, {len(backup_entries)} záloha súborov")
 

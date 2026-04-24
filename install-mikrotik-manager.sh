@@ -19,7 +19,14 @@ SERVICE_FILE="/etc/systemd/system/mikrotik-manager.service"
 # Kontrola, či už existuje inštalácia
 if [ -d "${APP_DIR}/.git" ]; then
     echo "🔄 Detegovaná existujúca inštalácia - spúšťam aktualizáciu..."
-    
+
+    # Nastavenie časovej zóny
+    if [ "$(timedatectl show --property=Timezone --value 2>/dev/null)" != "Europe/Bratislava" ]; then
+        msg_info "Nastavujem časovú zónu na Europe/Bratislava..."
+        timedatectl set-timezone Europe/Bratislava 2>/dev/null || true
+        msg_ok "Časová zóna nastavená."
+    fi
+
     # UPDATE PROCES
     msg_info "Zastavujem službu MikroTik Manager..."
     systemctl stop mikrotik-manager.service 2>/dev/null || true
@@ -186,7 +193,14 @@ EOF
     
 else
     echo "🆕 Spúšťam čerstvú inštaláciu..."
-    
+
+    # Nastavenie časovej zóny
+    if [ "$(timedatectl show --property=Timezone --value 2>/dev/null)" != "Europe/Bratislava" ]; then
+        msg_info "Nastavujem časovú zónu na Europe/Bratislava..."
+        timedatectl set-timezone Europe/Bratislava 2>/dev/null || true
+        msg_ok "Časová zóna nastavená."
+    fi
+
     # INŠTALAČNÝ PROCES
     # Aktualizácia systému a inštalácia závislostí
     msg_info "Aktualizujem systém a inštalujem potrebné balíčky..."

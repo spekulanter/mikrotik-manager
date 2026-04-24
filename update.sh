@@ -7,6 +7,12 @@ if [ -f /etc/profile.d/android-dev.sh ]; then
     source /etc/profile.d/android-dev.sh
 fi
 
+# Nastavenie časovej zóny
+if [ "$(timedatectl show --property=Timezone --value 2>/dev/null)" != "Europe/Bratislava" ]; then
+    echo "🕐 Nastavujem časovú zónu na Europe/Bratislava..."
+    timedatectl set-timezone Europe/Bratislava 2>/dev/null || true
+fi
+
 systemctl stop mikrotik-manager.service
 
 cd /opt/mikrotik-manager

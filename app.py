@@ -957,7 +957,7 @@ def before_request_handler():
             if not current_user.is_authenticated:
                 return redirect(url_for('login'))
     
-    if not g.user_exists and request.endpoint not in ['register', 'static']:
+    if not g.user_exists and request.endpoint not in ['register', 'static', 'bootstrap_import']:
         return redirect(url_for('register'))
 
 def add_log(level, message, device_ip=None):

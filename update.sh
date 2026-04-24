@@ -24,9 +24,6 @@ find /opt/mikrotik-manager -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/
 # Reload systemd in case service file changed
 systemctl daemon-reload
 
-systemctl start mikrotik-manager.service
-sleep 2
-# Force restart to ensure fresh code loading
 systemctl restart mikrotik-manager.service
 
 echo "✅ Aplikácia bola úspešne aktualizovaná a reštartovaná."

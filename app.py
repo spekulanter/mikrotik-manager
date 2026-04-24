@@ -4122,6 +4122,106 @@ def cleanup_debug_logs():
         logger.error(f"Chyba pri čistení debug logov: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/admin/export', methods=['GET'])
+@login_required
+def export_config():
+    """Exportuje celú konfiguráciu (DB, kľúče, voliteľne zálohy) do ZIP súboru"""
+    import zipfile, io as _io
+    from flask import send_file
+    include_backups = request.args.get('include_backups') == '1'
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    secret_key_file = os.path.join(DATA_DIR, 'secret.key')
+    encryption_key_file = os.path.join(DATA_DIR, 'encryption.key')
+
+    zip_buffer = _io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.write(DB_PATH, 'mikrotik_manager.db')
+        if os.path.exists(encryption_key_file):
+            zf.write(encryption_key_file, 'encryption.key')
+        if os.path.exists(secret_key_file):
+            zf.write(secret_key_file, 'secret.key')
+        if include_backups and os.path.exists(BACKUP_DIR):
+            for root, dirs, files in os.walk(BACKUP_DIR):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    arc_name = 'backups/' + os.path.relpath(full_path, BACKUP_DIR)
+                    zf.write(full_path, arc_name)
+
+    zip_buffer.seek(0)
+    add_log('info', f"Konfigurácia exportovaná do ZIP {'(vrátane záloh)' if include_backups else ''}")
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'mikrotik-manager-export-{timestamp}.zip'
+    )
+
+
+@app.route('/api/admin/bootstrap-import', methods=['POST'])
+def bootstrap_import():
+    """Importuje konfiguráciu zo ZIP — povolené LEN keď neexistuje žiadny user (nová inštalácia)"""
+    import zipfile, io as _io
+    try:
+        with get_db_connection() as conn:
+            user_count = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0]
+    except Exception:
+        user_count = 0
+
+    if user_count > 0:
+        return jsonify({'error': 'Import je povolený len pri prázdnej inštalácii (žiadny používateľ v DB)'}), 403
+
+    zip_file = request.files.get('file')
+    if not zip_file:
+        return jsonify({'error': 'Žiadny súbor nebol nahraný'}), 400
+    if not zip_file.filename.lower().endswith('.zip'):
+        return jsonify({'error': 'Neplatný formát súboru, očakáva sa .zip'}), 400
+
+    try:
+        with zipfile.ZipFile(zip_file) as zf:
+            names = set(zf.namelist())
+            required = {'mikrotik_manager.db', 'encryption.key', 'secret.key'}
+            missing = required - names
+            if missing:
+                return jsonify({'error': f'Neúplný export ZIP, chýbajú: {", ".join(missing)}'}), 400
+
+            # Nahraď DB a kľúče
+            for fname in ['mikrotik_manager.db', 'encryption.key', 'secret.key']:
+                dest = os.path.join(DATA_DIR, fname)
+                with zf.open(fname) as src, open(dest, 'wb') as dst:
+                    dst.write(src.read())
+
+            # Oprav permissions na kľúčoch
+            os.chmod(os.path.join(DATA_DIR, 'encryption.key'), 0o600)
+            os.chmod(os.path.join(DATA_DIR, 'secret.key'), 0o600)
+
+            # Zálohy (ak existujú v ZIP)
+            backup_entries = [n for n in names if n.startswith('backups/') and not n.endswith('/')]
+            for entry in backup_entries:
+                dest_path = os.path.join(DATA_DIR, entry)
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                with zf.open(entry) as src, open(dest_path, 'wb') as dst:
+                    dst.write(src.read())
+
+        logger.info(f"Bootstrap import: DB + kľúče nahradené, {len(backup_entries)} záloha súborov")
+
+        # Reštartuj službu po 2s aby sa stihol odoslať response
+        def delayed_restart():
+            import time as _time
+            _time.sleep(2)
+            subprocess.run(['systemctl', 'restart', 'mikrotik-manager'], check=False)
+
+        threading.Thread(target=delayed_restart, daemon=True).start()
+
+        return jsonify({'status': 'ok', 'restarting': True, 'backup_files': len(backup_entries)})
+
+    except zipfile.BadZipFile:
+        return jsonify({'error': 'Poškodený ZIP súbor'}), 400
+    except Exception as e:
+        logger.error(f"Chyba pri bootstrap importe: {e}")
+        return jsonify({'error': f'Chyba pri importe: {str(e)}'}), 500
+
+
 def scheduled_backup_job():
     with app.app_context():
         add_log('info', "Spúšťam naplánovanú úlohu zálohovania...")

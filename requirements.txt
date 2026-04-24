@@ -11,4 +11,5 @@ Flask-Login
 pyotp
 qrcode[pil]
 werkzeug
-cryptographyrequests
+cryptography
+requests

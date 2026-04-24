@@ -58,31 +58,7 @@ if [ -d "${APP_DIR}/.git" ]; then
 
     # Kontrola a aktualizácia Android development nástrojov
     msg_info "Kontrolujem Android development nástroje..."
-    
-    # Node.js check & update
-    if ! command -v node &> /dev/null || [[ "$(node -v)" != "v18."* ]]; then
-        msg_info "Aktualizujem Node.js na verziu 18.x..."
-        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - >/dev/null 2>&1
-        apt-get install -y nodejs >/dev/null 2>&1
-    fi
 
-    # Refresh environment setup files
-    if [ ! -f "/etc/profile.d/android-dev.sh" ]; then
-        msg_info "Obnovujem environment setup..."
-        cat << 'PROFEOF' > /etc/profile.d/android-dev.sh
-export ANDROID_HOME=/opt/android-sdk
-export ANDROID_SDK_ROOT=/opt/android-sdk
-export PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/gradle/bin
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-PROFEOF
-        chmod +x /etc/profile.d/android-dev.sh
-    fi
-    
-    msg_ok "Android development nástroje skontrolované."
-    
-    # Kontrola a aktualizácia Android development nástrojov
-    msg_info "Kontrolujem Android development nástroje..."
-    
     # Node.js 18.x check
     if ! command -v node &> /dev/null || [[ "$(node -v)" != "v18."* ]]; then
         msg_info "Aktualizujem Node.js na verziu 18.x..."
@@ -109,10 +85,10 @@ PROFEOF
     if [ ! -d "/opt/gradle" ]; then
         msg_info "Inštalujem chýbajúci Gradle..."
         cd /tmp
-        wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip 2>/dev/null || true
-        unzip -q gradle.zip 2>/dev/null || true
+        wget -q https://services.gradle.org/distributions/gradle-8.13-bin.zip -O /tmp/gradle-8.13-bin.zip 2>/dev/null || true
+        unzip -q /tmp/gradle-8.13-bin.zip 2>/dev/null || true
         mv gradle-8.13 /opt/gradle 2>/dev/null || true
-        rm -f gradle.zip 2>/dev/null || true
+        rm -f /tmp/gradle-8.13-bin.zip 2>/dev/null || true
         cd ${APP_DIR}
     fi
     

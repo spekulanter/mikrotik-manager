@@ -1322,6 +1322,28 @@
             </div>
             </div>
 
+            <!-- Export konfigurácie -->
+            <div class="section-card card rounded-xl p-6">
+                <h2 class="text-2xl font-bold border-b border-gray-600 pb-3 mb-6 text-sky-400">
+                    <i class="fas fa-file-export mr-3"></i>Export konfigurácie
+                </h2>
+                <p class="text-sm text-gray-400 mb-4">Stiahne ZIP archív s databázou, šifrovacími kľúčmi a voliteľne zálohovacími súbormi zariadení. Súbor použite na migráciu na nové LXC.</p>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+                        <input type="checkbox" id="exportIncludeBackups" class="w-4 h-4 rounded accent-sky-500">
+                        Zahrnúť zálohy zariadení <span class="text-gray-500">(môže byť veľký súbor)</span>
+                    </label>
+                    <button type="button" id="exportConfigBtn"
+                        class="btn bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-5 rounded-lg flex items-center gap-2 text-sm">
+                        <i class="fas fa-download"></i> Stiahnuť export ZIP
+                    </button>
+                </div>
+                <p class="text-xs text-yellow-400 mt-4 flex items-start gap-1">
+                    <i class="fas fa-exclamation-triangle mt-0.5 shrink-0"></i>
+                    ZIP obsahuje citlivé údaje (heslá zariadení, TOTP tajomstvo). Uchovávajte ho bezpečne.
+                </p>
+            </div>
+
             <!-- Action Buttons -->
             <div class="flex flex-col sm:flex-row gap-4 justify-end mt-8 pt-6 border-t border-gray-700">
                 <button type="button" id="cancelSettingsBtn"
@@ -1334,6 +1356,7 @@
                 </button>
             </div>
         </form>
+
     </main>
 
     <!-- Notification Toast -->
@@ -1691,6 +1714,12 @@
                 window.location.href = '/';
             }
         }
+
+        // Export konfigurácie
+        document.getElementById('exportConfigBtn').addEventListener('click', () => {
+            const includeBackups = document.getElementById('exportIncludeBackups').checked ? '1' : '0';
+            window.location.href = `/api/admin/export?include_backups=${includeBackups}`;
+        });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {

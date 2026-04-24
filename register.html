@@ -10,41 +10,149 @@
         .card { background-color: #1f2937; border: 1px solid #374151; }
         .btn-primary { background-color: #38bdf8; color: #ffffff; transition: background-color 0.2s; }
         .btn-primary:hover { background-color: #0ea5e9; }
+        .btn-warning { background-color: #d97706; color: #ffffff; transition: background-color 0.2s; }
+        .btn-warning:hover { background-color: #b45309; }
         .input { background-color: #374151; border: 1px solid #4b5563; }
         .input:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4); }
+        .tab-active { background-color: #374151; color: #ffffff; }
+        .tab-inactive { color: #9ca3af; }
+        .tab-inactive:hover { color: #d1d5db; }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
     <div class="card p-8 rounded-lg w-full max-w-md shadow-2xl">
         <h1 class="text-2xl font-bold text-white mb-2 text-center">🛡️ Vytvorenie administrátorského účtu</h1>
         <p class="text-center text-gray-400 mb-6">Keďže v systéme neexistuje žiadny používateľ, vytvorte si prvý účet.</p>
-        
-        {% if error %}
-            <div class="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-md mb-4 text-sm" role="alert">
-                {{ error }}
-            </div>
-        {% endif %}
 
-        <form method="post" action="/register" class="space-y-6">
+        <!-- Záložky -->
+        <div class="flex rounded-lg bg-gray-900 p-1 mb-6 gap-1">
+            <button id="tabRegister" onclick="switchTab('register')"
+                class="flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors tab-active">
+                Nový účet
+            </button>
+            <button id="tabImport" onclick="switchTab('import')"
+                class="flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors tab-inactive">
+                Importovať zo ZIP
+            </button>
+        </div>
+
+        <!-- Panel: Nový účet -->
+        <div id="panelRegister">
+            {% if error %}
+                <div class="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-md mb-4 text-sm" role="alert">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="post" action="/register" class="space-y-6">
+                <div>
+                    <label for="username" class="block mb-2 font-semibold text-gray-300">Používateľské meno</label>
+                    <input type="text" id="username" name="username" class="input w-full p-2.5 rounded-md" value="admin" required>
+                </div>
+                <div>
+                    <label for="password" class="block mb-2 font-semibold text-gray-300">Heslo</label>
+                    <input type="password" id="password" name="password" class="input w-full p-2.5 rounded-md" required>
+                </div>
+                <div>
+                    <label for="password_confirm" class="block mb-2 font-semibold text-gray-300">Potvrdenie hesla</label>
+                    <input type="password" id="password_confirm" name="password_confirm" class="input w-full p-2.5 rounded-md" required>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full btn-primary font-bold py-2.5 px-4 rounded-lg">
+                        Vytvoriť účet a pokračovať
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Panel: Import zo ZIP -->
+        <div id="panelImport" class="hidden space-y-4">
+            <div class="bg-yellow-900/40 border border-yellow-700 text-yellow-300 p-3 rounded-md text-sm flex items-start gap-2">
+                <span class="mt-0.5 shrink-0">⚠️</span>
+                <span>Import nahradí celú databázu a šifrovacie kľúče. Použiť <strong>len na novej prázdnej inštalácii</strong>. Po importe sa prihlás starými údajmi.</span>
+            </div>
+
             <div>
-                <label for="username" class="block mb-2 font-semibold text-gray-300">Používateľské meno</label>
-                <input type="text" id="username" name="username" class="input w-full p-2.5 rounded-md" value="admin" required>
+                <label class="block mb-2 font-semibold text-gray-300">Export ZIP súbor</label>
+                <input type="file" id="importFile" accept=".zip"
+                    class="input w-full p-2 rounded-md text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-sky-700 file:text-white hover:file:bg-sky-600 cursor-pointer">
             </div>
-            <div>
-                <label for="password" class="block mb-2 font-semibold text-gray-300">Heslo</label>
-                <input type="password" id="password" name="password" class="input w-full p-2.5 rounded-md" required>
+
+            <div id="importResult" class="hidden"></div>
+
+            <div id="importProgress" class="hidden text-center py-4">
+                <div class="inline-block w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                <p class="text-gray-300 text-sm">Importujem a reštartujem službu...</p>
+                <p class="text-gray-500 text-xs mt-1">Automaticky presmeruje na prihlásenie o niekoľko sekúnd</p>
             </div>
-            <div>
-                <label for="password_confirm" class="block mb-2 font-semibold text-gray-300">Potvrdenie hesla</label>
-                <input type="password" id="password_confirm" name="password_confirm" class="input w-full p-2.5 rounded-md" required>
-            </div>
-            
-            <div class="pt-2">
-                <button type="submit" class="w-full btn-primary font-bold py-2.5 px-4 rounded-lg">
-                    Vytvoriť účet a pokračovať
-                </button>
-            </div>
-        </form>
+
+            <button id="importBtn" onclick="doImport()"
+                class="w-full btn-warning font-bold py-2.5 px-4 rounded-lg">
+                Importovať a reštartovať
+            </button>
+        </div>
     </div>
+
+    <script>
+        function switchTab(tab) {
+            const isRegister = tab === 'register';
+            document.getElementById('panelRegister').classList.toggle('hidden', !isRegister);
+            document.getElementById('panelImport').classList.toggle('hidden', isRegister);
+            document.getElementById('tabRegister').className = `flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${isRegister ? 'tab-active' : 'tab-inactive'}`;
+            document.getElementById('tabImport').className = `flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${!isRegister ? 'tab-active' : 'tab-inactive'}`;
+        }
+
+        async function doImport() {
+            const fileInput = document.getElementById('importFile');
+            const resultDiv = document.getElementById('importResult');
+            const progressDiv = document.getElementById('importProgress');
+            const importBtn = document.getElementById('importBtn');
+
+            if (!fileInput.files.length) {
+                showImportMsg('Vyber ZIP súbor', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            importBtn.disabled = true;
+            importBtn.textContent = 'Importujem...';
+            resultDiv.classList.add('hidden');
+
+            try {
+                const resp = await fetch('/api/admin/bootstrap-import', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+
+                if (resp.ok && data.status === 'ok') {
+                    progressDiv.classList.remove('hidden');
+                    importBtn.classList.add('hidden');
+                    fileInput.parentElement.classList.add('hidden');
+                    // Presmeruj na login po reštarte služby
+                    setTimeout(() => { window.location.href = '/login'; }, 6000);
+                } else {
+                    showImportMsg(data.error || 'Neznáma chyba', 'error');
+                    importBtn.disabled = false;
+                    importBtn.textContent = 'Importovať a reštartovať';
+                }
+            } catch (e) {
+                showImportMsg('Chyba spojenia', 'error');
+                importBtn.disabled = false;
+                importBtn.textContent = 'Importovať a reštartovať';
+            }
+        }
+
+        function showImportMsg(msg, type) {
+            const div = document.getElementById('importResult');
+            const isError = type === 'error';
+            div.className = `p-3 rounded-md text-sm ${isError ? 'bg-red-900/50 border border-red-700 text-red-300' : 'bg-green-900/50 border border-green-700 text-green-300'}`;
+            div.textContent = msg;
+            div.classList.remove('hidden');
+        }
+    </script>
 </body>
 </html>

@@ -10,7 +10,9 @@ fi
 systemctl stop mikrotik-manager.service
 
 cd /opt/mikrotik-manager
-git pull origin main
+git fetch origin
+git reset --hard origin/main
+git clean -fd
 
 source venv/bin/activate
 pip install -r requirements.txt

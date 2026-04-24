@@ -679,7 +679,8 @@ def init_environment():
 def get_db_connection():
     conn = None
     try:
-        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.row_factory = sqlite3.Row
         yield conn
     except sqlite3.Error as e:

@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var preferences: SharedPreferences
+    private var rootView: ViewGroup? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +88,15 @@ class MainActivity : AppCompatActivity() {
         try {
             setContentView(R.layout.activity_main)
 
+            // Handle edge-to-edge (forced on Android 15+, opt-in on older)
+            rootView = findViewById(R.id.root)
+            ViewCompat.setOnApplyWindowInsetsListener(rootView!!) { view, insets ->
+                val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+                val bottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+                view.setPadding(0, top, 0, bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+
             // Solid status bar with theme colors
             enableFullscreen()
 
@@ -136,7 +146,11 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         try {
                             val parsed = parseAnyColor(color)
+                            // Android 15+: edge-to-edge forced, root view padding shows background
+                            rootView?.setBackgroundColor(parsed)
+                            // Older Android: direct status bar color still works
                             window.statusBarColor = parsed
+                            window.navigationBarColor = parsed
                             Log.d("StatusBar", "Status bar color set to: ${Integer.toHexString(parsed)}")
                         } catch (e: Exception) {
                             Log.e("MainActivity", "Error setting status bar color: $color", e)
@@ -332,8 +346,8 @@ class MainActivity : AppCompatActivity() {
             window.statusBarColor = android.graphics.Color.parseColor("#111827") // Dark theme
             window.navigationBarColor = android.graphics.Color.parseColor("#111827")
 
-            // Normal layout - let system handle status bar space automatically
-            WindowCompat.setDecorFitsSystemWindows(window, true)
+            // Accept edge-to-edge — insets handled via ViewCompat.setOnApplyWindowInsetsListener
+            WindowCompat.setDecorFitsSystemWindows(window, false)
 
             // Light icons for dark background - use modern API for Android 11+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

@@ -2565,8 +2565,8 @@
 
             <div class="right-sidebar lg:block hidden">
                 <!-- Activity log - integrovaný do layoutu -->
-                <div class="card p-4 rounded-lg flex flex-col sticky top-4 resize-y min-h-96"
-                    style="max-height: 3000px; height: 1000px;">
+                <div id="activityCard" class="card p-4 rounded-lg flex flex-col sticky top-4 resize-y min-h-96"
+                    style="height: 1000px;">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold text-white">📋 Aktivita</h2>
                         <div class="flex gap-1 items-center">
@@ -6367,6 +6367,22 @@
 
         // Export debugLog to window scope for use in other scripts
         window.debugLog = debugLog;
+
+        // Sync activity panel height to left-content height (align bottom on small tables)
+        (function () {
+            const leftContent = document.querySelector('.left-content');
+            const activityCard = document.getElementById('activityCard');
+            if (!leftContent || !activityCard) return;
+
+            const syncHeight = () => {
+                const leftH = leftContent.offsetHeight;
+                activityCard.style.maxHeight = leftH + 'px';
+            };
+
+            const ro = new ResizeObserver(syncHeight);
+            ro.observe(leftContent);
+            syncHeight();
+        })();
     </script>
 
 </body>

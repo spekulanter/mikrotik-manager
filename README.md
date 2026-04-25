@@ -28,7 +28,7 @@ APK súbor bude vytvorený ako `/opt/MT Manager.apk`
 ⚡ Native Android: Aplikácia je postavená na natívnej Android Kotlin WebView s optimalizovaným splash screen, vlastnou network-themed ikonou a eliminovanými prebliknutiami pri spúšťaní (optimalizované pre Android 15).
 
 📦 APK vlastnosti:
-- **Veľkosť:** 6.2 MB (optimalizovaná splash screen knižnica)
+- **Veľkosť:** 3.56 MB
 - **Ikona:** Vlastná network-themed ikona s MikroTik zariadeniami
 - **Splash screen:** Rýchly tmavý splash bez prebliknutí
 - **Kompatibilita:** Android 7+ (API 24+), optimalizované pre Android 15
@@ -81,7 +81,9 @@ bash update.sh
 Manuál obsahuje detailné informácie o:
 - Inštalácii a konfigurácii systému
 - Používaní webového rozhrania a mobilnej aplikácie
-- Správe zariadení a zálohovaní
+- Správe zariadení, zálohovaní a koši zariadení
 - Monitoringu a grafoch
+- Updateri (aktualizácie RouterOS, firmware, TLS certifikáty)
+- Exporte a importe (migrácia medzi servermi)
 - Bezpečnostných nastaveniach a 2FA
 - Riešení problémov a FAQ

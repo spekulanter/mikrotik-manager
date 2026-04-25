@@ -10,32 +10,33 @@
 6. [Správa zariadení](#správa-zariadení)
 7. [Zálohovanie](#zálohovanie)
 8. [Monitoring a grafy](#monitoring-a-grafy)
-9. [Nastavenia systému](#nastavenia-systému)
-10. [Bezpečnosť a 2FA](#bezpečnosť-a-2fa)
-    - [Dvojfaktorová autentifikácia](#dvojfaktorová-autentifikácia-2fa)
-    - [Správa používateľského účtu](#správa-používateľského-účtu)
-    - [Session Management a Cookie Persistence](#session-management-a-cookie-persistence)
-11. [Riešenie problémov](#riešenie-problémov)
-12. [Často kladené otázky](#často-kladené-otázky)
-13. [Záver](#záver)
+9. [Updater - aktualizácie RouterOS](#updater---aktualizácie-routeros)
+10. [Export a import (migrácia)](#export-a-import-migrácia)
+11. [Nastavenia systému](#nastavenia-systému)
+12. [Bezpečnosť a 2FA](#bezpečnosť-a-2fa)
+13. [Riešenie problémov](#riešenie-problémov)
+14. [Často kladené otázky](#často-kladené-otázky)
+15. [Záver](#záver)
 
 ---
 
 ## Úvod
 
-**MikroTik Manager** je komplexný webový nástroj pre správu, zálohovanie a monitoring MikroTik zariadení. Umožňuje centralizovanú správu viacerých RouterOS zariadení s možnosťou automatického zálohovania, real-time monitoringu a vzdialeneho prístupu cez webové rozhranie alebo mobilnú aplikáciu.
+**MikroTik Manager** je komplexný webový nástroj pre správu, zálohovanie a monitoring MikroTik zariadení. Umožňuje centralizovanú správu viacerých RouterOS zariadení s možnosťou automatického zálohovania, real-time monitoringu a vzdialeného prístupu cez webové rozhranie alebo mobilnú aplikáciu.
 
 ### Hlavné funkcie:
 
-- **Centralizovaná správa zariadení** - Pridávanie, úprava a správa MikroTik zariadení
-- **Automatické zálohovanie** - Pravidelné vytváranie a sťahovanie backup súborov
-- **Real-time monitoring** - Sledovanie stavu zariadení, CPU, teploty, pamäte a dostupnosti
-- **SNMP monitoring** - Detailné sledovanie výkonu zariadení
-- **Ping monitoring** - Kontinuálne sledovanie dostupnosti siete
-- **Webové aj mobilné rozhranie** - Prístup cez prehliadač alebo Android aplikáciu
-- **Bezpečnostné funkcie** - Povinná 2FA autentifikácia, šifrovanie hesiel
-- **Notifikácie** - Pushover notifikácie pri problémech
-- **FTP upload** - Automatické nahrávanie záloh na FTP server
+- **Centralizovaná správa zariadení** – Pridávanie, úprava a správa MikroTik zariadení vrátane koša so soft-delete
+- **Automatické zálohovanie** – Pravidelné vytváranie a sťahovanie .backup a .rsc súborov
+- **Real-time monitoring** – Sledovanie dostupnosti, CPU, teploty, pamäte a latencie
+- **SNMP monitoring** – Detailné sledovanie výkonu zariadení cez SNMPv2c
+- **Ping monitoring** – Kontinuálne sledovanie dostupnosti siete
+- **Updater** – Vzdialená aktualizácia RouterOS a firmware, správa TLS certifikátov
+- **Webové aj mobilné rozhranie** – Prístup cez prehliadač alebo Android aplikáciu
+- **Bezpečnostné funkcie** – Povinná 2FA autentifikácia, šifrovanie hesiel (Fernet), hašovanie hesiel (Werkzeug)
+- **Notifikácie** – Pushover notifikácie pre rôzne udalosti (výpadky, zálohy, prahy, bezpečnosť)
+- **FTP upload** – Automatické nahrávanie záloh na FTP server
+- **Export/Import** – Migrácia celej inštalácie medzi servermi cez ZIP
 
 ---
 
@@ -45,7 +46,7 @@
 
 1. **Stiahnutie inštalačného skriptu:**
 ```bash
-wget https://raw.githubusercontent.com/your-repo/mikrotik-manager/main/install-mikrotik-manager.sh
+wget https://raw.githubusercontent.com/spekulanter/mikrotik-manager/main/install-mikrotik-manager.sh
 chmod +x install-mikrotik-manager.sh
 ```
 
@@ -55,7 +56,7 @@ sudo ./install-mikrotik-manager.sh
 ```
 
 Skript automaticky:
-- Nainštaluje všetky potrebné závislosti (Python, Node.js, Android SDK)
+- Nainštaluje všetky potrebné závislosti (Python 3.11+, potrebné systémové balíčky)
 - Naklonuje repozitár z GitHub
 - Nastaví Python virtuálne prostredie
 - Nainštaluje Python balíčky
@@ -72,8 +73,8 @@ sudo apt install -y python3 python3-pip python3-venv git
 
 2. **Klonovanie repozitára:**
 ```bash
-git clone https://github.com/your-repo/mikrotik-manager.git
-cd mikrotik-manager
+git clone https://github.com/spekulanter/mikrotik-manager.git /opt/mikrotik-manager
+cd /opt/mikrotik-manager
 ```
 
 3. **Vytvorenie virtuálneho prostredia:**
@@ -92,9 +93,32 @@ python app.py
 
 - **Operačný systém:** Linux (testované na Debian 12, Ubuntu)
 - **RAM:** Minimálne 512 MB (odporúčané 1 GB)
-- **Disk:** 500 MB voľného miesta
-- **Python:** 3.8 alebo novší
-- **Sieť:** Prístup k MikroTik zariadeniam cez SSH a SNMP
+- **Disk:** 500 MB voľného miesta + miesto pre zálohy
+- **Python:** 3.11 alebo novší
+- **Sieť:** Prístup k MikroTik zariadeniam cez SSH (port 22) a SNMP (UDP port 161)
+
+### Adresárová štruktúra po inštalácii
+
+```
+/opt/mikrotik-manager/         # Aplikačný kód
+├── app.py                     # Hlavná Flask aplikácia
+├── requirements.txt
+├── *.html                     # Šablóny (Jinja2)
+├── static/js/                 # Frontend JavaScript
+├── template/                  # Súbory pre Android APK build
+├── venv/                      # Python virtuálne prostredie
+├── build-apk.sh
+└── install-mikrotik-manager.sh
+
+/var/lib/mikrotik-manager/data/  # Runtime dáta (mimo git)
+├── mikrotik_manager.db          # SQLite databáza
+├── secret.key                   # Flask SESSION key (chmod 600)
+├── encryption.key               # Fernet šifrovací kľúč (chmod 600)
+└── backups/                     # Zálohy zariadení
+    └── 192.168.1.1/
+        ├── backup_*.backup
+        └── export_*.rsc
+```
 
 ---
 
@@ -106,33 +130,36 @@ Po úspešnej inštalácii je aplikácia dostupná na:
 - **Webové rozhranie:** `http://IP_SERVERA:5000`
 - **Mobilná aplikácia:** Nainštalujte APK súbor z `/opt/MT Manager.apk`
 
-### 2. Vytvorenie účtu
+### 2. Vytvorenie účtu alebo import
 
-⚠️ **DÔLEŽITÉ:** Systém podporuje len jeden účet. Po vytvorení musíte povinne nastaviť 2FA.
+Pri prvom prístupe (prázdna databáza) sa zobrazí stránka s dvomi možnosťami:
 
-1. Otvorte webové rozhranie
-2. Kliknite na **"Vytvoriť nový účet"**
-3. Zadajte:
-   - **Používateľské meno** (4-50 znakov)
-   - **Heslo** (minimálne 8 znakov)
-4. Kliknite **"Vytvoriť účet"**
-5. **Ihneď nastavte 2FA** (povinné)
+**A) Vytvoriť nový účet:**
+1. Záložka **"Nová inštalácia"**
+2. Zadajte používateľské meno (4–50 znakov) a heslo (minimálne 8 znakov)
+3. Kliknite **"Vytvoriť účet"**
+4. **Ihneď nastavte 2FA** (systém vás presmeruje automaticky)
+
+**B) Importovať zo ZIP (migrácia zo starej inštalácie):**
+1. Záložka **"Importovať zo ZIP"**
+2. Vyberte exportovaný ZIP súbor zo starej inštalácie
+3. Potvrďte import – aplikácia sa automaticky reštartuje
+4. Prihláste sa pôvodnými prihlasovacími údajmi vrátane TOTP
+
+⚠️ **DÔLEŽITÉ:** Systém podporuje len jeden používateľský účet. Po vytvorení je povinné nastaviť 2FA.
 
 ### 3. Prvé prihlásenie
 
-1. Zadajte vytvorené používateľské meno a heslo
+1. Zadajte používateľské meno a heslo
 2. Kliknite **"Prihlásiť sa"**
-3. Budete presmerovaní na hlavnú stránku
+3. Ak je aktivované 2FA, zadajte 6-ciferný kód z autentifikačnej aplikácie
 
 ### 4. Nastavenie 2FA (povinné)
 
-⚠️ **DÔLEŽITÉ:** 2FA je povinné pre všetky účty a nedá sa vypnúť po aktivácii.
-
-1. Prejdite do **Nastavenia**
-2. V sekcii **"Bezpečnosť"** kliknite **"Nastaviť 2FA"**
-3. Naskenujte QR kód pomocou aplikácie ako Google Authenticator
-4. Zadajte overovací kód a potvrďte
-5. **Uložte si záložné kódy na bezpečné miesto** - sú potrebné pre obnovenie prístupu
+1. Po registrácii vás systém automaticky presmeruje na nastavenie 2FA
+2. Naskenujte QR kód pomocou autentifikačnej aplikácie (Google Authenticator, Authy, Bitwarden a pod.)
+3. Zadajte overovací kód a potvrďte aktiváciu
+4. **Uložte si záložné kódy na bezpečné miesto** – sú potrebné pri strate prístupu k autentifikačnej aplikácii
 
 ---
 
@@ -140,72 +167,60 @@ Po úspešnej inštalácii je aplikácia dostupná na:
 
 ### Hlavná stránka (Dashboard)
 
-Hlavná stránka obsahuje:
-
 #### Horná lišta
-- **Logo a verzia** - MikroTik Manager
-- **Navigačné tlačidlá:**
-  - **Monitoring** - Grafy a real-time sledovanie
-  - **Zálohy** - História a správa backup súborov
-  - **Nastavenia** - Konfigurácia systému
-- **Užívateľské menu:**
-  - Zmena hesla
-  - Nastavenie 2FA
-  - Odhlásenie
 
-#### Stredná časť - Správa zariadení
+- **Logo** – MikroTik Manager
+- **Navigačné tlačidlá:** Monitoring, Zálohy, Updater, Nastavenia
+- **Používateľské menu:** Upraviť (zmena mena/hesla/2FA), Odhlásiť sa
+
+#### Správa zariadení
 
 **Pridanie nového zariadenia:**
 1. Kliknite **"Pridať zariadenie"**
 2. Vyplňte formulár:
-   - **IP adresa** - IP adresa MikroTik zariadenia
-   - **Názov** - Popisný názov (napr. "Hlavný router")
-   - **Používateľské meno** - SSH používateľ (obvykle "admin")
-   - **Heslo** - SSH heslo
-   - **Low Memory Mode** - Zaškrtnite pre zariadenia s malou pamäťou
-   - **SNMP Community** - Obvykle "public"
+   - **IP adresa** zariadenia
+   - **Názov** (popisný, napr. "Hlavný router")
+   - **Používateľské meno** – SSH používateľ (obvykle `admin`)
+   - **Heslo** – SSH heslo (ukladá sa šifrované)
+   - **Low Memory Mode** – pre zariadenia s obmedzenou pamäťou
+   - **SNMP Community** – obvykle `public` (ukladá sa šifrované)
 3. Kliknite **"Pridať zariadenie"**
 
-**Zoznam zariadení:**
-- **Zelený status** - Zariadenie je online a dostupné
-- **Červený status** - Zariadenie je offline alebo nedostupné
-- **Žltý status** - Neznámy stav alebo problémy s pripojením
+> Ak IP adresa patrí zariadeniu v koši, systém to oznámi a ponúkne možnosť obnovenia namiesto pridania duplicitu.
+
+**Zoznam zariadení – stavy:**
+- 🟢 **Online** – zariadenie je dostupné
+- 🔴 **Offline** – zariadenie nie je dostupné
+- ⚪ **Unknown** – stav neznámy (monitoring ešte neprebehol)
+- ⏸️ **Paused** – monitoring je pozastavený
 
 **Akcie pre zariadenia:**
-- **Zálohovať** - Vytvorí okamžitú zálohu
-- **SNMP** - Zobrazí aktuálne SNMP údaje
-- **Upraviť** - Zmení nastavenia zariadenia
-- **Zmazať** - Odstráni zariadenie zo systému
+- **Zálohovať** – vytvorí okamžitú zálohu
+- **SNMP** – zobrazí aktuálne SNMP údaje
+- **Upraviť** – zmení nastavenia zariadenia
+- **Zmazať** – presunie zariadenie do koša (soft-delete)
 
-#### Spodná časť - Ovládanie systému
+#### Kôš zariadení
 
-**Hromadné operácie:**
-- **Zálohovať všetky** - Spustí zálohovanie všetkých zariadení
-- **Obnoviť SNMP údaje** - Aktualizuje SNMP informácie pre všetky zariadenia
+Odstránené zariadenia sa nepresúvajú priamo do databázy – zachovávajú sa v koši po nastaviteľný počet dní, potom sa automaticky vymažú.
 
-**Stavové informácie:**
-- **SNMP Timer Status** - Stav automatického SNMP monitoringu
-- **Počet aktívnych záloh** - Aktuálne prebiehajúce zálohy
-- **Posledná aktivita** - Časové pečiatky posledných operácií
+**Funkcie koša:**
+- **Zobraziť kôš** – zobrazí zoznam soft-deleted zariadení
+- **Obnoviť** – zariadenie sa vráti do aktívneho zoznamu vrátane histórie monitoringu
+- **Trvalo vymazať** – okamžité úplné vymazanie zariadenia vrátane záloh a monitoringovej histórie
+- **Automatické vymazanie** – každé zariadenie v koši sa automaticky vymaže po uplynutí nastavenej doby uchovávania (predvolene 7 dní)
 
-#### Bočný panel - Logy a debug
+#### Bočný panel – Logy
 
-**Real-time logy:**
-- **Info** - Informačné správy (zelené)
-- **Warning** - Varovania (žlté)
-- **Error** - Chybové hlásenia (červené)
+- **Info** – informačné správy
+- **Warning** – varovania
+- **Error** – chybové hlásenia
 
-**Debug panel** (ak je zapnutý):
-- Detailné technické informácie
-- Websocket komunikácia
-- SNMP requesty a odpovede
+Logy sa aktualizujú v reálnom čase cez WebSocket.
 
 ### Responsívny dizajn
 
-Webové rozhranie je optimalizované pre:
-- **Desktop** - Plná funkcionalita na veľkých obrazovkách
-- **Tablet** - Prispôsobené rozloženie pre stredné obrazovky
-- **Mobile** - Kompaktné rozhranie pre telefóny
+Webové rozhranie je optimalizované pre Desktop, Tablet aj Mobile.
 
 ---
 
@@ -213,175 +228,116 @@ Webové rozhranie je optimalizované pre:
 
 ### Generovanie APK
 
-1. **Automatické buildovanie:**
-   ```bash
-   cd /opt/mikrotik-manager
-   bash build-apk.sh
-   ```
+```bash
+cd /opt/mikrotik-manager
+bash build-apk.sh
+```
 
-   Poznámka: Build skript teraz používa Android SDK 35 a Gradle 8.13 (targetSdk 35, optimalizované pre Android 15).
+APK súbor sa vytvorí ako `/opt/MT Manager.apk`.
 
-   - APK súbor sa vytvorí ako `/opt/MT Manager.apk`
-
-   ⚡ Native Android: Aplikácia je postavená ako natívna Android Kotlin WebView s optimalizovaným splash screen, vlastnou network-themed ikonou a eliminovanými prebliknutiami pri spúšťaní (optimalizované pre Android 15).
-
-   📦 APK vlastnosti:
-   - **Veľkosť:** 6.2 MB (optimalizovaná splash screen knižnica)
-   - **Ikona:** Vlastná network-themed ikona s MikroTik zariadeniami
-   - **Splash screen:** Rýchly tmavý splash bez prebliknutí
-   - **Kompatibilita:** Android 7+ (API 24+), optimalizované pre Android 15
+**Vlastnosti build procesu:**
+- Android SDK 35 (targetSdk 35, Android 15)
+- Gradle 8.13, AGP 8.7.3, Kotlin 2.0.21
+- Gradle inštalácia: `/opt/gradle`
 
 ### Inštalácia APK
 
-1. **Stiahnutie:**
-   - APK súbor sa nachádza v `/opt/MT Manager.apk`
-   - Native Android aplikácia s Kotlin WebView
+1. Skopírujte `/opt/MT Manager.apk` na Android zariadenie
+2. Na zariadení povolte inštaláciu z neznámych zdrojov
+3. Otvorte APK a potvrďte inštaláciu
 
-2. **Inštalácia na Android:**
-   - Povolte inštaláciu z neznámych zdrojov
-   - Otvorte APK súbor a potvrďte inštaláciu
+### Vlastnosti aplikácie
 
-### Ikona aplikácie
+**Technické vlastnosti:**
+- Native Android Kotlin WebView
+- Veľkosť: ~6.2 MB
+- Kompatibilita: Android 7+ (API 24+), optimalizované pre Android 15
+- Edge-to-edge status bar s theme-aware farbami (tmavá: `#111827` / svetlá: `#cddbf2`)
 
-Aplikácia má vlastnú **network-themed ikonu** navrhnutú špeciálne pre MikroTik Manager:
+**Ikona:**
+- Network-themed ikona (sieťová topológia – routery prepojené káblami)
+- Sky blue téma (`#38bdf8`, `#0ea5e9`, `#60a5fa`) na tmavom pozadí (`#0f172a`)
 
-**Charakteristiky ikony:**
-- **Sieťová topológia** - Zobrazuje tri sieťové zariadenia (routery/switche) prepojené káblami
-- **Sky blue téma** - Farby zosúladené s webovou verziou (#38bdf8, #0ea5e9, #60a5fa)
-- **Tmavé pozadie** - Moderný dark theme (#0f172a)
-- **Profesionálny dizajn** - Čisté línie a connection points
-- **Android optimalizácia** - 108dp rozlíšenie pre adaptive icons
+**Splash screen:**
+- Tmavé pozadie konzistentné s webovou aplikáciou
+- Eliminované biele blikania pri štarte (Android 15 kompatibilita)
 
-**Vizuálna reprezentácia:**
-- Vrchné zariadenia reprezentujú edge routery/switche
-- Spodné zariadenie reprezentuje core switch/router  
-- Modré káble znázorňují network connections
-- Junction body označujú connection points v topológii
+### Použitie
 
-Ikona vizuálne reprezentuje účel aplikácie - správu MikroTik sieťových zariadení a ich prepojenú topológiu.
-
-### Optimalizovaný splash screen
-
-Aplikácia používa **moderný splash screen** optimalizovaný pre Android 12+ a Android 15:
-
-**Vlastnosti splash screen:**
-- **Tmavé pozadie** - Konzistentné s webovou aplikáciou (#111827)
-- **Žiadna ikona** - Čistý tmavý splash screen bez prebliknutí
-- **Rýchle spustenie** - Animácia 200ms pre okamžité zobrazenie
-- **Eliminované blikania** - Žiadne biele flashy počas načítavania
-- **Android 15 kompatibilita** - Testované na OnePlus 13
-
-**Technické optimalizácie:**
-- Používa oficiálnu `androidx.core:core-splashscreen` knižnicu
-- WebView sa zobrazí až po úplnom načítaní obsahu
-- Konzistentné tmavé pozadie cez všetky aktivity
-- Optimalizované pre najnovšie Android zariadenia
-
-### Použitie mobilnej aplikácie
-
-1. **Spustenie aplikácie:**
-   - Aplikácia sa automaticky pripojí na server
-   - Zadajte IP adresu servera pri prvom spustení
-
-2. **Prihlásenie:**
-   - Použite rovnaké prihlasovacie údaje ako vo webovom rozhraní
-   - Podporuje 2FA autentifikáciu
-
-3. **Native Android funkcie:**
-   - Automatická detekcia témy (dark/light mode)
-   - Optimalizovaný splash screen bez prebliknutí
-   - Vlastná network-themed ikona aplikácie
-   - Natívne Android WebView s lepšou výkonnosťou
-   - Správne zobrazenie na všetkých Android verziách (7+)
-   - Android 15 kompatibilita a optimalizácie
+1. **Prvé spustenie:** Zadajte IP adresu alebo doménu servera na setup obrazovke
+2. **Prihlásenie:** Rovnaké údaje ako vo webovom rozhraní vrátane 2FA
+3. **Funkcie:** Plná funkcionalita webového rozhrania vrátane real-time aktualizácií cez WebSocket
 
 ### Rozdiely oproti webovému rozhraniu
 
-**Výhody Native Android aplikácie:**
+**Výhody Native APK:**
 - Rýchlejšie spustenie a lepšia výkonnosť
 - Automatické prepínanie dark/light témy podľa systému
-- Optimalizovaný splash screen pre hladké spúšťanie
-- Vlastná network-themed ikona reprezentujúca sieťovú topológiu
-- Eliminované biele blikania počas načítavania (Android 15 fix)
+- Optimalizovaný splash screen
 - Lepšia integrácia s Android systémom
-- Natívne Android WebView namiesto browser wrappera
 
 **Obmedzenia:**
-- Vyžaduje internetové pripojenie
-- Závislá na dostupnosti servera
-- Menšia obrazovka môže obmedziť zobrazenie komplexných grafov
+- Vyžaduje sieťové pripojenie k serveru
+- Na menšej obrazovke môžu byť komplexné grafy menej pohodlné
 
 ---
 
 ## Správa zariadení
 
-### Pridávanie zariadení
+### Požiadavky na MikroTik zariadenie
 
-#### Požiadavky na MikroTik zariadenie
-
-1. **SSH prístup:**
-   - Zapnutá SSH služba
-   - Vytvorený používateľ s admin právami
-   - Nastavené heslo
-
-2. **SNMP prístup:**
-   - Zapnutá SNMP služba
-   - Nastavená SNMP community (obvykle "public")
-   - SNMP verzia 2c
-
-#### Konfigurácia MikroTik zariadenia
-
+**SSH prístup:**
 ```bash
-# SSH konfigurácia
 /ip service set ssh port=22 disabled=no
+```
 
-# SNMP konfigurácia
-/snmp set enabled=yes contact="admin@example.com" location="Data Center"
+**SNMP prístup:**
+```bash
+/snmp set enabled=yes
 /snmp community set public name=public
 ```
 
-#### Pridanie do MikroTik Manager
+Používateľ musí mať admin práva pre zálohovanie (SSH príkazy `/system backup save`, `/export`).
 
-1. V hlavnom rozhraní kliknite **"Pridať zariadenie"**
-2. Vyplňte všetky povinné polia
-3. **Testovanie pripojenia:**
-   - Systém automaticky testuje SSH pripojenie
-   - Overí SNMP dostupnosť
-   - Zobrazí výsledok testu
+### Úprava zariadenia
 
-### Správa existujúcich zariadení
+Kliknite na ikonu ceruzky – môžete zmeniť:
+- Názov, IP adresu, prihlasovacie údaje
+- SNMP community string
+- Individuálne monitoring intervaly (ping, SNMP) – 0 = použiť globálne nastavenie
 
-#### Upravenie zariadenia
+### Soft-delete a kôš
 
-1. Kliknite na **ikonu ceruzky** vedľa zariadenia
-2. Môžete zmeniť:
-   - Názov zariadenia
-   - IP adresu
-   - Prihlasovacie údaje
-   - SNMP nastavenia
-   - Monitoring intervaly
+**Zmazanie zariadenia** ho nepresunie do koša okamžite – nastaví mu `deleted_at` timestamp a vypočíta dátum automatického vymazania (`purge_after = deleted_at + nastavená doba uchovávania`).
 
-#### Odstránenie zariadenia
+Počas pobytu v koši:
+- Monitoring zariadenia je zastavený
+- História monitoringu a zálohy sú zachované
+- Zariadenie sa nezobrazuje v aktívnom zozname
 
-1. Kliknite na **ikonu koša** vedľa zariadenia
-2. Potvrďte odstránenie
-3. **Pozor:** Odstránia sa aj všetky súvisiace zálohy a monitoring dáta
+**Automatické vymazanie** prebieha na pozadí každých 60 sekúnd a kontroluje, či uplynula doba uchovávania. Pri automatickom vymazaní príde Pushover notifikácia (ak je povolená).
 
-### Stavy zariadení
+**Trvalé vymazanie** (manuálne z koša) okamžite odstráni:
+- Všetky záznamy monitoringu (ping, SNMP história)
+- Všetky lokálne zálohy
+- Zálohy na FTP (ak sú nastavené)
+- Záznam zariadenia v databáze
 
-#### Indikátory stavu
+### Monitorovanie zariadení
 
-- **🟢 Online** - Zariadenie je dostupné a funguje správne
-- **🔴 Offline** - Zariadenie nie je dostupné
-- **🟡 Unknown** - Neznámy stav alebo chyba pripojenia
-- **⏸️ Paused** - Monitoring je pozastavený
+**Ping monitoring:**
+- Konfigurovateľný interval per-device (0 = globálny)
+- Linux: `ping -c 4 -W 5 {ip}` → priemerná latencia, strata paketov
+- Retry logika: 3 neúspešné pokusy pred označením ako offline
 
-#### Automatické sledovanie stavu
+**SNMP monitoring:**
+- Konfigurovateľný interval per-device (0 = globálny)
+- SNMPv2c, timeout 2s, 1 retry
+- Bulk požiadavka pre všetky OID naraz (minimálna záťaž siete)
 
-Systém pravidelně kontroluje:
-- **Ping dostupnosť** - Každé 30 sekúnd (predvolene)
-- **SSH pripojenie** - Pri každej zálohe
-- **SNMP odpoveď** - Podľa nastaveného intervalu
+**Pozastavenie monitoringu:**
+- Tlačidlo Pauza/Obnoviť na monitoring stránke (per-device)
+- Monitoring sa zastaví bez vymazania histórie
 
 ---
 
@@ -389,293 +345,364 @@ Systém pravidelně kontroluje:
 
 ### Automatické zálohovanie
 
-#### Nastavenie automatického zálohovania
+**Nastavenie plánu:**
+1. Nastavenia → sekcia **Zálohovanie**
+2. Typ plánu: `daily` (denné), `weekly` (týždenné), `custom`
+3. Čas spustenia (HH:MM)
+4. Počet uchovaných záloh (predvolene 10)
+5. Oneskorenie medzi zariadeniami (predvolene 30 s)
 
-1. V **Nastaveniach** prejdite do sekcie **"Zálohovanie"**
-2. Nastavte:
-   - **Interval zálohovania** (hodiny/dni)
-   - **Počet uchovaných záloh** (predvolene 10)
-   - **Oneskorenie medzi zariadeniami** (predvolene 30s)
+### Priebeh zálohovania
 
-#### Proces automatického zálohovania
+1. SSH pripojenie na zariadenie (Paramiko)
+2. Vytvorenie `.backup` súboru: `/system backup save`
+3. Export konfigurácie: `/export file=export`
+4. Stiahnutie súborov cez SFTP
+5. Uloženie do `/var/lib/mikrotik-manager/data/backups/{ip}/`
+6. Upload na FTP (ak je nastavený)
+7. Vyčistenie starých záloh podľa `backup_retention_count`
+8. Pushover notifikácia (ak je povolená)
 
-1. **Spustenie:** Podľa nastaveného plánu
-2. **Pripojenie:** SSH na MikroTik zariadenie
-3. **Export:** Vytvorenie .backup a .rsc súborov
-4. **Stiahnutie:** Prenos súborov na server
-5. **Uloženie:** Organizácia do priečinkov podľa IP adresy
-6. **Cleanup:** Odstránenie starých záloh podľa nastavenia
+Systém porovnáva nový `.rsc` export s predchádzajúcim a loguje zmeny v konfigurácii (diff).
 
 ### Manuálne zálohovanie
 
-#### Záloha jednotlivého zariadenia
-
-1. V zozname zariadení kliknite **"Zálohovať"**
-2. Systém zobrazí progress bar
-3. Po dokončení sa zobrazí výsledok
-
-#### Hromadná záloha
-
-1. Kliknite **"Zálohovať všetky"** v spodnej časti
-2. Systém postupne zálohuje všetky zariadenia
-3. Sledujte progress v real-time
+- **Jednotlivé zariadenie:** Tlačidlo "Zálohovať" v zozname zariadení
+- **Všetky zariadenia:** Tlačidlo "Zálohovať všetky" – zariadenia sa spracúvajú postupne s nastaveným oneskorením
 
 ### Správa backup súborov
 
-#### Priečinková štruktúra
+**Stránka Zálohy** (odkaz v hornej lište):
+- Zoznam všetkých backup súborov zoradených podľa zariadenia
+- Dátum, čas, veľkosť, typ (`.backup` / `.rsc`)
 
-```
-backups/
-├── 192.168.1.1/
-│   ├── backup_2024-01-15_10-30-00.backup
-│   ├── export_2024-01-15_10-30-00.rsc
-│   └── ...
-├── 192.168.1.2/
-│   └── ...
-```
+**Akcie:**
+- **Stiahnuť** – stiahne súbor na lokálny počítač
+- **Zobraziť obsah** – náhľad `.rsc` súborov priamo v prehliadači
+- **Zmazať** – odstráni konkrétny súbor
 
-#### Stránka Zálohy
+### FTP upload
 
-1. Prejdite na **Zálohy** v hornej lište
-2. Zobrazenie:
-   - Zoznam všetkých backup súborov
-   - Dátum a čas vytvorenia
-   - Veľkosť súboru
-   - Typ súboru (.backup/.rsc)
+**Nastavenie (Nastavenia → FTP):**
+- Server (IP/hostname), port (predvolene 21)
+- Používateľské meno a heslo (ukladá sa šifrované)
+- Cieľový priečinok
 
-3. **Akcie:**
-   - **Stiahnuť** - Download súboru na lokálny počítač
-   - **Zobraziť obsah** - Náhľad .rsc súborov
-   - **Zmazať** - Odstránenie súboru
-
-### FTP upload záloh
-
-#### Nastavenie FTP
-
-1. V **Nastaveniach** nájdite sekciu **"FTP nastavenia"**
-2. Vyplňte:
-   - **FTP server** - IP alebo hostname
-   - **Používateľské meno**
-   - **Heslo**
-   - **Priečinok** (voliteľné)
-
-#### Automatický upload
-
-- Každá úspešná záloha sa automaticky nahraje na FTP
-- V logoch vidíte potvrdenie úspešného uploadu
-- Pri chybe FTP sa záloha uloží lokálne
+Každá úspešná záloha sa automaticky nahrá na FTP. Pri chybe FTP sa záloha uloží len lokálne a chyba sa zaloguje.
 
 ---
 
 ## Monitoring a grafy
 
-### Stránka Monitoring
+### Prístup
 
-Prístup cez **Monitoring** tlačidlo v hornej lište.
+Kliknite na **Monitoring** v hornej lište.
 
-#### Výber zariadenia
+### Výber zariadenia
 
-- Dropdown menu s výberom zariadenia
-- Automatické načítanie dát po výbere
-- Zobrazenie aktuálneho stavu zariadenia
+- Rozbaľovacie menu s výberom zariadenia
+- Každé zariadenie zobrazuje aktuálny stav (emoji + meno + IP)
+- Výber sa uloží do localStorage – pri ďalšom otvorení sa obnoví
 
-#### Typy grafov
+### Časové rozsahy
 
-**1. Ping Latency Graf**
-- **Osa Y:** Latencia v milisekundách
-- **Osa X:** Čas
-- **Farby:**
-  - Zelená: Nízka latencia (< 50ms)
-  - Žltá: Stredná latencia (50-100ms)
-  - Červená: Vysoká latencia (> 100ms)
-- **Červené body:** Stratené pakety
+Tlačidlá pre výber časového okna: **30m, 3h, 6h, 12h, 24h, 7d, 30d, 90d, 1y**
 
-**2. CPU Load Graf**
-- **Osa Y:** Zaťaženie v percentách (0-100%)
-- **Osa X:** Čas
-- **Farby:**
-  - Zelená: Nízke zaťaženie (< 50%)
-  - Žltá: Stredné zaťaženie (50-80%)
-  - Červená: Vysoké zaťaženie (> 80%)
+Predvolený rozsah: **24h**. Výber sa uloží do localStorage.
 
-**3. Teplota Graf**
-- **Osa Y:** Teplota v stupňoch Celzia
-- **Osa X:** Čas
-- **Farebné zóny:**
-  - Zelená: Normálna teplota (< 60°C)
-  - Žltá: Zvýšená teplota (60-70°C)
-  - Červená: Kritická teplota (> 70°C)
+### Typy grafov
 
-**4. Memory Usage Graf**
-- **Osa Y:** Využitie pamäte v percentách
-- **Osa X:** Čas
-- **Detaily:**
-  - Používaná pamäť
-  - Celková pamäť
-  - Percentuálne využitie
+Stránka zobrazuje štyri grafy v mriežke 2×2 (na mobile 1 stĺpec):
 
-#### Ovládanie grafov
+**1. Ping Latencia**
+- Online segmenty: zelená čiara s plôškou
+- Offline segmenty: červená plôška (vizualizuje výpadok)
+- Tooltip: latencia v ms + strata paketov
 
-**Zoom funkcie:**
-- **Zoom in:** Krúženie myšou alebo dotyk
-- **Zoom out:** Dvojklik alebo tlačidlo
-- **Pan:** Ťahanie po zoomovaní
-- **Reset:** Tlačidlo "Zoom out" pre pôvodný pohľad
+**2. CPU Load**
+- Modrá čiara, os Y 0–100 %
+- Inteligentná os Y: ak max ≤ 50 %, zobrazí sa škála 0–50 %
 
-**Časové rozsahy:**
-- **1 hodina** - Detailný pohľad
-- **6 hodín** - Krátke trendy
-- **24 hodín** - Denný prehľad
-- **7 dní** - Týždenné trendy
-- **30 dní** - Mesačný prehľad
+**3. Teplota**
+- Červená čiara, os Y centrovaná okolo skutočného rozsahu hodnôt
+- Ak je teplota konštantná: ±5 °C okraj
 
-**Automatické obnovenie:**
-- Dáta sa automaticky aktualizujú každých 30 sekúnd
-- Možnosť pozastavenia auto-refresh
-- Manuálne obnovenie tlačidlom
+**4. Memory Usage**
+- Dve dátové série: Použitá pamäť (červená) + Celková pamäť (modrá)
+- Celková pamäť sa dopĺňa dopredu (forward-fill) pre súvislé zobrazenie
+- Tooltip: Použitá, Celková, Voľná pamäť, Percentá
 
-### SNMP Monitoring
+### Stavové karty
 
-#### Nastavenie SNMP intervalov
+Nad grafmi sú 4 stavové karty:
+- **Ping stav** – Online/Offline s animovaným indikátorom
+- **Priemerná latencia** – váhovaný priemer v aktuálnom časovom okne
+- **Uptime** – percento dostupnosti (farebné kódovanie: ≥95 % zelená, ≥80 % žltá, <80 % červená)
+- **Posledný ping** – čas poslednej kontroly
 
-1. **Globálne nastavenie:**
-   - V **Nastaveniach** → **SNMP Monitor**
-   - Predvolený interval: 10 minút
+Pri priblížení (zoom) sa uptime a priemerná latencia automaticky prepočítavajú pre zobrazené okno.
 
-2. **Per-device nastavenie:**
-   - Pri úprave zariadenia
-   - Override globálneho nastavenia
-   - 0 = vypnuté SNMP monitoring
+### Ovládanie grafov
 
-#### SNMP údaje
+**Zoom in:**
+- Kliknite a ťahajte myšou (alebo prstom na mobile) po grafe pre výber oblasti
 
-**Získavané informácie:**
-- **System Info:** Identita, verzia, model
-- **Performance:** CPU, pamäť, teplota
-- **Network:** Interfaces, traffic
-- **Uptime:** Doba behu zariadenia
+**Zoom out:**
+- Tlačidlo s lupou na každom grafe
+- Dvojklik (alebo dvojité ťuknutie na mobile) priamo na grafe
+- Progresívny zoom-out: každý krok rozšíri pohľad 2,5×; po dosiahnutí maxima dát sa automaticky načítajú dáta z väčšieho časového rozsahu
 
-**Úloženie dát:**
-- SQLite databáza
-- Kompresné algoritmy pre efektívnosť
-- Automatické čistenie starých dát
+**Zoom režim:**
+- **Individuálny** (predvolený) – zoom ovplyvní len kliknutý graf
+- **Globálny** – zoom sa synchronizuje na všetky 4 grafy súčasne
+- Prepínanie tlačidlom v záhlaví stránky (sivé = individuálny, oranžové = globálny), nastavenie sa uloží
 
-### Ping Monitoring
+**Aktualizácia:**
+- Tlačidlo **Obnoviť** – manuálne načíta aktuálne dáta
+- Real-time aktualizácie cez WebSocket (nové ping/SNMP hodnoty sa pridávajú priebežne)
 
-#### Konfigurácia ping monitoringu
+### Individuálne nastavenia zariadenia
 
-1. **Interval:** Predvolene 30 sekúnd
-2. **Timeout:** 5 sekúnd na ping
-3. **Packet count:** 4 pakety na test
-4. **Retry logic:** 3 pokusy pred označením ako offline
+Tlačidlo **Intervaly** otvorí modal pre per-device nastavenia:
+- **Ping interval** (s) – 0 = použiť globálny
+- **Retry interval** (s) – interval počas výpadku
+- **SNMP interval** (min) – 0 = použiť globálny
 
-#### Notifications pri výpadkoch
+### Debug terminál
 
-**Pushover notifikácie:**
-- Okamžite pri zistení výpadku
-- Potvrdenie obnovenia pripojenia
-- Konfigurovateľné v Nastaveniach
+V pravom dolnom rohu je skrytý debug terminál (zapnutie: `Ctrl+D` alebo v Nastaveniach → `debug_terminal`). Zobrazuje technické logy v reálnom čase.
+
+---
+
+## Updater - aktualizácie RouterOS
+
+### Prístup
+
+Kliknite na **Updater** v hornej lište.
+
+### Prehľad zariadení v Updateri
+
+Pre každé zariadenie sa zobrazuje:
+- **Stav pripojenia** (online/offline cez MikroTik REST API)
+- **Aktuálna verzia RouterOS** a dostupná nová verzia
+- **Aktuálna verzia Firmware** a dostupná nová verzia
+- **TLS/SSL stav** – či zariadenie má platný TLS certifikát
+- **Expirácia certifikátu** (badge: zelená >30 dní, oranžová 8–30 dní, červená 1–7 dní, červená = expirovaný)
+
+### Aktualizácia RouterOS a Firmware
+
+**Kompletná aktualizácia (odporúčané):**
+
+Tlačidlo **"Aktualizovať MikroTik"** spustí 7-krokový proces:
+1. Kontrola a inštalácia novej verzie RouterOS
+2. Čakanie na odpojenie zariadenia (reboot)
+3. Čakanie na opätovné pripojenie
+4. Stabilizačná pauza (120 s – preskočí sa pri VM/CHR)
+5. Kontrola a inštalácia novej verzie Firmware
+6. Pauza pred záverečným rebootom
+7. Záverečný reboot + čakanie na online
+
+Priebeh sa zobrazuje v modálnom okne s progress indikátorom.
+
+**Čiastočné aktualizácie** (dropdown pri hlavnom tlačidle):
+- Len RouterOS
+- Len Firmware
+- Reštartovať zariadenie
+
+**VM/CHR zariadenia:** Firmware fázy sa automaticky preskočia (CHR/VM nemajú hardware firmware).
+
+### Plánované aktualizácie
+
+**Plánovanie jednotlivého zariadenia:**
+1. Kliknite na tlačidlo kalendára pri zariadení
+2. Vyberte dátum a čas
+3. Potvrďte – plán sa uloží v databáze
+
+**Hromadné plánovanie:**
+1. Označte viaceré zariadenia checkboxom
+2. Kliknite **"Naplánovať vybrané"**
+3. Vyberte čas – zariadenia sa budú aktualizovať postupne s nastaveným oneskorením
+
+**Správa plánov:**
+- Aktívne plány zobrazujú fialový badge pri zariadení
+- Plán je možné zrušiť kliknutím na badge alebo v zozname plánov
+
+Stav plánov prežije reload stránky (F5) – systém obnoví zobrazenie z databázy.
+
+### Hromadná aktualizácia (okamžitá)
+
+1. Označte zariadenia checkboxom
+2. Kliknite **"Aktualizovať vybrané"**
+3. Zariadenia sa aktualizujú postupne (jedno po druhom) s nastaveným oneskorením
+
+Stav čakajúcich zariadení (⟳ Čaká...) prežije reload stránky.
+
+### TLS certifikát
+
+Zariadenia bez TLS certifikátu zobrazujú varovanie **"⚠️ Bez TLS certifikátu"**.
+
+**Vytvorenie/obnovenie certifikátu:**
+1. Kliknite **"Vytvoriť TLS Cert ⚠️"** (alebo **"Obnoviť TLS Cert"** ak certifikát existuje)
+2. Systém cez HTTP REST API:
+   - Odstráni starý certifikát (ak existuje)
+   - Vytvorí nový self-signed certifikát (`WebCert`)
+   - Podpíše ho
+   - Priradí ho na `www-ssl` službu
+3. Po dokončení zariadenie funguje cez HTTPS
+
+> Poznámka: Celý proces prebieha cez HTTP (port 80), pretože nahradenie certifikátu by dočasne prerušilo HTTPS.
+
+**Automatická obnova certifikátov:**
+- Denná kontrola o 09:00
+- Certifikáty s platnosťou ≤ `cert_expiry_warning_days` dní sa automaticky obnovia
+- Pushover notifikácia pri automatickej obnove
+
+**Nastavenie platnosti certifikátu:**
+- Globálne: Nastavenia → `cert_auto_renewal_days` (predvolene 365 dní)
+- Per-device: Tlačidlo nastavenia pri certifikáte → vlastná hodnota pre dané zariadenie
+
+### RSS changelog
+
+Updater automaticky načíta RSS feed z mikrotik.com a zobrazuje changelog k najnovšej stabilnej verzii RouterOS. Výsledok sa ukladá do cache (nie je potrebné opakovane načítavať pri každom F5).
+
+---
+
+## Export a import (migrácia)
+
+### Export celej inštalácie
+
+**Účel:** Záloha celej inštalácie alebo migrácia na nový server/LXC kontajner.
+
+**Postup:**
+1. Nastavenia → sekcia **Admin / Migrácia**
+2. Kliknite **"Exportovať ZIP"**
+3. Voliteľne zaškrtnite **"Zahrnúť zálohy zariadení"**
+4. Stiahnite ZIP súbor
+
+**Obsah ZIP:**
+- `mikrotik_manager.db` – celá databáza (zariadenia, používatelia, TOTP, nastavenia, história)
+- `encryption.key` – Fernet šifrovací kľúč
+- `secret.key` – Flask session kľúč
+- `backups/` – zálohy zariadení (voliteľne)
+
+⚠️ **DÔLEŽITÉ:** ZIP obsahuje šifrovacie kľúče – uložte ho na bezpečné miesto!
+
+### Import na novej inštalácii
+
+**Podmienka:** Import je možný len na inštalácii bez existujúceho používateľského účtu (prázdna databáza = čerstvá inštalácia).
+
+**Postup:**
+1. Nainštalujte MikroTik Manager na novom serveri
+2. Otvorte webové rozhranie – zobrazí sa registračná stránka
+3. Kliknite záložku **"Importovať zo ZIP"**
+4. Nahrajte ZIP súbor zo starej inštalácie
+5. Systém nahradí databázu, kľúče a zálohy, potom sa automaticky reštartuje
+6. Prihláste sa pôvodnými prihlasovacími údajmi (vrátane TOTP z pôvodnej aplikácie)
 
 ---
 
 ## Nastavenia systému
 
-### Prístup k nastaveniam
+### Prístup
 
-Kliknite na **Nastavenia** v hornej lište hlavnej stránky.
+Kliknite na **Nastavenia** v hornej lište.
 
-### Sekcie nastavení
+### Zálohovanie
 
-#### 1. Zálohovanie
+| Nastavenie | Predvolená hodnota | Popis |
+|---|---|---|
+| Automatické zálohovanie | vypnuté | Zapnutie/vypnutie plánovaných záloh |
+| Typ plánu | `daily` | daily / weekly / custom |
+| Čas zálohovania | `02:00` | HH:MM |
+| Počet uchovaných záloh | 10 | Na zariadenie, rozsah 1–100 |
+| Oneskorenie medzi zariadeniami | 30 s | Predchádzanie preťaženiu siete |
+| Detailné logovanie záloh | zapnuté | Logovanie diff zmien |
 
-**Počet uchovaných záloh:**
-- Predvolene: 10 záloh na zariadenie
-- Rozsah: 1-100
-- Automatické mazanie najstarších
+### Monitoring
 
-**Oneskorenie medzi zariadeniami:**
-- Predvolene: 30 sekúnd
-- Účel: Predchádzanie preťaženiu siete
-- Rozsah: 5-300 sekúnd
+| Nastavenie | Predvolená hodnota | Popis |
+|---|---|---|
+| Ping monitoring | zapnutý | Zapnutie/vypnutie ping monitoringu |
+| Ping interval | 30 s | Globálny interval pre všetky zariadenia |
+| Ping timeout | 5 s | Timeout jedného pingu |
+| Ping retries | 3 | Pokusy pred offline označením |
+| Uchovávanie ping histórie | 30 dní | Automatické mazanie starých dát |
+| SNMP monitoring | zapnutý | Zapnutie/vypnutie SNMP |
+| SNMP interval | 10 min | Globálny interval pre všetky zariadenia |
+| Uchovávanie SNMP histórie | 30 dní | Automatické mazanie starých dát |
 
-**Automatické zálohovanie:**
-- Zapnutie/vypnutie automatického režimu
-- Nastavenie času spustenia
-- Výber dní v týždni
+### FTP
 
-#### 2. SNMP Monitor
+| Nastavenie | Popis |
+|---|---|
+| FTP server | IP alebo hostname FTP servera |
+| Port | Predvolene 21 |
+| Používateľské meno | FTP prihlasovacie meno |
+| Heslo | FTP heslo (ukladá sa šifrované) |
+| Priečinok | Cieľový priečinok na FTP (predvolene `/`) |
 
-**Interval kontroly:**
-- Predvolene: 10 minút
-- Globálne nastavenie pre všetky zariadenia
-- Možnosť override na úrovni zariadenia
+### Pushover notifikácie
 
-**Timeout nastavenia:**
-- SNMP timeout: 10 sekúnd
-- Retry count: 2 pokusy
-- Port: 161 (štandardný SNMP port)
+**Nastavenie:**
+- **App Key** – Pushover API kľúč aplikácie (ukladá sa šifrované)
+- **User Key** – Pushover používateľský kľúč (ukladá sa šifrované)
+- Tlačidlo **"Otestovať"** – overí funkčnosť nastavenia
 
-#### 3. FTP nastavenia
+**Dostupné typy notifikácií:**
 
-**Server informácie:**
-- **Hostname/IP:** FTP server adresa
-- **Port:** Predvolene 21
-- **Username:** FTP prihlasovacie meno
-- **Password:** FTP heslo (šifrované uloženie)
+| Typ | Popis |
+|---|---|
+| Zariadenie offline | Pri výpadku dostupnosti |
+| Zariadenie online | Pri obnovení dostupnosti |
+| Záloha úspešná | Po úspešnom zálohovaní |
+| Záloha neúspešná | Pri chybe zálohovania |
+| Kritická teplota | Teplota presiahla prah |
+| Kritické CPU | CPU zaťaženie presiahlo prah |
+| Kritická pamäť | Využitie pamäte presiahlo prah |
+| Reboot zariadenia | Detekcia reštartu (zmena uptime) |
+| Zmena verzie RouterOS | Detekcia aktualizácie firmvéru |
+| Expirácia TLS certifikátu | Automatická obnova certifikátu |
+| Nová verzia RouterOS | Dostupná nová verzia (RSS) |
+| Neúspešné prihlásenie | Nesprávne heslo pri prihlásení |
+| Neúspešné 2FA | Nesprávny 2FA kód |
+| Neúspešná obnova hesla | Pokus o obnovu hesla zlyhal |
+| Automatické vymazanie zariadenia | Zariadenie vymazané z koša |
 
-**Upload nastavenia:**
-- **Remote directory:** Cieľový priečinok na FTP
-- **Passive mode:** Odporúčané pre firewall
-- **SSL/TLS:** Podpora pre bezpečný prenos
+**Prahy pre notifikácie:**
+- CPU kritický prah: 80 %
+- Pamäť kritický prah: 80 %
+- Teplota kritický prah: 70 °C
 
-#### 4. Pushover notifikácie
+### Tichá hodina (Quiet Hours)
 
-**API nastavenia:**
-- **App Key:** Pushover aplikačný kľúč
-- **User Key:** Váš Pushover používateľský kľúč
-- **Test tlačidlo:** Overenie funkčnosti
+Možnosť nastavenia časového okna, počas ktorého sa Pushover notifikácie neodosielajú.
 
-**Typy notifikácií:**
-- Device offline/online
-- Backup úspešné/neúspešné
-- SNMP chyby
-- Systémové upozornenia
+### Kôš zariadení
 
-#### 5. Logy a Debug
+| Nastavenie | Predvolená hodnota | Popis |
+|---|---|---|
+| Doba uchovávania | 7 dní | Po uplynutí sa zariadenie automaticky vymaže (rozsah 1–90 dní) |
 
-**Log retention:**
-- Počet dní uchovávania logov
-- Predvolene: 30 dní
-- Automatické čistenie
+### Updater
 
-**Debug módy:**
-- **Terminal debug:** Detailné logy operácií
-- **WebSocket debug:** Komunikácia s frontendom
-- **SNMP debug:** SNMP requesty a odpovede
+| Nastavenie | Predvolená hodnota | Popis |
+|---|---|---|
+| Záloha pred aktualizáciou | zapnuté | Spustí zálohu pred aktualizáciou |
+| Oneskorenie medzi zariadeniami (bulk) | 60 s | Pauza medzi zariadeniami pri hromadnej aktualizácii |
+| Oneskorenie po zálohe | 10 s | Čakanie po dokončení zálohy |
+| Stabilizačná pauza | 120 s | Čakanie po reboote pred firmware fázou |
+| Pauza pred záverečným rebootom | 20 s | Čakanie po firmware upgrade |
 
-**Export funkcionalita:**
-- Stiahnuť logy ako textový súbor
-- Filtrovanie podľa dátumu a typu
-- Kompresný format pre veľké súbory
+### TLS certifikáty
 
-#### 6. Bezpečnosť
+| Nastavenie | Predvolená hodnota | Popis |
+|---|---|---|
+| Platnosť certifikátu | 365 dní | Globálna platnosť nových certifikátov |
+| Varovanie pred expiráciou | 30 dní | Pri ≤ N dňoch sa certifikát automaticky obnoví |
 
-**Zmena hesla:**
-1. Zadajte aktuálne heslo
-2. Zadajte nové heslo (min. 8 znakov)
-3. Potvrďte nové heslo
-4. Kliknite "Zmeniť heslo"
+### Debug
 
-**2FA nastavenie:**
-- QR kód pre Google Authenticator
-- Záložné kódy (uložte si ich!)
-- ⚠️ **2FA sa nedá vypnúť** (je povinné pre všetky účty)
-
-### Uloženie nastavení
-
-1. **Automatické uloženie:** Zmeny sa ukladajú okamžite
-2. **Validácia:** Systém kontroluje správnosť údajov
-3. **Restart služieb:** Niektoré zmeny vyžadujú restart SNMP timers
+- **Debug terminál** – zapnutie/vypnutie debug panelu v monitoringu (Ctrl+D)
 
 ---
 
@@ -683,987 +710,413 @@ Kliknite na **Nastavenia** v hornej lište hlavnej stránky.
 
 ### Dvojfaktorová autentifikácia (2FA)
 
-⚠️ **DÔLEŽITÉ UPOZORNENIE:**
-- **2FA je povinné pre každý účet** (systém podporuje len jeden účet)
-- **2FA sa nedá vypnúť po aktivácii**
-- **Bez 2FA nie je možné používať aplikáciu**
-- **Záložné kódy sú jediný spôsob obnovenia prístupu**
+2FA je povinné pre všetky účty. Bez nastavenej 2FA nie je možné sa prihlásiť.
 
 #### Aktivácia 2FA
 
-1. **Prístup k nastaveniam:**
-   - Prihláste sa do systému
-   - Kliknite na používateľské menu → "Nastavenia"
+1. Po registrácii vás systém automaticky presmeruje na nastavenie 2FA
+2. Naskenujte QR kód pomocou autentifikačnej aplikácie
 
-2. **Nastavenie 2FA:**
-   - V sekcii "Bezpečnosť" kliknite "Nastaviť 2FA"
-   - Naskenujte QR kód pomocou autentifikačnej aplikácie
+**Podporované aplikácie:**
+- Google Authenticator
+- Microsoft Authenticator
+- Authy
+- 1Password
+- Bitwarden
 
-3. **Podporované aplikácie:**
-   - Google Authenticator
-   - Microsoft Authenticator
-   - Authy
-   - 1Password
-   - Bitwarden
-
-4. **Potvrdenie aktivácie:**
-   - Zadajte 6-ciferný kód z aplikácie
-   - Kliknite "Potvrdiť a aktivovať"
+3. Zadajte 6-ciferný kód a potvrďte aktiváciu
 
 #### Záložné kódy
 
-**Generovanie kódov:**
 - Automaticky sa vygeneruje 10 záložných kódov
-- Každý kód môžete použiť iba raz
-- Uložte si ich na bezpečné miesto
-
-**Použitie záložných kódov:**
-- Pri prihlásení zadajte záložný kód namiesto 2FA
-- Kód sa po použití označí ako použitý
-- Odporúčame generovať nové kódy po použití
-
-**Obnova kódov:**
-1. Prihláste sa do systému
-2. Prejdite do Nastavení → Bezpečnosť
-3. Kliknite "Generovať nové záložné kódy"
-4. Stiahnite si nové kódy
+- Každý kód je jednorazový (po použití sa označí ako spotrebovaný)
+- **Uložte si ich na bezpečné miesto** – sú jediným spôsobom prístupu ak stratíte autentifikačnú aplikáciu
+- Nové kódy: Nastavenia → Upraviť → záložka 2FA → "Generovať nové záložné kódy"
 
 #### Prihlásenie s 2FA
 
-1. **Štandardné prihlásenie:**
-   - Zadajte používateľské meno a heslo
-   - Kliknite "Prihlásiť sa"
-
-2. **2FA overenie:**
-   - Budete presmerovaní na 2FA stránku
-   - Zadajte 6-ciferný kód z autentifikačnej aplikácie
-   - Alebo použite záložný kód
-
-3. **Úspešné prihlásenie:**
-   - Po správnom zadaní budete presmerovaní na hlavnú stránku
+1. Zadajte meno a heslo → "Prihlásiť sa"
+2. Zadajte 6-ciferný kód z aplikácie **alebo** záložný kód
+3. Po správnom zadaní ste presmerovaný na hlavnú stránku
 
 #### Vypnutie 2FA
 
-1. **Bezpečnostné overenie:**
-   - Zadajte aktuálne heslo
-   - Zadajte aktuálny 2FA kód
+2FA je možné vypnúť v Nastaveniach → Upraviť → záložka 2FA. Vyžaduje zadanie aktuálneho hesla a platného 2FA kódu.
 
-2. **Potvrdenie:**
-   - Kliknite "Vypnúť 2FA"
-   - Všetky záložné kódy sa deaktivujú
+⚠️ Vypnutie 2FA sa **neodporúča** – znižuje bezpečnosť účtu.
+
+### Obnova hesla
+
+Ak zabudnete heslo, je možná obnova cez Pushover:
+
+**Podmienky:**
+- Pushover musí byť nakonfigurovaný a funkčný
+- Musíte mať prístup k záložným kódom pre overenie identity
+
+**Postup:**
+1. Na prihlasovacej stránke kliknite **"Zabudnuté heslo"**
+2. Systém odošle jednorazový kód cez Pushover notifikáciu
+3. Zadajte kód a záložný 2FA kód
+4. Po overení nastavte nové heslo
 
 ### Správa používateľského účtu
 
-**Prístup k správe účtu:**
-1. Prihláste sa do systému
-2. V hornej časti kliknite na **"Upraviť"** vedľa vášho používateľského mena
-3. Otvorí sa modálne okno s troma záložkami: **Používateľské meno**, **Heslo** a **2FA**
+Prístup: Horná lišta → **"Upraviť"** vedľa mena → modálne okno s troma záložkami
 
 #### Zmena používateľského mena
 
-**Kedy použiť:**
-- Pri migrácii databázy medzi LXC kontajnermi
-- Zmena identity administrátora
-- Zjednotenie názvu účtu
-
-**Postup zmeny:**
-1. **Otvorte správu účtu:** Kliknite na "Upraviť" → záložka "Používateľské meno"
-2. **Zadanie nových údajov:**
-   - **Aktuálne meno** - Zobrazí sa automaticky (len na čítanie)
-   - **Nové meno** - Zadajte nové používateľské meno (3-50 znakov)
-   - **Potvrdenie hesla** - Zadajte vaše aktuálne heslo na overenie
-3. **Validácia:**
-   - Povolené znaky: písmená (a-z, A-Z), číslice (0-9), podčiarkovník (_), pomlčka (-)
-   - Minimálne 3 znaky, maximálne 50 znakov
-   - Nové meno nesmie už existovať v systéme
-4. **Úspešná zmena:**
-   - Používateľské meno sa okamžite aktualizuje
-   - Zostanete prihlásení pod novým menom
-   - Zobrazí sa potvrdzovacie hlásenie
+1. Záložka **"Používateľské meno"**
+2. Zadajte nové meno (3–50 znakov, povolené: `a-z`, `A-Z`, `0-9`, `_`, `-`)
+3. Overte aktuálnym heslom
+4. Po zmene zostanete prihlásení pod novým menom
 
 #### Zmena hesla
 
-**Postup zmeny:**
-1. **Otvorte správu účtu:** Kliknite na "Upraviť" → záložka "Heslo"
-2. **Zadanie hesiel:**
-   - **Staré heslo** - Aktuálne heslo na overenie
-   - **Nové heslo** - Nové heslo (minimálne 8 znakov)
-   - **Potvrdenie** - Zopakujte nové heslo
-3. **Úspešná zmena:**
-   - Heslo sa okamžite aktualizuje
-   - Zostanete prihlásení
-   - Zobrazí sa potvrdzovacie hlásenie
+1. Záložka **"Heslo"**
+2. Zadajte staré heslo, nové heslo (min. 8 znakov) a potvrdenie
+3. Po zmene zostanete prihlásení
 
-#### Správa 2FA
+### Šifrovanie a hašovanie
 
-**Prístup k 2FA nastaveniam:**
-1. **Otvorte správu účtu:** Kliknite na "Upraviť" → záložka "2FA"
-2. **Dostupné funkcie:**
-   - Zobrazenie počtu zostávajúcich záložných kódov
-   - Regenerovanie nových záložných kódov
-   - Správa 2FA nastavení
+| Typ dát | Metóda |
+|---|---|
+| SSH heslá zariadení | Fernet (AES 128-bit CBC + HMAC SHA256) |
+| SNMP community strings | Fernet |
+| TOTP secret | Fernet |
+| Pushover kľúče, FTP heslo | Fernet |
+| Používateľské heslá | Werkzeug (PBKDF2-SHA256) |
+| Záložné 2FA kódy | Werkzeug hash |
+| Tokeny obnovy hesla | Werkzeug hash |
 
-**Praktické použitie pri LXC migrácii:**
-```bash
-# 1. Záloha databázy na starom LXC
-cp /opt/mikrotik-manager/mikrotik_manager.db /root/backup.db
+Fernet kľúč: `/var/lib/mikrotik-manager/data/encryption.key` (44 bytes, chmod 600)
 
-# 2. Inštalácia na novom LXC
-bash install_in_lxc.sh
+### Session Management
 
-# 3. Kopírovanie databázy
-cp /root/backup.db /opt/mikrotik-manager/mikrotik_manager.db
-sudo chown mikrotik-manager:mikrotik-manager /opt/mikrotik-manager/mikrotik_manager.db
-
-# 4. Reštart služby
-sudo systemctl restart mikrotik-manager
-
-# 5. Zmena používateľského mena cez webové rozhranie
-# Prihláste sa → "Upraviť" → "Používateľské meno" → Zadajte nové meno
-```
-
-### Šifrovanie hesiel
-
-#### Automatické šifrovanie
-
-Systém automaticky šifruje:
-- **SSH heslá zariadení** - Fernet encryption (AES 128-bit v CBC mode)
-- **FTP heslá** - Fernet encryption (AES 128-bit v CBC mode)  
-- **Používateľské heslá** - bcrypt hashing (cost factor 12)
-
-#### Encryption Key Management
-
-**`/var/lib/mikrotik-manager/data/encryption.key`:**
-- **Algoritmus:** Fernet (AES 128-bit v CBC mode s HMAC SHA256)
-- **Veľkosť:** 44 bytes (32 bytes key + 12 bytes nonce)
-- **Generovanie:** `Fernet.generate_key()` pri prvom spustení
-- **Práva:** chmod 600 (read/write len pre owner)
-- **Použitie:** Šifrovanie SSH/FTP hesiel MikroTik zariadení
-
-#### Automatická migrácia
-
-Systém automaticky zabezpečuje:
-1. Detekciu nešifrovaných hesiel v databáze
-2. Automatické šifrovanie pri prvom spustení s novým kľúčom
-3. Logovanie bezpečnostných operácií
-4. Bezpečné prepísanie pôvodných dát
-5. Backward compatibility pre dešifrovanie
-
-### Session management
-
-#### Bezpečnosť sessions
-
-- **Flask sessions** s náhodným secret key
-- **Automatické vypršanie** po 24 hodinách nečinnosti
-- **Secure cookies** pri HTTPS pripojení
-
-#### Logout funkcie
-
-- **Manuálny logout** - Tlačidlo "Odhlásiť sa"
-- **Automatický logout** - Po vypršaní session
-- **Global logout** - Zrušenie všetkých aktívnych sessions
-
-### Session Management a Cookie Persistence
-
-#### Persistent SECRET_KEY
-
-#### Persistent SECRET_KEY
-
-**Bezpečnostné vlastnosti:**
-- Systém používa **persistent SECRET_KEY** uložený v súbore
-- Kľúč sa ukladá do `/var/lib/mikrotik-manager/data/secret.key`
+**Persistent SECRET_KEY:**
+- Uložený v `/var/lib/mikrotik-manager/data/secret.key` (32 bytes, chmod 600)
 - Sessions zostávajú platné aj po reštarte služby
-- Automatické vytvorenie kľúča pri prvom spustení
 
-**Implementácia:**
-```python
-app.config['SECRET_KEY'] = get_or_create_secret_key()  # Persistent kľúč
-```
+**Platnosť session:** 1 rok (365 dní) od prihlásenia
 
-#### Session Lifetime
+**Správanie:**
 
-**Nastavenie platnosti:**
-- **Platnosť cookie:** 1 rok (365 dní)
-- **Remember Me:** Automaticky zapnuté pre všetky prihlásenia
-- **Persistent sessions:** Prežijú reštart služby aj zariadenia
+| Scenár | Výsledok |
+|---|---|
+| Reštart služby | Stále prihlásený |
+| Zatvorenie prehliadača | Stále prihlásený |
+| Reštart zariadenia | Stále prihlásený |
+| Vymazanie cookies / app dát | Vyžaduje nový login |
+| Po 1 roku | Vyžaduje nový login |
+| Manuálny logout | Okamžité odhlásenie |
 
-#### Správanie v rôznych scenároch
-
-**🖥️ Web Browser:**
-```
-• Prihlásenie → platné 1 rok
-• Reštart služby → stále prihlásený
-• Zatvorenie prehliadača → stále prihlásený
-• Reštart počítača → stále prihlásený
-• Vymazanie cookies → vyžaduje nový login
-• Po 1 roku → vyžaduje nový login
-```
-
-**📱 Android APK:**
-```
-• Prihlásenie → platné 1 rok
-• Reštart služby → stále prihlásený
-• Zatvorenie aplikácie → stále prihlásený
-• Reštart telefónu → stále prihlásený
-• Vymazanie app dát → vyžaduje nový login
-• Po 1 roku → vyžaduje nový login
-```
-
-#### Bezpečnostné aspekty
-
-**Výhody persistent sessions:**
-- Pohodlie pre používateľov
-- Stabilné fungovanie mobilnej aplikácie
-- Predvídateľné správanie systému
-- Kontinuita služieb pri maintenance
-
-**Bezpečnostné opatrenia:**
-- **2FA povinnosť** - Aj pri dlhých sessions je nutná 2FA
-- **Silné heslá** - Požiadavka na kvalitné heslá
-- **Automatické vypršanie** - Sessions sa invalidujú po 1 roku
-- **Secure file permissions** - SECRET_KEY súbor má práva 600 (read/write owner only)
-
-#### Technické detaily
-
-**Súbory a umiestnenia:**
+**Reset všetkých sessions (ak je potrebný):**
 ```bash
-# Adresárová štruktúra
-/var/lib/mikrotik-manager/data/
-├── secret.key           # Flask session encryption key (32 bytes)
-├── encryption.key       # Password encryption key pre zariadenia (44 bytes)
-├── mikrotik_manager.db  # SQLite databáza s aplikačnými dátami
-└── backups/            # Priečinok pre backup súbory
-
-# Android WebView cookies
-/data/data/com.mikrotik.manager/app_webview/Cookies
-/data/data/com.mikrotik.manager/app_webview/Local Storage/
-
-# Práva na kľúče
-chmod 600 /var/lib/mikrotik-manager/data/secret.key
-chmod 600 /var/lib/mikrotik-manager/data/encryption.key
-```
-
-**Detailný popis súborov:**
-
-**`secret.key` (32 bytes):**
-- Flask SECRET_KEY pre session management
-- Podpisovanie a overovanie cookies
-- Automatické vytvorenie pri prvom štarte
-- Persistent medzi reštartami služby
-
-**`encryption.key` (44 bytes):**
-- Fernet encryption key pre heslá zariadení
-- Šifrovanie SSH hesiel MikroTik zariadení
-- Šifrovanie FTP hesiel pre backup upload
-- Automatická migrácia existujúcich hesiel
-
-**`mikrotik_manager.db` (SQLite):**
-- Hlavná databáza aplikácie
-- Všetky konfiguračné a monitoring dáta
-- Používateľské účty a 2FA nastavenia
-- História ping a SNMP monitoring
-
-**Cookie parametry:**
-```python
-# Session konfigurácia
-PERMANENT_SESSION_LIFETIME = timedelta(days=365)  # 1 rok
-SESSION_COOKIE_SECURE = True  # Len cez HTTPS
-SESSION_COOKIE_HTTPONLY = False  # WebView compatibility
-SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
-```
-
-#### Riešenie problémov s sessions
-
-**Ak sa sessions invalidujú:**
-1. Skontrolujte existenciu SECRET_KEY súboru
-2. Overte práva na súbor (600)
-3. Reštartujte službu pre vytvorenie nového kľúča
-
-**Pre reset sessions (ak je potrebný):**
-```bash
-# Zastavenie služby
-sudo systemctl stop mikrotik-manager
-
-# Odstránenie SECRET_KEY (vytvorí sa nový)
-sudo rm /var/lib/mikrotik-manager/data/secret.key
-
-# Spustenie služby
-sudo systemctl start mikrotik-manager
-```
-
-**Monitoring session aktivít:**
-```bash
-# Kontrola logov
-sudo journalctl -u mikrotik-manager -f
-
-# Sledovanie SECRET_KEY súboru
-ls -la /var/lib/mikrotik-manager/data/secret.key
+systemctl stop mikrotik-manager
+rm /var/lib/mikrotik-manager/data/secret.key
+systemctl start mikrotik-manager
 ```
 
 ### Databázová štruktúra
 
-#### SQLite databáza `mikrotik_manager.db`
-
-Aplikácia používa SQLite databázu pre ukladanie všetkých konfiguračných a monitoring dát.
-
 **Umiestnenie:** `/var/lib/mikrotik-manager/data/mikrotik_manager.db`
 
-#### Štruktúra tabuliek
+Databáza obsahuje tieto tabuľky:
 
-**1. `devices` - MikroTik zariadenia**
-```sql
-CREATE TABLE devices (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ip TEXT UNIQUE NOT NULL,           -- IP adresa zariadenia
-    name TEXT NOT NULL,                -- Popisný názov zariadenia
-    username TEXT NOT NULL,            -- SSH používateľské meno
-    password TEXT NOT NULL,            -- SSH heslo (šifrované)
-    low_memory BOOLEAN DEFAULT 0,      -- Režim pre zariadenia s málo RAM
-    snmp_community TEXT DEFAULT 'public', -- SNMP community string
-    status TEXT DEFAULT 'unknown',     -- Aktuálny stav zariadenia
-    last_backup TIMESTAMP,             -- Čas poslednej zálohy
-    last_snmp_data TEXT,              -- Posledné SNMP dáta (JSON)
-    snmp_interval_minutes INTEGER DEFAULT 0,     -- SNMP monitoring interval
-    last_snmp_check TIMESTAMP,         -- Čas poslednej SNMP kontroly
-    ping_interval_seconds INTEGER DEFAULT 0,     -- Ping monitoring interval
-    monitoring_paused BOOLEAN DEFAULT 0          -- Pozastavenie monitoringu
-);
-```
+- **`devices`** – zariadenia, prihlasovacie údaje (šifrované), monitoring stav, soft-delete (`deleted_at`, `purge_after`)
+- **`users`** – používateľské účty, hash hesla, TOTP secret (šifrovaný)
+- **`backup_codes`** – záložné 2FA kódy (hašované), stav použitia
+- **`password_recovery_tokens`** – jednorazové tokeny obnovy hesla (hašované), expirácia
+- **`ping_history`** – história ping monitoringu (timestamp, latencia, strata paketov, status)
+- **`snmp_history`** – história SNMP dát (CPU, teplota, pamäť, uptime)
+- **`update_schedule`** – plánované a prebiehajúce aktualizácie RouterOS
+- **`logs`** – systémové logy (info/warning/error)
+- **`settings`** – konfiguračné nastavenia (key-value)
 
-**2. `users` - Používateľské účty**
-```sql
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,     -- Používateľské meno
-    password TEXT NOT NULL,            -- Heslo (bcrypt hash)
-    totp_secret TEXT,                  -- 2FA TOTP tajný kľúč
-    totp_enabled BOOLEAN NOT NULL DEFAULT 0  -- Stav 2FA
-);
-```
-
-**3. `backup_codes` - 2FA záložné kódy**
-```sql
-CREATE TABLE backup_codes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,          -- Odkaz na users.id
-    code TEXT NOT NULL,                -- Záložný kód
-    created_at TIMESTAMP NOT NULL,     -- Čas vytvorenia
-    used BOOLEAN NOT NULL DEFAULT 0,   -- Stav použitia
-    used_at TIMESTAMP,                 -- Čas použitia
-    FOREIGN KEY (user_id) REFERENCES users (id)
-);
-```
-
-**4. `ping_history` - História ping monitoringu**
-```sql
-CREATE TABLE ping_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_id INTEGER NOT NULL,        -- Odkaz na devices.id
-    timestamp DATETIME NOT NULL,       -- Čas merania
-    avg_latency REAL,                  -- Priemerná latencia (ms)
-    packet_loss INTEGER NOT NULL DEFAULT 0, -- Strata paketov (%)
-    status TEXT NOT NULL,              -- Stav (online/offline/error)
-    FOREIGN KEY (device_id) REFERENCES devices (id)
-);
-```
-
-**5. `snmp_history` - História SNMP monitoringu**
-```sql
-CREATE TABLE snmp_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    device_id INTEGER NOT NULL,        -- Odkaz na devices.id
-    timestamp DATETIME NOT NULL,       -- Čas merania
-    cpu_load INTEGER,                  -- Zaťaženie CPU (%)
-    temperature INTEGER,               -- Teplota (°C)
-    memory_usage INTEGER,              -- Využitie pamäte (%)
-    uptime INTEGER,                    -- Uptime (sekundy)
-    total_memory INTEGER,              -- Celková pamäť (bytes)
-    free_memory INTEGER,               -- Voľná pamäť (bytes)
-    FOREIGN KEY (device_id) REFERENCES devices (id)
-);
-```
-
-**6. `logs` - Systémové logy**
-```sql
-CREATE TABLE logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME NOT NULL,       -- Čas logu
-    level TEXT NOT NULL,               -- Úroveň (info/warning/error)
-    message TEXT NOT NULL,             -- Správa
-    device_ip TEXT DEFAULT NULL       -- IP zariadenia (ak relevantné)
-);
-```
-
-**7. `settings` - Systémové nastavenia**
-```sql
-CREATE TABLE settings (
-    key TEXT PRIMARY KEY,              -- Názov nastavenia
-    value TEXT                         -- Hodnota nastavenia
-);
-```
-
-#### Údržba databázy
-
-**Zálohování databázy:**
+**Záloha databázy:**
 ```bash
-# Vytvorenie zálohy
+systemctl stop mikrotik-manager
 cp /var/lib/mikrotik-manager/data/mikrotik_manager.db /backup/mikrotik_db_$(date +%Y%m%d).db
-
-# Komprimovaná záloha
-sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db ".backup /backup/mikrotik_db_$(date +%Y%m%d).db"
-```
-
-**Optimalizácia databázy:**
-```bash
-# SQLite VACUUM operácia
-sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "VACUUM;"
-
-# Reindexovanie
-sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "REINDEX;"
-```
-
-**Štatistiky databázy:**
-```bash
-# Veľkosť tabuliek
-sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "
-SELECT name, COUNT(*) as records 
-FROM sqlite_master m LEFT JOIN (
-    SELECT 'devices' as name, COUNT(*) as cnt FROM devices UNION
-    SELECT 'users' as name, COUNT(*) as cnt FROM users UNION
-    SELECT 'ping_history' as name, COUNT(*) as cnt FROM ping_history UNION
-    SELECT 'snmp_history' as name, COUNT(*) as cnt FROM snmp_history UNION
-    SELECT 'logs' as name, COUNT(*) as cnt FROM logs
-) t ON m.name = t.name 
-WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%';"
-
-# Veľkosť databázového súboru
-ls -lh /var/lib/mikrotik-manager/data/mikrotik_manager.db
+systemctl start mikrotik-manager
 ```
 
 ---
 
 ## Riešenie problémov
 
-### Časté problémy a riešenia
+### Aplikácia sa nespustí
 
-#### 1. Aplikácia sa nespustí
-
-**Príznaky:**
-- Chyba pri spustení `python app.py`
-- Port 5000 nie je dostupný
-- Import errors
-
-**Riešenie:**
 ```bash
-# Kontrola Python verzie
-python3 --version  # Minimálne 3.8
+# Kontrola stavu služby
+systemctl status mikrotik-manager
+journalctl -u mikrotik-manager -f
 
-# Kontrola virtuálneho prostredia
+# Kontrola Python verzie (potrebná 3.11+)
+/opt/mikrotik-manager/venv/bin/python --version
+
+# Kontrola závislostí
+cd /opt/mikrotik-manager
 source venv/bin/activate
-pip list
-
-# Inštalácia chýbajúcich balíčkov
 pip install -r requirements.txt
 
-# Kontrola portov
-sudo netstat -tlnp | grep :5000
+# Kontrola portu
+ss -tlnp | grep :5000
 ```
 
-#### 2. Zariadenie sa nezálohovuje
+### Zariadenie sa nezálohovuje
 
-**Príznaky:**
-- "SSH connection failed"
-- "Authentication failed"
-- Timeout chyby
+**Príznaky:** "SSH connection failed", "Authentication failed", timeout
 
-**Riešenie:**
 ```bash
-# Manuálny test SSH pripojenia
+# Manuálny test SSH
 ssh admin@192.168.1.1
 
-# Kontrola MikroTik nastavení
+# MikroTik – kontrola SSH služby
 /ip service print
-/user print
-
-# Firewall kontrola
 /ip firewall filter print where dst-port=22
 ```
 
-**Časté príčiny:**
-- Nesprávne SSH credentials
+**Najčastejšie príčiny:**
+- Nesprávne SSH prihlasovacie údaje
 - SSH služba vypnutá na MikroTik
 - Firewall blokuje port 22
-- Sieťové problémy
 
-#### 3. SNMP monitoring nefunguje
+### SNMP monitoring nefunguje
 
-**Príznaky:**
-- "SNMP timeout"
-- Prázdne SNMP údaje
-- N/A hodnoty v grafoch
+**Príznaky:** "SNMP timeout", prázdne grafy, N/A hodnoty
 
-**Riešenie:**
 ```bash
 # Test SNMP z príkazového riadku
 snmpwalk -v2c -c public 192.168.1.1 1.3.6.1.2.1.1.1
+```
 
-# MikroTik SNMP konfigurácia
+**Na MikroTik:**
+```bash
 /snmp set enabled=yes
 /snmp community print
 ```
 
-**Kontrola:**
-- SNMP community name (predvolene "public")
-- SNMP port 161 otvorený
+**Kontrolný zoznam:**
+- Správny community string (predvolene `public`)
+- Port 161 UDP otvorený
 - SNMP verzia 2c
 
-#### 4. Webové rozhranie sa nenačíta
+### Updater – zariadenie nie je dostupné cez REST API
 
-**Príznaky:**
-- Blank stránka
-- JavaScript errors
-- 404/500 chyby
+**Príznaky:** Updater zobrazuje zariadenie ako offline napriek tomu, že ping funguje
 
-**Riešenie:**
+**Kontrola:**
+- MikroTik REST API musí byť zapnuté: `/ip service set www port=80 disabled=no` alebo `/ip service set www-ssl port=443 disabled=no`
+- Správne prihlasovacie údaje v MikroTik Manager
+- Firewall nesmie blokovať port 80/443
+
+### WebSocket / real-time aktualizácie nefungujú
+
+**Pri použití reverse proxy (nginx)** je nutné nastaviť WebSocket upgrade:
+
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_read_timeout 86400;
+```
+
+### Native Android APK sa nepripojí
+
+1. Skontrolujte IP adresu/doménu na setup obrazovke aplikácie
+2. Overte dostupnosť portu 5000 (alebo 443 cez nginx):
+   ```bash
+   ufw allow 5000
+   ```
+3. Skontrolujte, či je server dostupný zo siete mobilného zariadenia
+
+### Database problémy
+
 ```bash
-# Kontrola logov aplikácie
+# Kontrola integrity
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "PRAGMA integrity_check;"
+
+# Optimalizácia
+sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "VACUUM; REINDEX;"
+```
+
+### Čítanie logov
+
+```bash
+# Logy systemd služby
 journalctl -u mikrotik-manager -f
 
-# Kontrola disk space
-df -h
-
-# Kontrola pamäte
-free -h
-
-# Restart aplikácie
-sudo systemctl restart mikrotik-manager
-```
-
-#### 5. Database problémy
-
-**Príznaky:**
-- "Database locked"
-- Corrupt database errors
-- Pomalé načítavanie
-
-**Riešenie:**
-```bash
-# Kontrola databázy
-sqlite3 mikrotik_manager.db ".schema"
-
-# Backup databázy
-cp mikrotik_manager.db mikrotik_manager.db.backup
-
-# Repair database
-sqlite3 mikrotik_manager.db "PRAGMA integrity_check;"
-```
-
-#### 6. Native Android APK aplikácia sa nepripojí
-
-**Príznaky:**
-- Connection timeout  
-- SSL certificate errors
-- Network unreachable
-- Setup obrazovka sa nezobrazuje správne
-
-**Riešenie:**
-1. **Kontrola IP adresy servera v setup obrazovke**
-2. **Firewall nastavenia:**
-   ```bash
-   # Otvorenie portu 5000
-   sudo ufw allow 5000
-   ```
-3. **SSL certifikát** (ak používate HTTPS)
-4. **Android network permissions**
-
-### Debug a logging
-
-#### Zapnutie debug režimu
-
-1. **V web rozhraní:**
-   - Nastavenia → Logy a Debug
-   - Zapnite "Terminal debug"
-   - Zapnite "WebSocket debug"
-
-2. **V aplikácii:**
-   ```python
-   # V app.py
-   DEBUG = True
-   logger.setLevel(logging.DEBUG)
-   ```
-
-#### Čítanie logov
-
-**Systémové logy:**
-```bash
-# Journalctl logs
-sudo journalctl -u mikrotik-manager -f
-
-# Aplikačné logy
-tail -f /opt/mikrotik-manager/app.log
-```
-
-**Web logy:**
-- Real-time v debug paneli
-- Export cez Nastavenia → Logy
-- Filtrovanie podľa typu a dátumu
-
-#### Diagnostické nástroje
-
-**Network connectivity:**
-```bash
-# Ping test
-ping -c 4 192.168.1.1
-
-# Port connectivity
-telnet 192.168.1.1 22
-telnet 192.168.1.1 161
-```
-
-**SNMP testing:**
-```bash
-# Inštalácia SNMP utils
-sudo apt install snmp snmp-mibs-downloader
-
-# Test SNMP
-snmpget -v2c -c public 192.168.1.1 1.3.6.1.2.1.1.1.0
-```
-
-### Performance optimization
-
-#### Database optimization
-
-```sql
--- Vacuum database
-VACUUM;
-
--- Reindex
-REINDEX;
-
--- Analyze statistics
-ANALYZE;
-```
-
-#### Memory optimization
-
-**Pre nízko-pamäťové zariadenia:**
-- Zapnite "Low Memory Mode"
-- Znížte SNMP interval
-- Obmedzte počet uchovaných záloh
-
-**Server optimalizácia:**
-```bash
-# Zvýšenie swap
-sudo swapon --show
-sudo fallocate -l 1G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
+# Posledných 100 riadkov
+journalctl -u mikrotik-manager -n 100
 ```
 
 ---
 
 ## Často kladené otázky
 
-### Všeobecné otázky
+### Všeobecné
 
 **Q: Aké MikroTik zariadenia sú podporované?**
 
-A: Všetky zariadenia s RouterOS v6.x a v7.x. Testované na:
-- hEX series
-- CRS series  
-- CCR series
-- RB series
-- wAP series
+A: Všetky zariadenia s RouterOS v6.x a v7.x s dostupným SSH. Testované na hEX, CRS, CCR, RB, wAP sériách. Pre Updater je potrebné zapnuté REST API (HTTP/HTTPS).
 
 **Q: Môžem používať aplikáciu cez internet?**
 
 A: Áno, ale odporúčame:
-- Použitie HTTPS (SSL certifikát)
-- Zmenu predvoleného portu 5000
-- Firewall konfiguráciu
+- HTTPS cez reverse proxy (nginx)
 - VPN prístup pre vyššiu bezpečnosť
+- Silné heslo + povinná 2FA
 
 **Q: Koľko zariadení môže aplikácia spravovať?**
 
-A: Testované do 50 zariadení. Limit závisí od:
-- Výkonu servera
-- Dostupnej pamäte  
-- Sieťovej konektivity
-- SNMP intervalov
+A: Testované na 50+ zariadeniach. Limit závisí od výkonu servera a nastavených monitorovacích intervalov.
 
 ### Zálohovanie
 
-**Q: Ako často sa vytvárajú zálohy?**
+**Q: Ako obnoviť zálohu na MikroTik?**
 
-A: Záleží na nastavení:
-- Manuálne zálohy: na požiadanie
-- Automatické zálohy: podľa nastaveného plánu
-- Doporučený interval: denne až týždenne
+A: Dvoma spôsobmi:
+1. `.backup` súbor – nahrať cez Winbox / WebFig → Files → obnoviť
+2. `.rsc` súbor – importovať cez `/import file=export.rsc` v termináli
 
-**Q: Kde sa ukladajú backup súbory?**
+**Q: Kde sa ukladajú zálohy?**
 
-A: Lokálne v priečinku `backups/` a voliteľne na FTP server. Štruktúra:
-```
-backups/
-├── 192.168.1.1/
-│   ├── backup_2024-01-15_10-30-00.backup
-│   └── export_2024-01-15_10-30-00.rsc
-```
-
-**Q: Môžem obnoviť zálohu?**
-
-A: Áno, dvoma spôsobmi:
-1. Stiahnuť backup súbor a nahrať cez Winbox/WebFig
-2. Použiť .rsc súbor pre import nastavení
+A: Lokálne v `/var/lib/mikrotik-manager/data/backups/{ip}/` a voliteľne na FTP server.
 
 ### Monitoring
 
-**Q: Ako dlho sa uchovávajú monitoring dáta?**
-
-A: Predvolene:
-- Ping history: 30 dní
-- SNMP history: 30 dní  
-- Logy: 30 dní
-- Konfigurovateľné v nastaveniach
-
 **Q: Prečo sa nezobrazujú SNMP dáta?**
 
-A: Najčastejšie príčiny:
-- SNMP nie je zapnuté na MikroTik
-- Nesprávna SNMP community
-- Firewall blokuje port 161
-- Zariadenie nie je dostupné
+A: Najčastejšie príčiny: SNMP nie je zapnuté na zariadení, nesprávny community string, firewall blokuje UDP port 161, zariadenie nie je dostupné.
 
-**Q: Môžem pridať vlastné SNMP OID?**
+**Q: Ako dlho sa uchovávajú monitoring dáta?**
 
-A: Momentálne nie, ale je to na roadmape. Aktuálne podporované:
-- CPU load
-- Memory usage
-- Temperature  
-- Uptime
-- System info
+A: Predvolene 30 dní pre ping aj SNMP históriu. Konfigurovateľné v Nastaveniach.
+
+**Q: Prečo sa uptime a latencia menia pri zoom?**
+
+A: Metriky sa dynamicky prepočítavajú pre viditeľné časové okno – zobrazujú presné hodnoty pre zoomovaný výsek, nie celý rozsah.
+
+### Updater
+
+**Q: Čo sa stane ak aktualizácia zlyhá?**
+
+A: Systém loguje chybu a odošle Pushover notifikáciu (ak je nakonfigurovaná). Zariadenie sa označí ako "failed" v zozname plánov.
+
+**Q: Môžem aktualizovať zariadenie bez zálohy?**
+
+A: Áno, zálohu pred aktualizáciou je možné vypnúť v Nastaveniach → Updater → `updater_backup_before_update`.
+
+**Q: Ako funguje aktualizácia CHR/VM?**
+
+A: Systém automaticky detekuje VM/CHR zariadenia a preskočí firmware fázy (krok 4, 5, 6, 7). Vykoná sa len RouterOS aktualizácia a reboot.
 
 ### Bezpečnosť
 
-**Q: Sú heslá bezpečne uložené?**
+**Q: Sú heslá zariadení bezpečne uložené?**
 
-A: Áno:
-- SSH heslá: Fernet encryption
-- Používateľské heslá: bcrypt hashing
-- Database: SQLite s šifrovanými stĺpcami
-- Session: Flask sessions s náhodným kľúčom
+A: Áno – SSH heslá, SNMP community strings, FTP heslo a Pushover kľúče sú šifrované Fernet šifrovaním. Kľúč je v `/var/lib/mikrotik-manager/data/encryption.key` (chmod 600).
 
 **Q: Je 2FA povinné?**
 
-A: Nie, ale silne odporúčané, especially pre:
-- Internet prístup
-- Produkčné prostredie
-- Správu kritických zariadení
+A: Áno, 2FA je povinné pre prihlásenie. Je možné ho vypnúť, ale neodporúčame to – znižuje bezpečnosť.
 
-**Q: Aké typy autentifikácie sú podporované?**
+**Q: Čo sa stane ak stratím autentifikačnú aplikáciu?**
 
-A: Aplikácia podporuje lokálne používateľské účty s možnosťou 2FA autentifikácie.
-
-### Session Management a Prihlasovanie
+A: Použite záložný kód. Ak nemáte ani záložné kódy, je možná obnova cez Pushover (funkcia "Zabudnuté heslo" na prihlasovacej stránke) – vyžaduje funkčný Pushover.
 
 **Q: Ako dlho zostávam prihlásený?**
 
-A: Sessions majú platnosť **1 rok** a automaticky sa obnovujú pri:
-- Reštarte služby
-- Zatvorení prehliadača/APK  
-- Reštarte počítača/telefónu
-- Invalidujú sa po 1 roku alebo manuálnom logoute
+A: Session platí 1 rok. Reštart služby, zatvorenie prehliadača ani reštart počítača session nezruší – je uložená ako persistent cookie.
 
-**Q: Ako funguje session persistence?**
+**Q: Ako zrušiť všetky aktívne sessions?**
 
-A: Systém používa persistent SECRET_KEY, ktorý zabezpečuje stabilné sessions. Cookie persistence systém je optimalizovaný pre Android WebView aj web prehliadače.
-
-**Q: Je 1-ročná session bezpečná?**
-
-A: Áno, pri správnej konfigurácii:
-- Požaduje sa 2FA
-- Silné heslá sú povinné  
-- SECRET_KEY je chránený (chmod 600)
-- HTTPS komunikácia odporúčaná
-
-**Q: Môžem zmeniť dĺžku session?**
-
-A: Áno, v súbore `app.py`:
-```python
-# Pre kratšie sessions (napr. 24 hodín):
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
-
-# Pre dlhšie sessions (napr. 2 roky):
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=730)
-```
-
-**Q: Kde sa ukladá SECRET_KEY?**
-
-A: V súbore `/var/lib/mikrotik-manager/data/secret.key` s právami 600 (len owner read/write).
-
-**Q: Ako resetovať všetky sessions?**
-
-A: Odstráň SECRET_KEY súbor a reštartuj službu:
+A: Odstrán `secret.key` a reštartuj službu:
 ```bash
-sudo systemctl stop mikrotik-manager
-sudo rm /var/lib/mikrotik-manager/data/secret.key
-sudo systemctl start mikrotik-manager
+systemctl stop mikrotik-manager
+rm /var/lib/mikrotik-manager/data/secret.key
+systemctl start mikrotik-manager
 ```
 
-### Databáza a údržba
+### Migrácia
 
-**Q: Kde sa ukladajú všetky dáta aplikácie?**
+**Q: Ako migrovať MikroTik Manager na nový server?**
 
-A: V SQLite databáze `/var/lib/mikrotik-manager/data/mikrotik_manager.db` obsahujúcej:
-- Konfigurácia MikroTik zariadení (IP, mená, šifrované heslá)
-- Používateľské účty a 2FA nastavenia
-- História ping a SNMP monitoringu (30 dní predvolene)
-- Systémové logy a nastavenia
+A: Použite funkciu Export/Import:
+1. Starý server: Nastavenia → Exportovať ZIP
+2. Nový server: Nainštalovať MikroTik Manager
+3. Nový server: Registračná stránka → záložka "Importovať zo ZIP" → nahrať ZIP
+4. Prihlásiť sa pôvodnými údajmi
 
-**Q: Ako vytvoriť zálohu databázy?**
+**Q: Môžem zmeniť používateľské meno po migrácii?**
 
-A: Jednoduchým kopírovaním súboru:
-```bash
-sudo systemctl stop mikrotik-manager
-cp /var/lib/mikrotik-manager/data/mikrotik_manager.db /backup/
-sudo systemctl start mikrotik-manager
-```
+A: Áno – Horná lišta → Upraviť → záložka "Používateľské meno".
 
-**Q: Aká je štruktúra databázy?**
-
-A: Databáza obsahuje 8 hlavných tabuliek:
-- `devices` - MikroTik zariadenia a ich konfigurácia
-- `users` - Používateľské účty s 2FA
-- `backup_codes` - 2FA záložné kódy  
-- `ping_history` - História ping monitoringu
-- `snmp_history` - História SNMP dát (CPU, RAM, teplota)
-- `logs` - Systémové logy aplikácie
-- `settings` - Konfiguračné nastavenia
-
-**Q: Ako optimalizovať výkon databázy?**
-
-A: Pravidelná údržba:
-```bash
-# Optimalizácia databázy
-sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "VACUUM; REINDEX;"
-
-# Vymazanie starých monitoring dát (starších ako 30 dní)
-sqlite3 /var/lib/mikrotik-manager/data/mikrotik_manager.db "
-DELETE FROM ping_history WHERE timestamp < datetime('now', '-30 days');
-DELETE FROM snmp_history WHERE timestamp < datetime('now', '-30 days');"
-```
-
-**Q: Sú heslá zariadení bezpečne uložené?**
-
-A: Áno, všetky SSH/FTP heslá sú šifrované Fernet encryption (AES 128-bit) pomocou kľúča v `/var/lib/mikrotik-manager/data/encryption.key` s právami 600.
-
-### Technické otázky
+### Technické
 
 **Q: Aké sú systémové požiadavky?**
 
-A: Minimálne:
-- RAM: 512 MB (doporučené 1 GB)
-- CPU: 1 core (doporučené 2 cores)
-- Disk: 500 MB + miesto pre zálohy
-- OS: Linux (Ubuntu/Debian testované)
-
-**Q: Môžem spustiť aplikáciu v Dockeri?**
-
-A: Áno, Docker support je dostupný. Dockerfile v repozitári:
-```bash
-docker build -t mikrotik-manager .
-docker run -p 5000:5000 -v $(pwd)/data:/app/data mikrotik-manager
-```
+A: Minimálne: RAM 512 MB (odporúčané 1 GB), CPU 1 jadro, Disk 500 MB + miesto pre zálohy, Python 3.11+, Linux (Ubuntu/Debian).
 
 **Q: Podporuje aplikácia SSL/HTTPS?**
 
-A: Áno, konfigurácia cez reverse proxy (nginx):
+A: Áno, cez reverse proxy. Príklad nginx konfigurácia:
 
-**Štandardný nginx:**
 ```nginx
 server {
     listen 443 ssl;
     server_name yourdomain.com;
-    
+
     ssl_certificate /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
-    
+
     location / {
         proxy_pass http://localhost:5000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_redirect off;
+        proxy_read_timeout 86400;
     }
 }
 ```
 
-**Nginx Proxy Manager - Custom headers:**
-```
-proxy_set_header Upgrade $http_upgrade;
-proxy_set_header Connection "upgrade";
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-proxy_set_header Host $host;
-proxy_redirect off;
-```
+**Q: Aká je štruktúra databázy?**
 
-### Mobilná aplikácia
+A: SQLite databáza s 9 tabuľkami – `devices`, `users`, `backup_codes`, `password_recovery_tokens`, `ping_history`, `snmp_history`, `update_schedule`, `logs`, `settings`.
 
-**Q: Aké mobilné platformy sú podporované?**
+**Q: Funguje aplikácia na Windows?**
 
-A: Momentálne je dostupná Native Android APK aplikácia s Kotlin WebView.
-
-**Q: Ako aktualizovať mobilnú aplikáciu?**
-
-A: Regenerovať APK cez `bash build-apk.sh` a preinštalovať. Dáta sa uchovávajú na serveri.
-
-**Q: Aký je rozdiel medzi Native Android APK a webovým rozhraním?**
-
-A: Native Android APK poskytuje lepšiu výkonnosť, automatickú detekciu témy a optimalizovaný status bar handling pre Android.
-
-**Q: Funguje aplikácia offline?**
-
-A: Čiastočne - zobrazuje posledné známe dáta, ale vyžaduje pripojenie pre aktuálne informácie.
-
-### Podpora a vývoj
-
-**Q: Aké sú plánované funkcie?**
-
-A: Roadmapa vývoja zahŕňa:
-- Dashboard customization
-- API pre tretie strany
-- Rozšírenie SNMP monitoring
-- Scheduled reports
-- Performance optimizations
+A: Nie je primárne testovaná na Windows. Odporúčame Linux (Debian/Ubuntu) – napr. LXC kontajner na Proxmox.
 
 ---
 
 ## Záver
 
-MikroTik Manager je komplexné riešenie pre správu MikroTik infraštruktúry. Kombinuje jednoduché používanie s pokročilými funkciami monitoringu a automatizácie.
+MikroTik Manager je komplexné riešenie pre správu MikroTik infraštruktúry. Kombinuje jednoduché používanie s pokročilými funkciami monitoringu, automatizácie a vzdialenej aktualizácie zariadení.
 
 ### Kľúčové výhody:
 
-- **Centralizovaná správa** viacerých zariadení
-- **Automatické zálohovanie** s flexible scheduling
-- **Real-time monitoring** s grafickými reportmi
-- **Mobilný prístup** cez Android aplikáciu
-- **Bezpečnostné funkcie** s 2FA podporou
-- **Profesionálne riešenie** s aktívnym vývojom
+- **Centralizovaná správa** viacerých zariadení vrátane koša a obnovy
+- **Automatické zálohovanie** s flexibilným plánovaním a FTP uploadom
+- **Real-time monitoring** s interaktívnymi grafmi a WebSocket aktualizáciami
+- **Vzdialené aktualizácie** RouterOS, firmware a TLS certifikátov
+- **Mobilný prístup** cez Native Android aplikáciu
+- **Bezpečnostné funkcie** – povinná 2FA, Fernet šifrovanie, session persistence
+- **Migrácia** cez Export/Import ZIP
 
 ### Ďalšie kroky:
 
 1. **Inštalácia** podľa tohto manuálu
-2. **Konfigurácia** základných nastavení
+2. **Registrácia** účtu a nastavenie 2FA
 3. **Pridanie zariadení** do správy
-4. **Nastavenie monitoringu** a notifikácií
-5. **Pravidelné zálohovanie** kritických konfigurácií
+4. **Nastavenie monitoringu** a Pushover notifikácií
+5. **Nakonfigurovanie Updatera** pre plánované aktualizácie
+6. **Pravidelné zálohovanie** kritických konfigurácií
 
 ---
 
-*Manuál pre MikroTik Manager*
+*Manuál pre MikroTik Manager – github.com/spekulanter/mikrotik-manager*

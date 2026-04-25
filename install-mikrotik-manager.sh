@@ -11,7 +11,7 @@ function msg_ok() { echo -e "\\033[1;32mSUCCESS\\033[0m: $1"; }
 function msg_warn() { echo -e "\\033[1;33mWARNING\\033[0m: $1"; }
 
 # Premenné
-REPO_URL="https://github.com/spekulanter/mikrotik-manager.git"
+REPO_URL="https://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@github.com/spekulanter/mikrotik-manager.git"
 APP_DIR="/opt/mikrotik-manager"
 DATA_DIR="/var/lib/mikrotik-manager"
 SERVICE_FILE="/etc/systemd/system/mikrotik-manager.service"

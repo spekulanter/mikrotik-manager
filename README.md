@@ -21,11 +21,13 @@ cd /opt/mikrotik-manager
 bash build-apk.sh
 ```
 
+Poznámka: Build skript používa Android SDK 35 a Gradle 8.13 (targetSdk 35), optimalizované pre Android 15.
+
 APK súbor bude vytvorený ako `/opt/MT Manager.apk`
 
-**⚡ Native Android:** Aplikácia je teraz postavená na Native Android Kotlin WebView s optimalizovaným splash screen, vlastnou network-themed ikonou a eliminovanými blikaniami počas spúšťania (Android 15 kompatibilita).
+⚡ Native Android: Aplikácia je postavená na natívnej Android Kotlin WebView s optimalizovaným splash screen, vlastnou network-themed ikonou a eliminovanými prebliknutiami pri spúšťaní (optimalizované pre Android 15).
 
-**📦 APK vlastnosti:**
+📦 APK vlastnosti:
 - **Veľkosť:** 6.2 MB (optimalizovaná splash screen knižnica)
 - **Ikona:** Vlastná network-themed ikona s MikroTik zariadeniami
 - **Splash screen:** Rýchly tmavý splash bez prebliknutí

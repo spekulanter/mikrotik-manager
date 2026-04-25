@@ -251,6 +251,7 @@ def get_or_create_secret_key():
 app.config['SECRET_KEY'] = get_or_create_secret_key()
 # PRAKTICKÉ NASTAVENIE: 1 rok platnosť cookie (s persistent SECRET_KEY je to bezpečné)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=365)
+app.config['MAX_CONTENT_LENGTH'] = 512 * 1024 * 1024  # 512 MB – ochrana pred ZIP bomb
 
 # Pridanie ProxyFix pre správne spracovanie proxy hlavičiek (Nginx Proxy Manager)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -4196,11 +4197,15 @@ def bootstrap_import():
             os.chmod(os.path.join(DATA_DIR, 'encryption.key'), 0o600)
             os.chmod(os.path.join(DATA_DIR, 'secret.key'), 0o600)
 
-            # Zálohy (ak existujú v ZIP)
+            # Zálohy (ak existujú v ZIP) — path traversal ochrana cez realpath
             import time as _time
+            data_dir_real = os.path.realpath(DATA_DIR)
             backup_entries = [n for n in names if n.startswith('backups/') and not n.endswith('/')]
             for entry in backup_entries:
-                dest_path = os.path.join(DATA_DIR, entry)
+                dest_path = os.path.realpath(os.path.join(DATA_DIR, entry))
+                if not dest_path.startswith(data_dir_real + os.sep):
+                    logger.warning(f"Bootstrap import: odmietnutá podozrivá cesta: {entry}")
+                    continue
                 os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                 info = zf.getinfo(entry)
                 with zf.open(entry) as src, open(dest_path, 'wb') as dst:

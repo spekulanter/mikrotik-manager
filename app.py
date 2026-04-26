@@ -1953,11 +1953,34 @@ def list_backups():
         logger.error(f"Chyba pri načítaní zoznamu záloh: {e}")
         return "Chyba pri načítaní zoznamu záloh.", 500
 
+ALLOWED_BACKUP_EXTENSIONS = ('.backup', '.rsc')
+
+def validate_backup_filename(filename):
+    if not filename or os.path.isabs(filename) or filename != os.path.basename(filename):
+        raise ValueError("Nepovolený názov súboru.")
+    if not filename.endswith(ALLOWED_BACKUP_EXTENSIONS):
+        raise ValueError("Nepovolený typ súboru.")
+    return filename
+
+def resolve_backup_file_path(filename):
+    """Return a validated path for a backup file directly under BACKUP_DIR."""
+    safe_filename = validate_backup_filename(filename)
+
+    backup_root = os.path.realpath(BACKUP_DIR)
+    candidate_path = os.path.realpath(os.path.join(backup_root, safe_filename))
+    if os.path.commonpath([backup_root, candidate_path]) != backup_root:
+        raise ValueError("Nepovolená cesta k súboru.")
+    return candidate_path
+
 @app.route('/download_backup/<path:filename>')
 @login_required
 def download_backup(filename):
     try:
-        return send_from_directory(BACKUP_DIR, filename, as_attachment=True)
+        safe_filename = validate_backup_filename(filename)
+        resolve_backup_file_path(safe_filename)
+        return send_from_directory(BACKUP_DIR, safe_filename, as_attachment=True)
+    except ValueError as e:
+        return str(e), 400
     except FileNotFoundError:
         return "Súbor nebol nájdený.", 404
     except Exception as e:
@@ -1969,20 +1992,24 @@ def download_backup(filename):
 def delete_backup(filename):
     """API endpoint pre vymazanie záložného súboru lokálne aj z FTP servera."""
     try:
-        # Bezpečnostná kontrola - povoliť iba .backup a .rsc súbory
-        if not (filename.endswith('.backup') or filename.endswith('.rsc')):
-            return jsonify({'status': 'error', 'message': 'Nepovolený typ súboru.'}), 400
+        try:
+            safe_filename = validate_backup_filename(filename)
+            resolve_backup_file_path(safe_filename)
+        except ValueError as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 400
         
         # Získanie základného názvu súboru bez prípony
-        base_filename = os.path.splitext(filename)[0]
+        base_filename = os.path.splitext(safe_filename)[0]
         backup_file = base_filename + '.backup'
         rsc_file = base_filename + '.rsc'
         
         # Zoznam súborov na vymazanie
         files_to_delete = []
-        if os.path.exists(os.path.join(BACKUP_DIR, backup_file)):
+        backup_file_path = resolve_backup_file_path(backup_file)
+        rsc_file_path = resolve_backup_file_path(rsc_file)
+        if os.path.exists(backup_file_path):
             files_to_delete.append(backup_file)
-        if os.path.exists(os.path.join(BACKUP_DIR, rsc_file)):
+        if os.path.exists(rsc_file_path):
             files_to_delete.append(rsc_file)
         
         deleted_local = []
@@ -1990,7 +2017,7 @@ def delete_backup(filename):
         
         # Vymazanie lokálnych súborov
         for file_to_delete in files_to_delete:
-            local_file_path = os.path.join(BACKUP_DIR, file_to_delete)
+            local_file_path = resolve_backup_file_path(file_to_delete)
             try:
                 os.remove(local_file_path)
                 deleted_local.append(file_to_delete)

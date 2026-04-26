@@ -1857,6 +1857,13 @@ def setup_2fa():
     if current_user.totp_enabled:
         return redirect(url_for('index'))
     secret = current_user.totp_secret
+    if not secret:
+        new_secret = pyotp.random_base32()
+        encrypted_secret = encrypt_password(new_secret)
+        with get_db_connection() as conn:
+            conn.execute('UPDATE users SET totp_secret = ? WHERE id = ?', (encrypted_secret, current_user.id,))
+            conn.commit()
+        secret = new_secret
     uri = pyotp.totp.TOTP(secret).provisioning_uri(name=current_user.username, issuer_name="MikroTik Manager")
     img = qrcode.make(uri)
     buf = BytesIO()
@@ -1868,6 +1875,8 @@ def setup_2fa():
 @login_required
 def verify_2fa():
     totp_code = request.form.get('totp_code', '').strip()
+    if not current_user.totp_secret:
+        return redirect(url_for('setup_2fa'))
     if pyotp.TOTP(current_user.totp_secret).verify(totp_code):
         with get_db_connection() as conn:
             conn.execute('UPDATE users SET totp_enabled = 1 WHERE id = ?', (current_user.id,))
@@ -3087,6 +3096,38 @@ def handle_backup_codes():
         except Exception as e:
             logger.error(f"Chyba pri generovaní záložných kódov: {e}")
             return jsonify({'status': 'error', 'message': 'Chyba pri generovaní záložných kódov.'}), 500
+
+@app.route('/api/user/reset-2fa', methods=['POST'])
+@login_required
+def reset_2fa():
+    """Reset 2FA - vymaže TOTP secret a záložné kódy, používateľ musí nastaviť 2FA znovu"""
+    data = request.json
+    password = data.get('password')
+
+    if not password:
+        return jsonify({'status': 'error', 'message': 'Heslo je povinné.'}), 400
+
+    with get_db_connection() as conn:
+        user_data = conn.execute('SELECT password FROM users WHERE id = ?', (current_user.id,)).fetchone()
+
+    if not user_data or not check_password_hash(user_data['password'], password):
+        return jsonify({'status': 'error', 'message': 'Nesprávne heslo.'}), 401
+
+    try:
+        new_secret = pyotp.random_base32()
+        encrypted_secret = encrypt_password(new_secret)
+        with get_db_connection() as conn:
+            conn.execute('UPDATE users SET totp_secret = ?, totp_enabled = 0 WHERE id = ?', (encrypted_secret, current_user.id,))
+            conn.execute('DELETE FROM backup_codes WHERE user_id = ?', (current_user.id,))
+            conn.commit()
+
+        add_log('warning', f"Používateľ '{current_user.username}' resetoval 2FA – vyžaduje nové nastavenie.")
+        return jsonify({'status': 'success', 'message': '2FA bolo resetované. Nastavte nové 2FA.'})
+
+    except Exception as e:
+        logger.error(f"Chyba pri resete 2FA: {e}")
+        return jsonify({'status': 'error', 'message': 'Chyba pri resete 2FA.'}), 500
+
 
 @app.route('/api/user/disable-2fa', methods=['POST'])
 @login_required

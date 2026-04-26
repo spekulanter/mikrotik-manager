@@ -3288,6 +3288,13 @@
                                     <i class="fas fa-rotate text-xs"></i>Regenerovať záložné kódy
                                 </button>
                             </div>
+                            <div class="bg-gray-800 p-4 rounded-lg border border-red-900/40 mt-3">
+                                <p class="text-gray-400 text-sm mb-4">Reset 2FA vymaže aktuálny autentifikátor a záložné kódy. Budete ihneď presmerovaní na nastavenie nového 2FA.</p>
+                                <button id="reset2faBtn"
+                                    class="btn bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-lg text-sm flex items-center gap-2">
+                                    <i class="fas fa-arrow-rotate-left text-xs"></i>Resetovať 2FA
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -3345,6 +3352,30 @@
                 <button id="closeBackupCodesBtn"
                     class="btn btn-primary font-bold py-2 px-4 rounded-lg">Dokončiť</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Reset 2FA Confirmation Modal -->
+    <div id="reset2faModal"
+        class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="card p-8 rounded-lg w-full max-w-md modal-content">
+            <h2 class="text-xl font-bold text-white mb-2">Resetovať 2FA</h2>
+            <p class="text-gray-400 text-sm mb-4">Aktuálny autentifikátor a všetky záložné kódy budú vymazané. Po resete budete presmerovaní na nastavenie nového 2FA.</p>
+            <div id="reset2faMessage" class="hidden p-3 rounded-md mb-4 text-sm"></div>
+            <form id="reset2faForm" class="space-y-4">
+                <div>
+                    <label for="reset2faPasswordInput" class="block mb-1 font-semibold text-sm">Potvrďte heslom</label>
+                    <input type="password" id="reset2faPasswordInput"
+                        class="w-full p-2 rounded bg-gray-800 border border-gray-600" placeholder="Vaše aktuálne heslo" required>
+                </div>
+                <div class="flex justify-end gap-4 mt-6">
+                    <button type="button" id="cancelReset2faBtn"
+                        class="btn bg-gray-600 hover:bg-gray-700 py-2 px-4 rounded-lg">Zrušiť</button>
+                    <button type="submit" class="btn bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-lg">
+                        <i class="fas fa-arrow-rotate-left mr-1"></i>Resetovať
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -5174,7 +5205,17 @@
             document.getElementById('cancelAccountManageBtn').addEventListener('click', closeModal);
 
             // === Recovery Confirm Modal ===
-            function showRecoveryConfirm() {
+            async function showRecoveryConfirm() {
+                try {
+                    const data = await api.get('user/2fa-status');
+                    const remaining = data.remaining_backup_codes ?? data.remaining_codes ?? 0;
+                    if (remaining === 0) {
+                        showToast('Nemáte žiadne záložné kódy. Bez nich nie je možné obnoviť heslo. Najprv si vygenerujte záložné kódy v záložke 2FA.', 'warning');
+                        return;
+                    }
+                } catch (e) {
+                    // ak API zlyhá, necháme pokračovať štandardne
+                }
                 document.getElementById('recoveryConfirmModal').classList.remove('hidden');
             }
             function hideRecoveryConfirm() {
@@ -6084,6 +6125,56 @@
 
             document.getElementById('downloadCodesBtn').addEventListener('click', downloadBackupCodes);
             document.getElementById('printCodesBtn').addEventListener('click', printBackupCodes);
+
+            // Reset 2FA handlers
+            const reset2faModal = document.getElementById('reset2faModal');
+
+            document.getElementById('reset2faBtn').addEventListener('click', () => {
+                manageAccountModal.classList.add('hidden');
+                reset2faModal.classList.remove('hidden');
+                document.getElementById('reset2faPasswordInput').focus();
+            });
+
+            document.getElementById('cancelReset2faBtn').addEventListener('click', () => {
+                reset2faModal.classList.add('hidden');
+                manageAccountModal.classList.remove('hidden');
+                document.getElementById('reset2faForm').reset();
+                document.getElementById('reset2faMessage').classList.add('hidden');
+            });
+
+            document.getElementById('reset2faForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const password = document.getElementById('reset2faPasswordInput').value;
+                const msgDiv = document.getElementById('reset2faMessage');
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const originalHTML = submitBtn.innerHTML;
+
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Resetujem...';
+                msgDiv.classList.add('hidden');
+
+                try {
+                    const data = await api.post('user/reset-2fa', { password });
+                    if (data && data.status === 'success') {
+                        window.location.href = '/setup-2fa';
+                    } else {
+                        throw new Error(data?.message || 'Chyba pri resete 2FA');
+                    }
+                } catch (error) {
+                    const msg = error.message.includes('401') ? 'Nesprávne heslo' : (error.message || 'Chyba pri resete 2FA');
+                    msgDiv.textContent = msg;
+                    msgDiv.className = 'p-3 rounded-md mb-4 text-sm bg-red-900/50 text-red-300';
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalHTML;
+                }
+            });
+
+            reset2faModal.addEventListener('click', (e) => {
+                if (e.target === reset2faModal) {
+                    reset2faModal.classList.add('hidden');
+                    manageAccountModal.classList.remove('hidden');
+                }
+            });
 
             // Close modals when clicking outside
             [confirmPasswordModal, backupCodesModal].forEach(modal => {

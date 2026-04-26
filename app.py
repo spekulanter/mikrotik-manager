@@ -962,21 +962,45 @@ def before_request_handler():
     if not g.user_exists and request.endpoint not in ['register', 'static', 'bootstrap_import']:
         return redirect(url_for('register'))
 
+SENSITIVE_LOG_PATTERNS = [
+    re.compile(
+        r"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|"
+        r"snmp[_-]?community|ftp[_-]?password|totp|recovery[_-]?code|backup[_-]?code)\b"
+        r"(\s*[:=]\s*)"
+        r"([\"']?)[^\"'\s,;}]*(\3)"
+    ),
+    re.compile(r"(?i)(ftp|sftp|http|https)://([^:\s/@]+):([^@\s/]+)@"),
+]
+
+def sanitize_log_message(message):
+    """Mask likely secrets before writing to persistent logs or sockets."""
+    if message is None:
+        return ''
+
+    sanitized = str(message)
+    for pattern in SENSITIVE_LOG_PATTERNS:
+        if pattern.groups >= 4:
+            sanitized = pattern.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}[REDACTED]{m.group(4)}", sanitized)
+        else:
+            sanitized = pattern.sub(lambda m: f"{m.group(1)}://{m.group(2)}:[REDACTED]@", sanitized)
+    return sanitized
+
 def add_log(level, message, device_ip=None):
     level_map = {'INFO': logging.INFO, 'SUCCESS': logging.INFO, 'WARNING': logging.WARNING, 'ERROR': logging.ERROR, 'DEBUG': logging.DEBUG}
     log_level_int = level_map.get(level.upper(), logging.INFO)
-    logger.log(log_level_int, f"{f'[{device_ip}] ' if device_ip else ''}{message}")
+    safe_message = sanitize_log_message(message)
+    logger.log(log_level_int, f"{f'[{device_ip}] ' if device_ip else ''}{safe_message}")
     
     # Pokus o zápis do databázy a WebSocket
     try:
         with get_db_connection() as conn:
             # Vkladáme časovú značku priamo z aplikácie
-            conn.execute("INSERT INTO logs (timestamp, level, message, device_ip) VALUES (?, ?, ?, ?)", (datetime.now(), level, message, device_ip))
+            conn.execute("INSERT INTO logs (timestamp, level, message, device_ip) VALUES (?, ?, ?, ?)", (datetime.now(), level, safe_message, device_ip))
             conn.commit()
         
         # WebSocket emit s kontrolou pripojenia
         try:
-            socketio.emit('log_update', {'level': level, 'message': message, 'device_ip': device_ip, 'timestamp': datetime.now().isoformat()})
+            socketio.emit('log_update', {'level': level, 'message': safe_message, 'device_ip': device_ip, 'timestamp': datetime.now().isoformat()})
         except Exception as ws_error:
             logger.warning(f"WebSocket emit pre log zlyhal: {ws_error}")
             
@@ -984,7 +1008,7 @@ def add_log(level, message, device_ip=None):
         logger.error(f"Nepodarilo sa zapísať log do databázy: {e}")
         # Aj pri chybe sa pokúsime odoslať cez WebSocket
         try:
-            socketio.emit('log_update', {'level': 'error', 'message': f'Chyba pri zápise logu: {message}', 'device_ip': device_ip, 'timestamp': datetime.now().isoformat()})
+            socketio.emit('log_update', {'level': 'error', 'message': f'Chyba pri zápise logu: {safe_message}', 'device_ip': device_ip, 'timestamp': datetime.now().isoformat()})
         except:
             pass  # Ak ani WebSocket nefunguje, nevadí
 

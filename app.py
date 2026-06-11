@@ -114,6 +114,8 @@ SETTING_LABELS = {
     'notify_device_purged': 'Notifikácia: zariadenie automaticky vymazané z koša',
     'updater_backup_before_update': 'Záloha pred aktualizáciou',
     'updater_post_backup_delay': 'Pauza po zálohe pred aktualizáciou',
+    'cert_www_port': 'Port služby www (HTTP)',
+    'cert_www_ssl_port': 'Port služby www-ssl (HTTPS)',
     'viewport': 'Režim zobrazenia',
     'deleted_device_retention_days': 'Uchovávanie zmazaných zariadení (dni)'
 }
@@ -204,7 +206,9 @@ DEFAULT_SETTING_VALUES = {
     'updater_backup_before_update': 'true',
     'updater_post_backup_delay': '10',
     'updater_stabilization_delay': '120',
-    'updater_pre_reboot_delay': '20'
+    'updater_pre_reboot_delay': '20',
+    'cert_www_port': '80',
+    'cert_www_ssl_port': '443'
 }
 
 PASSWORD_RECOVERY_CODE_LENGTH = 8
@@ -755,7 +759,8 @@ def init_database():
                 snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
                 last_backup TIMESTAMP, last_snmp_data TEXT, snmp_interval_minutes INTEGER DEFAULT 0,
                 last_snmp_check TIMESTAMP, ping_interval_seconds INTEGER DEFAULT 0,
-                ping_retry_interval_seconds INTEGER DEFAULT 0, monitoring_paused BOOLEAN DEFAULT 0
+                ping_retry_interval_seconds INTEGER DEFAULT 0, monitoring_paused BOOLEAN DEFAULT 0,
+                cert_www_port INTEGER DEFAULT 0, cert_www_ssl_port INTEGER DEFAULT 0
             )
         ''')
         # Pridanie nových stĺpcov pre existujúce databázy
@@ -777,6 +782,14 @@ def init_database():
             pass
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN monitoring_paused BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN cert_www_port INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN cert_www_ssl_port INTEGER DEFAULT 0')
         except sqlite3.OperationalError:
             pass
         try:
@@ -913,6 +926,8 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_post_backup_delay', '10'))  # Pauza po zálohe pred aktualizáciou
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_stabilization_delay', '120'))  # Pauza po reštarte OS (krok 6)
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('updater_pre_reboot_delay', '20'))  # Pauza pred finálnym reštartom (krok 8)
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('cert_www_port', '80'))  # HTTP port služby www pre Updater/certifikáty
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('cert_www_ssl_port', '443'))  # HTTPS port služby www-ssl pre Updater
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retries', '3'))  # Počet neúspešných pokusov pred označením offline
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_timeout', '5'))  # Timeout pre jeden ping
         additional_defaults = {
@@ -2181,6 +2196,62 @@ def fetch_mikrotik_rss():
         logger.error(f"Failed to fetch MikroTik RSS: {e}")
         return None
 
+def parse_int_setting(value, default, min_value=None, max_value=None):
+    try:
+        parsed = int(value)
+        if min_value is not None and parsed < min_value:
+            return default
+        if max_value is not None and parsed > max_value:
+            return default
+        return parsed
+    except (TypeError, ValueError):
+        return default
+
+
+def parse_port_setting(value, default):
+    return parse_int_setting(value, default, 1, 65535)
+
+
+def get_mapping_value(mapping, key, default=None):
+    try:
+        if mapping is None:
+            return default
+        if hasattr(mapping, 'keys') and key in mapping.keys():
+            return mapping[key]
+        if isinstance(mapping, dict):
+            return mapping.get(key, default)
+    except Exception:
+        pass
+    return default
+
+
+def get_updater_web_ports(settings=None, device=None):
+    if settings is None:
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                "SELECT key, value FROM settings WHERE key IN (?, ?)",
+                ('cert_www_port', 'cert_www_ssl_port')
+            ).fetchall()
+            settings = {row['key']: row['value'] for row in rows}
+
+    http_port = parse_port_setting(settings.get('cert_www_port'), 80)
+    https_port = parse_port_setting(settings.get('cert_www_ssl_port'), 443)
+
+    device_http_port = parse_int_setting(get_mapping_value(device, 'cert_www_port'), 0, 0, 65535)
+    device_https_port = parse_int_setting(get_mapping_value(device, 'cert_www_ssl_port'), 0, 0, 65535)
+    if device_http_port > 0:
+        http_port = device_http_port
+    if device_https_port > 0:
+        https_port = device_https_port
+
+    return http_port, https_port
+
+
+def routeros_rest_url(scheme, ip, endpoint, http_port=None, https_port=None):
+    port = https_port if scheme == 'https' else http_port
+    return f"{scheme}://{ip}:{port}/rest/{endpoint.lstrip('/')}"
+
+
 def mk_api(device_id, method, endpoint, payload=None, timeout_val=20):
     with get_db_connection() as conn:
         device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
@@ -2191,10 +2262,11 @@ def mk_api(device_id, method, endpoint, payload=None, timeout_val=20):
     ip = device['ip']
     username = device['username']
     password = device['password']
+    http_port, https_port = get_updater_web_ports(device=device)
     
     # Skúsime najprv HTTPS, ak zlyhá (napr. zariadenie nemá certifikát), fallback na HTTP
     for scheme in ['https', 'http']:
-        url = f"{scheme}://{ip}/rest/{endpoint.lstrip('/')}"
+        url = routeros_rest_url(scheme, ip, endpoint, http_port, https_port)
         try:
             response = requests.request(
                 method=method,
@@ -2264,12 +2336,14 @@ _manual_bulk_groups = {}
 _recent_updates: set = set()
 
 
-def _do_renew_certificate(ip, username, password, days):
-    """Obnoví TLS certifikát WebCert na MikroTik zariadení cez HTTP (port 80).
+def _do_renew_certificate(ip, username, password, days, http_port=None):
+    """Obnoví TLS certifikát WebCert na MikroTik zariadení cez HTTP službu www.
     Vracia (success: bool, message: str)."""
+    if http_port is None:
+        http_port, _ = get_updater_web_ports()
 
     def http_api(method, endpoint, payload=None, timeout=20):
-        url = f"http://{ip}/rest/{endpoint.lstrip('/')}"
+        url = routeros_rest_url('http', ip, endpoint, http_port=http_port)
         try:
             r = requests.request(method, url, auth=(username, password), json=payload, timeout=timeout)
             if r.status_code in [200, 201, 202]:
@@ -2371,6 +2445,7 @@ def check_certificates_expiry():
                 renewal_days = int(settings.get('cert_auto_renewal_days', 365))
             except (TypeError, ValueError):
                 renewal_days = 365
+            http_port, https_port = get_updater_web_ports(settings, device)
 
             today_str = datetime.now().strftime('%Y-%m-%d')
 
@@ -2396,7 +2471,7 @@ def check_certificates_expiry():
                 for scheme in ['https', 'http']:
                     try:
                         r = requests.get(
-                            f"{scheme}://{ip}/rest/system/identity",
+                            routeros_rest_url(scheme, ip, 'system/identity', http_port, https_port),
                             auth=(username, password),
                             verify=False,
                             timeout=3
@@ -2415,7 +2490,7 @@ def check_certificates_expiry():
                 # Fetch cert via HTTP (consistent with cert renewal flow)
                 try:
                     r = requests.get(
-                        f"http://{ip}/rest/certificate",
+                        routeros_rest_url('http', ip, 'certificate', http_port=http_port),
                         params={'name': 'WebCert'},
                         auth=(username, password),
                         timeout=5
@@ -2438,7 +2513,7 @@ def check_certificates_expiry():
 
                 if days_remaining <= warning_days:
                     logger.info(f"Auto-renewing cert for {device_name} ({ip}), {days_remaining} days remaining.")
-                    success, message = _do_renew_certificate(ip, username, password, final_renewal_days)
+                    success, message = _do_renew_certificate(ip, username, password, final_renewal_days, http_port=http_port)
 
                     if success:
                         add_log('info', f'Certifikát automaticky obnovený ({final_renewal_days} dní). Zostatok bol {days_remaining} dní.', device_ip=ip)
@@ -2487,11 +2562,12 @@ def api_updater_ping(device_id):
     ip = device_dec['ip']
     username = device_dec['username']
     password = device_dec['password']
+    http_port, https_port = get_updater_web_ports(device=device_dec)
 
     for scheme in ['https', 'http']:
         try:
             r = requests.get(
-                f"{scheme}://{ip}/rest/system/identity",
+                routeros_rest_url(scheme, ip, 'system/identity', http_port, https_port),
                 auth=(username, password),
                 verify=False,
                 timeout=2
@@ -2661,10 +2737,12 @@ def api_updater_device(device_id):
     cert_expiry = None
     with get_db_connection() as conn:
         device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
+        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+    http_port, https_port = get_updater_web_ports(settings, device)
     if device:
         device_dec = get_device_with_decrypted_password(dict(device))
         try:
-            requests.get(f"https://{device_dec['ip']}/rest/system/identity",
+            requests.get(routeros_rest_url('https', device_dec['ip'], 'system/identity', https_port=https_port),
                         auth=(device_dec['username'], device_dec['password']),
                         verify=False, timeout=3)
             ssl_ok = True
@@ -2674,7 +2752,7 @@ def api_updater_device(device_id):
         # Načítanie platnosti certifikátu cez HTTP (konzistentné s cert flow)
         try:
             r = requests.get(
-                f"http://{device_dec['ip']}/rest/certificate",
+                routeros_rest_url('http', device_dec['ip'], 'certificate', http_port=http_port),
                 params={'name': 'WebCert'},
                 auth=(device_dec['username'], device_dec['password']),
                 timeout=5
@@ -2696,10 +2774,8 @@ def api_updater_device(device_id):
 
     
     # Pridanie dynamických nastavení z databázy
-    with get_db_connection() as conn:
-        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
-        cert_expiry_warning_days = int(settings.get('cert_expiry_warning_days', 10))
-        cert_auto_renewal_days = int(settings.get('cert_auto_renewal_days', 180))
+    cert_expiry_warning_days = parse_int_setting(settings.get('cert_expiry_warning_days'), 10, 1, 365)
+    cert_auto_renewal_days = parse_int_setting(settings.get('cert_auto_renewal_days'), 180, 1, 3650)
 
     if device and dict(device).get('cert_auto_renewal_days'):
         final_cert_days = int(dict(device)['cert_auto_renewal_days'])
@@ -2715,6 +2791,8 @@ def api_updater_device(device_id):
         'cert_auto_renewal_days': final_cert_days,
         'is_custom_cert_days': is_custom_cert_days,
         'cert_expiry_warning_days': cert_expiry_warning_days,
+        'cert_www_port': http_port,
+        'cert_www_ssl_port': https_port,
         'os': {
             'installed-version': os_info.get('installed-version', 'N/A'),
             'latest-version': os_info.get('latest-version', 'N/A'),
@@ -2789,8 +2867,9 @@ def api_updater_certificate(device_id):
     ip = device_dec['ip']
     username = device_dec['username']
     password = device_dec['password']
+    http_port, _ = get_updater_web_ports(device=device_dec)
 
-    success, message = _do_renew_certificate(ip, username, password, days)
+    success, message = _do_renew_certificate(ip, username, password, days, http_port=http_port)
 
     if success:
         add_log('info', f'Nový TLS certifikát vygenerovaný ({days} dní) a aplikovaný na www-ssl.', device_ip=ip)
@@ -3238,7 +3317,7 @@ def handle_devices():
         if request.method == 'GET':
             # Include all necessary fields including status and last_snmp_data
             devices = []
-            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, monitoring_paused, status, last_snmp_data, last_backup FROM devices WHERE deleted_at IS NULL ORDER BY LOWER(name)').fetchall():
+            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port, monitoring_paused, status, last_snmp_data, last_backup FROM devices WHERE deleted_at IS NULL ORDER BY LOWER(name)').fetchall():
                 device = get_device_with_decrypted_password(dict(row))
                 # Convert last_backup to ISO format with UTC timezone for consistent parsing across browsers
                 if device.get('last_backup'):
@@ -3252,14 +3331,36 @@ def handle_devices():
                 devices.append(device)
             return jsonify(devices)
         if request.method == 'POST':
-            data = request.json
+            data = request.json or {}
+
+            def parse_device_port_override(key, label):
+                raw_value = data.get(key, 0)
+                if raw_value in (None, ''):
+                    raw_value = 0
+                try:
+                    port = int(raw_value)
+                except (ValueError, TypeError):
+                    return None, jsonify({'status': 'error', 'message': f'Neplatná hodnota pre {label}'}), 400
+                if port < 0 or port > 65535:
+                    return None, jsonify({'status': 'error', 'message': f'{label} musí byť 0 (globálne) alebo 1-65535'}), 400
+                return port, None, None
+
+            new_cert_www_port, error_response, error_code = parse_device_port_override('cert_www_port', 'Port služby www (HTTP)')
+            if error_response:
+                return error_response, error_code
+            new_cert_www_ssl_port, error_response, error_code = parse_device_port_override('cert_www_ssl_port', 'Port služby www-ssl (HTTPS)')
+            if error_response:
+                return error_response, error_code
+
             try:
                 if data.get('id'):
                     # Získame staré nastavenia pre detekciu zmien intervalov
-                    old_device = conn.execute('SELECT snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
+                    old_device = conn.execute('SELECT snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
                     old_snmp_interval = old_device['snmp_interval_minutes'] if old_device else 0
                     old_ping_interval = old_device['ping_interval_seconds'] if old_device else 0
                     old_ping_retry_interval = old_device['ping_retry_interval_seconds'] if old_device else 0
+                    old_cert_www_port = old_device['cert_www_port'] if old_device else 0
+                    old_cert_www_ssl_port = old_device['cert_www_ssl_port'] if old_device else 0
                     new_snmp_interval = data.get('snmp_interval_minutes', 0)
                     new_ping_interval = data.get('ping_interval_seconds', 0)
                     new_ping_retry_interval = data.get('ping_retry_interval_seconds', 0)
@@ -3270,16 +3371,18 @@ def handle_devices():
                     if data.get('password'):
                         # Ak je zadané nové heslo, aktualizujeme všetko vrátane hesla
                         encrypted_password = encrypt_password(data['password'])
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=? AND deleted_at IS NULL",
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
                                    (device_name, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
                                     encrypted_snmp_community, new_snmp_interval,
-                                    new_ping_interval, new_ping_retry_interval, data['id']))
+                                    new_ping_interval, new_ping_retry_interval,
+                                    new_cert_www_port, new_cert_www_ssl_port, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=? WHERE id=? AND deleted_at IS NULL",
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
                                    (device_name, data['ip'], data['username'], data.get('low_memory', False),
                                     encrypted_snmp_community, new_snmp_interval,
-                                    new_ping_interval, new_ping_retry_interval, data['id']))
+                                    new_ping_interval, new_ping_retry_interval,
+                                    new_cert_www_port, new_cert_www_ssl_port, data['id']))
                     conn.commit()
                     
                     change_messages = []
@@ -3292,6 +3395,10 @@ def handle_devices():
                         change_messages.append(f"Ping interval {old_ping_interval}→{new_ping_interval} s")
                     if old_ping_retry_interval != new_ping_retry_interval:
                         change_messages.append(f"Retry interval {old_ping_retry_interval}→{new_ping_retry_interval} s")
+                    if old_cert_www_port != new_cert_www_port:
+                        change_messages.append(f"www port {old_cert_www_port}→{new_cert_www_port}")
+                    if old_cert_www_ssl_port != new_cert_www_ssl_port:
+                        change_messages.append(f"www-ssl port {old_cert_www_ssl_port}→{new_cert_www_ssl_port}")
 
                     if change_messages:
                         add_log('info', f"Zariadenie {data['ip']} aktualizované: " + ", ".join(change_messages))
@@ -3313,10 +3420,11 @@ def handle_devices():
                     cursor = conn.cursor()
                     encrypted_password = encrypt_password(data['password'])
                     encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
-                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                  (data['name'].strip(), data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
                                   encrypted_snmp_community, data.get('snmp_interval_minutes', 0),
-                                  data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0)))
+                                  data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0),
+                                  new_cert_www_port, new_cert_www_ssl_port))
                     device_id = cursor.lastrowid
                     conn.commit()
                     add_log('info', f"Zariadenie {data['ip']} pridané.")
@@ -3858,6 +3966,20 @@ def handle_settings():
                         return jsonify({'status': 'error', 'message': 'Uchovávanie zmazaných zariadení musí byť 1-90 dní'}), 400
                 except (ValueError, TypeError):
                     return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre uchovávanie zmazaných zariadení'}), 400
+
+            # Validácia portov MikroTik web služieb používaných Updaterom
+            for port_key, port_label in (
+                ('cert_www_port', 'Port služby www (HTTP)'),
+                ('cert_www_ssl_port', 'Port služby www-ssl (HTTPS)')
+            ):
+                port_value = request.json.get(port_key)
+                if port_value is not None:
+                    try:
+                        port_int = int(port_value)
+                        if port_int < 1 or port_int > 65535:
+                            return jsonify({'status': 'error', 'message': f'{port_label} musí byť 1-65535'}), 400
+                    except (ValueError, TypeError):
+                        return jsonify({'status': 'error', 'message': f'Neplatná hodnota pre {port_label}'}), 400
             
             # Načítame pôvodné nastavenia pre porovnanie zmien
             old_settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}

@@ -1257,6 +1257,13 @@
                         <input type="text" id="ftp_directory" name="ftp_directory"
                             class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
                     </div>
+                    <div class="lg:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3">
+                        <button type="button" id="testFtpBtn"
+                            class="btn bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-5 rounded-lg flex items-center justify-center gap-2 text-sm">
+                            <i class="fas fa-plug"></i> Otestovať spojenie
+                        </button>
+                        <div id="ftpTestStatus" class="hidden text-sm"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1439,18 +1446,18 @@
                     return {};
                 }
 
+                let data = null;
                 try {
-                    const data = await res.json();
-                    if (!res.ok) {
-                        throw new Error(data.message || `HTTP ${res.status}: ${res.statusText}`);
-                    }
-                    return data;
+                    data = await res.json();
                 } catch (error) {
-                    if (!res.ok) {
-                        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-                    }
-                    throw error;
+                    data = null;
                 }
+
+                if (!res.ok) {
+                    throw new Error(data?.message || `HTTP ${res.status}: ${res.statusText}`);
+                }
+
+                return data || {};
             },
 
             get: async function (endpoint) {
@@ -1708,6 +1715,41 @@
 
         // Event listeners
         document.getElementById('settingsForm').addEventListener('submit', saveSettings);
+
+        document.getElementById('testFtpBtn').addEventListener('click', async () => {
+            const button = document.getElementById('testFtpBtn');
+            const statusEl = document.getElementById('ftpTestStatus');
+            const iconEl = button.querySelector('i');
+            const data = {
+                ftp_server: document.getElementById('ftp_server').value,
+                ftp_port: document.getElementById('ftp_port').value,
+                ftp_username: document.getElementById('ftp_username').value,
+                ftp_password: document.getElementById('ftp_password').value,
+                ftp_directory: document.getElementById('ftp_directory').value
+            };
+
+            button.disabled = true;
+            button.classList.add('opacity-70', 'cursor-not-allowed');
+            iconEl.className = 'fas fa-spinner fa-spin';
+            statusEl.className = 'text-sm text-blue-300';
+            statusEl.textContent = 'Testujem FTP spojenie...';
+
+            try {
+                const result = await api.post('settings/ftp/test', data);
+                statusEl.className = 'text-sm text-green-400';
+                statusEl.textContent = result.message || 'FTP spojenie je funkčné.';
+                showNotification('FTP spojenie je funkčné', 'success');
+            } catch (error) {
+                const message = error?.message || 'FTP spojenie zlyhalo';
+                statusEl.className = 'text-sm text-red-400';
+                statusEl.textContent = message.replace(/^HTTP \d+:\s*/, '');
+                showNotification('FTP spojenie zlyhalo', 'error');
+            } finally {
+                button.disabled = false;
+                button.classList.remove('opacity-70', 'cursor-not-allowed');
+                iconEl.className = 'fas fa-plug';
+            }
+        });
 
         document.getElementById('testPushoverBtn').addEventListener('click', async () => {
             const type = document.getElementById('testNotifType').value;

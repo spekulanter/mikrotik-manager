@@ -4080,6 +4080,51 @@ def handle_settings():
                 'status': 'success'
             })
 
+@app.route('/api/settings/ftp/test', methods=['POST'])
+@login_required
+def test_ftp_settings():
+    data = request.get_json(silent=True) or {}
+    server = str(data.get('ftp_server') or '').strip()
+    username = str(data.get('ftp_username') or '').strip()
+    password = str(data.get('ftp_password') or '')
+    directory = str(data.get('ftp_directory') or '').strip()
+    port_value = data.get('ftp_port') or DEFAULT_SETTING_VALUES.get('ftp_port', '21')
+
+    if not server:
+        return jsonify({'status': 'error', 'message': 'FTP server je povinný.'}), 400
+    if not username:
+        return jsonify({'status': 'error', 'message': 'FTP používateľ je povinný.'}), 400
+    if not password:
+        return jsonify({'status': 'error', 'message': 'FTP heslo je povinné.'}), 400
+
+    try:
+        port = int(port_value)
+        if port < 1 or port > 65535:
+            return jsonify({'status': 'error', 'message': 'FTP port musí byť 1-65535.'}), 400
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre FTP port.'}), 400
+
+    try:
+        with FTP(timeout=10) as ftp:
+            ftp.connect(server, port, timeout=10)
+            ftp.login(username, password)
+            if directory:
+                ftp.cwd(directory)
+            ftp.voidcmd('NOOP')
+
+        add_log('info', f"FTP spojenie úspešne otestované ({server}:{port}).")
+        return jsonify({
+            'status': 'success',
+            'message': 'FTP spojenie je funkčné.'
+        })
+    except Exception as e:
+        error_message = str(e) or e.__class__.__name__
+        add_log('warning', f"Test FTP spojenia zlyhal ({server}:{port}): {error_message}")
+        return jsonify({
+            'status': 'error',
+            'message': f'FTP spojenie zlyhalo: {error_message}'
+        }), 400
+
 @app.route('/api/notifications/test', methods=['POST'])
 @login_required
 def test_notification():

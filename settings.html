@@ -797,9 +797,9 @@
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label for="ping_heartbeat_interval" class="block mb-2 font-medium">Globálny ping
+                                <label for="ping_check_interval_seconds" class="block mb-2 font-medium">Globálny ping
                                     interval (sekundy)</label>
-                                <input type="number" id="ping_heartbeat_interval" name="ping_heartbeat_interval"
+                                <input type="number" id="ping_check_interval_seconds" name="ping_check_interval_seconds"
                                     class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                     value="300" min="20" max="86400">
                                 <small class="text-gray-400 block mt-1">Bežný interval ping testov. Minimálne 20s,
@@ -1697,7 +1697,7 @@
                     showNotification('Nastavenia boli úspešne uložené', 'success');
 
                     // Notify monitoring page of settings change
-                    localStorage.setItem('settingsChanged', 'true');
+                    localStorage.setItem('settingsChanged', Date.now().toString());
 
                     // Also trigger immediate refresh for debug panel if monitoring page is open
                     if (window.opener && window.opener.refreshDebugSettings) {

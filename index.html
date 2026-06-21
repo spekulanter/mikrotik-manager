@@ -2776,6 +2776,7 @@
                                 <i class="fas fa-sliders text-sky-400 text-xs"></i>
                                 <span>Intervaly monitorovania</span>
                             </div>
+                            <small id="deviceMonitoringIntervalsGlobalHint" class="text-gray-500 block"></small>
                             <div>
                                 <label for="devicePingInterval" class="device-field-label">
                                     <i class="fas fa-satellite-dish text-emerald-400"></i>Ping interval (sekundy)
@@ -4110,8 +4111,47 @@
                 log_retention_days: 30, // default hodnota
                 ping_retention_days: 30, // default hodnota  
                 snmp_retention_days: 30, // default hodnota
+                ping_check_interval_seconds: 120,
+                ping_retry_interval: 20,
+                snmp_check_interval_minutes: 10,
                 cert_www_port: 80,
                 cert_www_ssl_port: 443
+            };
+
+            const applyFrontendGlobalSettings = (settings) => {
+                if (!settings) return;
+                if (settings.log_retention_days) {
+                    globalSettings.log_retention_days = parseInt(settings.log_retention_days);
+                }
+                if (settings.ping_check_interval_seconds) {
+                    globalSettings.ping_check_interval_seconds = parseInt(settings.ping_check_interval_seconds);
+                }
+                if (settings.ping_retry_interval) {
+                    globalSettings.ping_retry_interval = parseInt(settings.ping_retry_interval);
+                }
+                if (settings.snmp_check_interval_minutes) {
+                    globalSettings.snmp_check_interval_minutes = parseInt(settings.snmp_check_interval_minutes);
+                }
+                if (settings.cert_www_port) {
+                    globalSettings.cert_www_port = parseInt(settings.cert_www_port);
+                }
+                if (settings.cert_www_ssl_port) {
+                    globalSettings.cert_www_ssl_port = parseInt(settings.cert_www_ssl_port);
+                }
+            };
+
+            const updateDeviceMonitoringIntervalsHint = () => {
+                const monitoringIntervalsHint = document.getElementById('deviceMonitoringIntervalsGlobalHint');
+                if (monitoringIntervalsHint) {
+                    monitoringIntervalsHint.textContent = `Globálne: Ping ${globalSettings.ping_check_interval_seconds || 120} s, Retry ${globalSettings.ping_retry_interval || 20} s, SNMP ${globalSettings.snmp_check_interval_minutes || 10} min`;
+                }
+            };
+
+            const refreshFrontendGlobalSettings = async () => {
+                const settings = await api.get(`settings?_=${Date.now()}`);
+                applyFrontendGlobalSettings(settings);
+                updateDeviceMonitoringIntervalsHint();
+                return settings;
             };
 
             const LOG_FILTERS_KEY = 'mikrotik-log-filters';
@@ -4582,7 +4622,13 @@
                 });
             };
 
-            const openDeviceModal = (device = null) => {
+            const openDeviceModal = async (device = null) => {
+                try {
+                    await refreshFrontendGlobalSettings();
+                } catch (error) {
+                    console.warn('Nepodarilo sa obnoviť globálne nastavenia, používam posledné známe hodnoty');
+                }
+
                 deviceForm.reset();
                 document.getElementById('deviceId').value = device ? device.id : '';
                 document.getElementById('deviceName').value = device ? device.name : '';
@@ -4595,6 +4641,7 @@
                 document.getElementById('deviceCertWwwPort').value = device ? (device.cert_www_port || 0) : 0;
                 document.getElementById('deviceCertWwwSslPort').value = device ? (device.cert_www_ssl_port || 0) : 0;
                 document.getElementById('deviceLowMemory').checked = device ? device.low_memory : false;
+                updateDeviceMonitoringIntervalsHint();
                 const updaterPortsHint = document.getElementById('deviceUpdaterPortsGlobalHint');
                 if (updaterPortsHint) {
                     updaterPortsHint.textContent = `Globálne: HTTP ${globalSettings.cert_www_port || 80}, HTTPS ${globalSettings.cert_www_ssl_port || 443}`;
@@ -5799,15 +5846,12 @@
                 const result = await api.post('settings', body);
 
                 // Aktualizujeme globálne nastavenia pre frontend
-                if (body.log_retention_days) {
-                    globalSettings.log_retention_days = parseInt(body.log_retention_days);
+                try {
+                    await refreshFrontendGlobalSettings();
+                } catch (error) {
+                    applyFrontendGlobalSettings(body);
                 }
-                if (body.cert_www_port) {
-                    globalSettings.cert_www_port = parseInt(body.cert_www_port);
-                }
-                if (body.cert_www_ssl_port) {
-                    globalSettings.cert_www_ssl_port = parseInt(body.cert_www_ssl_port);
-                }
+                localStorage.setItem('settingsChanged', Date.now().toString());
 
                 closeModal();
 
@@ -6253,16 +6297,7 @@
                 try {
                     // Načítame globálne nastavenia pre frontend limity
                     try {
-                        const settings = await api.get('settings');
-                        if (settings && settings.log_retention_days) {
-                            globalSettings.log_retention_days = parseInt(settings.log_retention_days);
-                        }
-                        if (settings && settings.cert_www_port) {
-                            globalSettings.cert_www_port = parseInt(settings.cert_www_port);
-                        }
-                        if (settings && settings.cert_www_ssl_port) {
-                            globalSettings.cert_www_ssl_port = parseInt(settings.cert_www_ssl_port);
-                        }
+                        await refreshFrontendGlobalSettings();
                     } catch (error) {
                         console.warn('Nepodarilo sa načítať nastavenia, používam predvolené hodnoty');
                     }
@@ -6309,6 +6344,12 @@
 
             // Spustenie inicializácie
             initializeApp();
+
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'settingsChanged') {
+                    refreshFrontendGlobalSettings().catch(() => {});
+                }
+            });
 
             // Funkcie pre prepínanie témy
             function initTheme() {

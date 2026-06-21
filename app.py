@@ -189,6 +189,31 @@ def format_setting_value(key, value):
     if suffix:
         return f"{value_str}{suffix}"
     return value_str
+
+def sync_ping_interval_alias(conn):
+    """Synchronize legacy settings.html ping key with the key used by monitoring."""
+    legacy_row = conn.execute("SELECT value FROM settings WHERE key = ?", ('ping_heartbeat_interval',)).fetchone()
+    if not legacy_row or legacy_row['value'] in (None, ''):
+        return
+
+    legacy_value = str(legacy_row['value'])
+    try:
+        legacy_int = int(legacy_value)
+    except (ValueError, TypeError):
+        return
+
+    if legacy_int < 20 or legacy_int > 86400:
+        return
+
+    current_row = conn.execute("SELECT value FROM settings WHERE key = ?", ('ping_check_interval_seconds',)).fetchone()
+    current_value = str(current_row['value']) if current_row and current_row['value'] is not None else None
+    if current_value != legacy_value:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            ('ping_check_interval_seconds', legacy_value)
+        )
+        conn.commit()
+
 DEFAULT_SETTING_VALUES = {
     'ping_check_interval_seconds': '120',
     'ping_monitor_enabled': 'true',
@@ -953,6 +978,7 @@ def init_database():
         }
         for key, value in additional_defaults.items():
             cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
+        sync_ping_interval_alias(conn)
         conn.commit()
         logger.info("Databáza úspešne inicializovaná.")
 
@@ -3934,11 +3960,18 @@ def stop_snmp_refresh_all():
 def handle_settings():
     with get_db_connection() as conn:
         if request.method == 'GET':
+            sync_ping_interval_alias(conn)
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
             return jsonify(decrypt_sensitive_settings_map(settings))
         if request.method == 'POST':
+            request_data = dict(request.get_json(silent=True) or {})
+            if 'ping_heartbeat_interval' in request_data and 'ping_check_interval_seconds' not in request_data:
+                request_data['ping_check_interval_seconds'] = request_data['ping_heartbeat_interval']
+            if 'ping_check_interval_seconds' in request_data:
+                request_data['ping_heartbeat_interval'] = request_data['ping_check_interval_seconds']
+
             # Validácia ping_check_interval_seconds
-            ping_interval = request.json.get('ping_check_interval_seconds')
+            ping_interval = request_data.get('ping_check_interval_seconds')
             if ping_interval is not None:
                 try:
                     ping_interval_int = int(ping_interval)
@@ -3948,7 +3981,7 @@ def handle_settings():
                     return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre ping interval'}), 400
 
             # Validácia intervalu SNMP health checku
-            health_interval = request.json.get('snmp_health_check_interval_minutes')
+            health_interval = request_data.get('snmp_health_check_interval_minutes')
             if health_interval is not None:
                 try:
                     health_interval_int = int(health_interval)
@@ -3958,7 +3991,7 @@ def handle_settings():
                     return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre SNMP health check interval'}), 400
 
             # Validácia uchovávania zmazaných zariadení
-            deleted_retention = request.json.get('deleted_device_retention_days')
+            deleted_retention = request_data.get('deleted_device_retention_days')
             if deleted_retention is not None:
                 try:
                     deleted_retention_int = int(deleted_retention)
@@ -3972,7 +4005,7 @@ def handle_settings():
                 ('cert_www_port', 'Port služby www (HTTP)'),
                 ('cert_www_ssl_port', 'Port služby www-ssl (HTTPS)')
             ):
-                port_value = request.json.get(port_key)
+                port_value = request_data.get(port_key)
                 if port_value is not None:
                     try:
                         port_int = int(port_value)
@@ -4001,23 +4034,23 @@ def handle_settings():
                 return normalize_setting_value(key, stored)
 
             def request_value(key):
-                return normalize_setting_value(key, request.json.get(key))
+                return normalize_setting_value(key, request_data.get(key))
 
             def setting_changed(key):
-                if key not in request.json:
+                if key not in request_data:
                     return False
                 return request_value(key) != old_value(key)
 
             def new_value(key):
-                return request_value(key) if key in request.json else old_value(key)
+                return request_value(key) if key in request_data else old_value(key)
             
-            for key, value in request.json.items():
+            for key, value in request_data.items():
                 stored_value = encrypt_setting_value_if_sensitive(key, value)
                 conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, stored_value))
             conn.commit()
             add_log('info', "Globálne nastavenia uložené používateľom.")
             
-            changed_keys = sorted(key for key in request.json.keys() if setting_changed(key))
+            changed_keys = sorted(key for key in request_data.keys() if setting_changed(key))
             for key in changed_keys:
                 label = get_setting_label(key)
                 if key in SENSITIVE_SETTINGS:

@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const loadDebugSettings = async () => {
         try {
-            const response = await fetch('/api/settings');
+            const response = await fetch(`/api/settings?_=${Date.now()}`, { cache: 'no-store' });
             const settings = await response.json();
             debugSettings = settings;
 
@@ -27,6 +27,23 @@ document.addEventListener('DOMContentLoaded', () => {
             debugPanelEnabled = false;
             updateDebugPanelVisibility();
         }
+    };
+
+    const renderGlobalIntervalsHint = (settings = {}) => {
+        const globalIntervalsHint = document.getElementById('settingsGlobalIntervalsHint');
+        if (!globalIntervalsHint) return;
+
+        const globalPing = settings.ping_interval_seconds || settings.ping_check_interval_seconds || 120;
+        const globalRetry = settings.ping_retry_interval_seconds || settings.ping_retry_interval || 20;
+        const globalSnmp = settings.snmp_interval_minutes || settings.snmp_check_interval_minutes || 10;
+        globalIntervalsHint.textContent = `Globálne: Ping ${globalPing} s, Retry ${globalRetry} s, SNMP ${globalSnmp} min`;
+    };
+
+    const refreshGlobalIntervalsHint = async () => {
+        const response = await fetch(`/api/settings?_=${Date.now()}`, { cache: 'no-store' });
+        const settings = await response.json();
+        renderGlobalIntervalsHint(settings);
+        return settings;
     };
 
     const debugLog = (debugType, message, ...args) => {
@@ -215,10 +232,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listen for settings changes (e.g., from settings page)
     window.addEventListener('storage', function (e) {
-        if (e.key === 'settingsChanged' && e.newValue === 'true') {
+        if (e.key === 'settingsChanged') {
             setTimeout(() => {
                 loadDebugSettings();
-                localStorage.removeItem('settingsChanged');
+                if (deviceSettingsModal && !deviceSettingsModal.classList.contains('hidden')) {
+                    refreshGlobalIntervalsHint().catch(() => {});
+                }
             }, 500);
         }
     });
@@ -3789,7 +3808,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentDeviceId) return;
 
         try {
-            const settings = await api.get(`monitoring/device/${currentDeviceId}/settings`);
+            const settings = await api.get(`monitoring/device/${currentDeviceId}/settings?_=${Date.now()}`);
 
             // Populate modal
             document.getElementById('settingsDeviceInfo').textContent =
@@ -3797,6 +3816,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('pingInterval').value = settings.device.ping_interval_seconds;
             document.getElementById('retryInterval').value = settings.device.ping_retry_interval_seconds || 0;
             document.getElementById('snmpInterval').value = settings.device.snmp_interval_minutes;
+            renderGlobalIntervalsHint(settings.global_settings || {});
 
             // Show modal
             deviceSettingsModal.classList.remove('hidden');

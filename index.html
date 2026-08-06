@@ -1280,28 +1280,134 @@
         }
 
         /* Layout pre modál zariadenia */
+        #deviceModal {
+            padding: 1rem;
+        }
+
         .device-modal-content {
             max-width: 1100px;
+            max-height: calc(100vh - 2rem);
+            max-height: calc(100dvh - 2rem);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .device-modal-header {
+            flex-shrink: 0;
+        }
+
+        #deviceForm {
+            display: flex;
+            flex: 1 1 auto;
+            flex-direction: column;
+            min-height: 0;
         }
 
         .device-form-scroll {
-            max-height: 70vh;
+            flex: 1 1 auto;
+            min-height: 0;
             overflow-y: auto;
+            overscroll-behavior: contain;
             padding-right: 0.25rem;
+            scrollbar-gutter: stable;
+            scrollbar-width: thin;
+            scrollbar-color: #4b5563 #1f2937;
+        }
+
+        .device-form-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .device-form-scroll::-webkit-scrollbar-track {
+            background: #1f2937;
+            border-radius: 4px;
+        }
+
+        .device-form-scroll::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border: 1px solid #374151;
+            border-radius: 4px;
+        }
+
+        .device-form-scroll::-webkit-scrollbar-thumb:hover {
+            background-color: #6b7280;
+        }
+
+        .device-form-scroll::-webkit-scrollbar-button {
+            display: none;
+            height: 0;
+        }
+
+        body.light-theme .device-form-scroll {
+            scrollbar-color: #b8c9e6 #cddbf2;
+        }
+
+        body.light-theme .device-form-scroll::-webkit-scrollbar-track {
+            background: #cddbf2;
+        }
+
+        body.light-theme .device-form-scroll::-webkit-scrollbar-thumb {
+            background-color: #b8c9e6;
+            border-color: #cddbf2;
+        }
+
+        body.light-theme .device-form-scroll::-webkit-scrollbar-thumb:hover {
+            background-color: #94a3b8;
+        }
+
+        .device-form-actions {
+            flex-shrink: 0;
         }
 
         @media (max-width: 768px) {
+            #deviceModal {
+                align-items: flex-start;
+                padding: 0.5rem;
+            }
+
+            .device-modal-content {
+                max-height: calc(100vh - 1rem);
+                max-height: calc(100dvh - 1rem);
+            }
+
             #deviceForm {
                 padding-top: 12px;
+                padding-right: 0;
                 padding-bottom: 12px;
+                padding-left: 0;
+            }
+
+            .device-form-scroll {
+                padding-right: 0.375rem;
+                padding-left: 1rem;
+            }
+
+            .device-form-actions {
+                align-items: center;
+                flex-wrap: nowrap;
+                gap: 0.5rem;
+                padding: 0.75rem 1rem 0;
             }
         }
 
-        @media (min-width: 1024px) {
-            .device-form-scroll {
-                max-height: none;
-                overflow-y: visible;
-            }
+        /* Výšková poistka pre ostatné dialógy na nízkych displejoch a pri zoome. */
+        #manageAccountModal,
+        #confirmPasswordModal,
+        #backupCodesModal,
+        #reset2faModal,
+        #recoveryConfirmModal {
+            padding: 1rem;
+        }
+
+        #manageAccountModal > .modal-content,
+        #confirmPasswordModal > .modal-content,
+        #backupCodesModal > .modal-content,
+        #reset2faModal > .modal-content,
+        #recoveryConfirmModal > .modal-content {
+            max-height: calc(100vh - 2rem);
+            max-height: calc(100dvh - 2rem);
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
 
         /* Modálne okná v svetlej téme */
@@ -1565,6 +1671,15 @@
             .device-btn-save {
                 padding-left: 20px !important;
                 padding-right: 20px !important;
+            }
+            #deviceModal .device-form-actions .device-btn-cancel,
+            #deviceModal .device-form-actions .device-btn-save {
+                flex: 0 0 auto;
+                min-height: 44px;
+                padding: 10px 14px !important;
+                font-size: 0.8125rem !important;
+                line-height: 1.25;
+                white-space: nowrap;
             }
         }
 
@@ -2867,7 +2982,7 @@
                     </div>
                 </div>
 
-                <div class="flex justify-end gap-3 pt-1">
+                <div class="device-form-actions flex justify-end gap-3 pt-1">
                     <button type="button" id="cancelDeviceBtn"
                         class="device-btn-cancel btn flex items-center gap-2 py-2.5 px-5 rounded-lg font-medium">
                         <i class="fas fa-xmark text-sm"></i>Zrušiť

@@ -2233,7 +2233,7 @@
 
         function openChangelogModal() {
             if (rssData) {
-                document.getElementById('modalTitle').innerText = rssData.title;
+                document.getElementById('modalTitle').innerText = `RouterOS ${rssData.version} [stable]`;
                 const div = document.createElement('div');
                 div.innerHTML = rssData.description;
                 document.getElementById('modalContent').innerHTML = div.innerHTML;

@@ -2147,6 +2147,7 @@ def delete_backup(filename):
 
 RSS_CACHE = {'timestamp': 0, 'data': None}
 RSS_CACHE_DURATION = 3600 # 1 hour
+MIKROTIK_STABLE_RSS_URL = 'https://cdn.mikrotik.com/routeros/latest-stable.rss'
 
 def fetch_mikrotik_rss():
     global RSS_CACHE
@@ -2155,7 +2156,7 @@ def fetch_mikrotik_rss():
         return RSS_CACHE['data']
         
     try:
-        response = requests.get('https://mikrotik.com/download.rss', timeout=10)
+        response = requests.get(MIKROTIK_STABLE_RSS_URL, timeout=10)
         response.raise_for_status()
         root = ET.fromstring(response.text)
         
@@ -2168,9 +2169,10 @@ def fetch_mikrotik_rss():
             
             if title_el is not None:
                 title = title_el.text or ''
-                if '[stable]' in title.lower():
-                    version_match = re.search(r'RouterOS ([\d\.]+) \[stable\]', title, re.IGNORECASE)
-                    version = version_match.group(1) if version_match else title.replace('RouterOS ', '').replace(' [stable]', '').replace(' [Stable]', '')
+                stable_release = re.search(r'\[[^\]]*\bstable\b[^\]]*\]', title, re.IGNORECASE)
+                if stable_release:
+                    version_match = re.search(r'RouterOS\s+([\d.]+)', title, re.IGNORECASE)
+                    version = version_match.group(1) if version_match else title
                     
                     desc = ''
                     if content_el is not None and content_el.text:

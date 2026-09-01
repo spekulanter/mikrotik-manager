@@ -52,6 +52,17 @@
             --accent-color-hover: #0ea5e9;
         }
 
+        /* Zachovať šírku stránky pri prepínaní medzi kartami a tabuľkou. */
+        html {
+            scrollbar-gutter: stable;
+        }
+
+        @supports not (scrollbar-gutter: stable) {
+            html {
+                overflow-y: scroll;
+            }
+        }
+
         body {
             background-color: var(--main-bg);
             color: var(--text-color);

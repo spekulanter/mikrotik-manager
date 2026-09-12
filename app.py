@@ -2473,12 +2473,12 @@ def check_certificates_expiry():
                 renewal_days = int(settings.get('cert_auto_renewal_days', 365))
             except (TypeError, ValueError):
                 renewal_days = 365
-            http_port, https_port = get_updater_web_ports(settings, device)
 
             today_str = datetime.now().strftime('%Y-%m-%d')
 
             for device_row in devices:
                 device = dict(device_row)
+                http_port, https_port = get_updater_web_ports(settings, device)
                 device_id = device['id']
                 device_name = device['name']
                 ip = device['ip']

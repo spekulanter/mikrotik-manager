@@ -103,6 +103,90 @@
             flex-grow: 1;
         }
 
+        .device-select {
+            position: relative;
+            flex: 0 1 360px;
+            min-width: 270px;
+            z-index: 2;
+        }
+
+        .device-select.open {
+            z-index: 20;
+        }
+
+        .device-select-button {
+            width: 100%;
+            min-height: 43px;
+            padding: 10px 13px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: linear-gradient(135deg, #1f2937, #111827);
+            color: var(--text-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+            transition: all 0.25s ease;
+        }
+
+        .device-select-button:hover,
+        .device-select.open .device-select-button {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+        }
+
+        .device-select-button .device-icon { color: var(--accent-color); }
+        .device-select-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; font-size: 14px; }
+        .device-select-arrow { color: #94a3b8; transition: transform 0.25s ease; }
+        .device-select.open .device-select-arrow { transform: rotate(180deg); }
+
+        .device-select-menu {
+            position: absolute;
+            top: calc(100% + 7px);
+            left: 0;
+            width: max(100%, 410px);
+            max-height: min(440px, calc(100vh - 170px));
+            overflow-y: auto;
+            padding: 5px;
+            display: none;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: linear-gradient(145deg, #182333, #111827);
+            box-shadow: 0 18px 38px rgba(0, 0, 0, 0.38);
+        }
+
+        .device-select.open .device-select-menu { display: block; }
+
+        .device-select-option {
+            width: 100%;
+            min-height: 28px;
+            padding: 4px 8px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-align: left;
+            font-size: 12px;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .device-select-option + .device-select-option { margin-top: 1px; }
+        .device-select-option:hover,
+        .device-select-option.selected { background: rgba(56, 189, 248, 0.14); color: #fff; }
+        .device-select-option i { width: 14px; color: var(--accent-color); }
+        .device-select-option-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .device-select-option small { margin-left: auto; color: #94a3b8; white-space: nowrap; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+
+        .device-select-menu::-webkit-scrollbar { width: 8px; }
+        .device-select-menu::-webkit-scrollbar-track { background: #1f2937; border-radius: 99px; }
+        .device-select-menu::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 99px; }
+        .device-select-menu::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
         .search-box {
             flex-grow: 1;
             min-width: 250px;
@@ -583,6 +667,19 @@
             border-color: #b8c9e6;
         }
 
+        body.light-theme .device-select-button,
+        body.light-theme .device-select-menu {
+            background: #e3edfa;
+            border-color: #b8c9e6;
+            color: #0f172a;
+        }
+
+        body.light-theme .device-select-option { color: #0f172a; }
+        body.light-theme .device-select-option:hover,
+        body.light-theme .device-select-option.selected { color: #0f172a; background: rgba(14, 165, 233, 0.16); }
+        body.light-theme .device-select-menu::-webkit-scrollbar-track { background: #d5e2f4; }
+        body.light-theme .device-select-menu::-webkit-scrollbar-thumb { background: #91a8c7; }
+
         body.light-theme .filter-btn {
             color: #0f172a;
         }
@@ -660,6 +757,9 @@
                 flex-direction: column;
                 align-items: stretch;
             }
+
+            .device-select { flex-basis: auto; min-width: 0; width: 100%; }
+            .device-select-menu { width: 100%; max-height: min(360px, calc(100vh - 150px)); }
 
             .sort-container {
                 justify-content: center;
@@ -936,6 +1036,24 @@
         <!-- Ovládacie prvky - vyhľadávanie, filtrovanie a zoraďovanie -->
         <div class="controls-row">
             <div class="search-sort-container">
+                <div class="device-select" id="deviceSelect">
+                    <button type="button" class="device-select-button" id="deviceSelectButton"
+                        aria-haspopup="listbox" aria-expanded="false">
+                        <i class="fas fa-router device-icon"></i>
+                        <span class="device-select-label" id="deviceSelectLabel">Všetky zariadenia</span>
+                        <i class="fas fa-chevron-down device-select-arrow"></i>
+                    </button>
+                    <div class="device-select-menu" id="deviceSelectMenu" role="listbox" aria-label="Filtrovať podľa zariadenia">
+                        <button type="button" class="device-select-option selected" data-device="">
+                            <i class="fas fa-layer-group"></i><span class="device-select-option-label">Všetky zariadenia</span>
+                        </button>
+                        {% for device_ip, device_name in device_filters %}
+                        <button type="button" class="device-select-option" data-device="{{ device_ip }}">
+                            <i class="fas fa-router"></i><span class="device-select-option-label">{{ device_name }}</span><small>{{ device_ip }}</small>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
                 <div class="search-box">
                     <input type="text" id="searchInput" placeholder="🔍 Hľadať súbory..." onkeyup="filterAndPaginate()">
                 </div>
@@ -985,7 +1103,7 @@
                 </thead>
                 <tbody id="filesTableBody">
                     {% for file in files %}
-                    <tr data-filename="{{ file.name }}" data-size="{{ file.size }}"
+                    <tr data-filename="{{ file.name }}" data-device="{{ file.device_ip }}" data-size="{{ file.size }}"
                         data-date="{{ file.modified.timestamp() }}">
                         <td>
                             {% if file.name.endswith('.backup') %}
@@ -1054,6 +1172,7 @@
         let currentSort = 'date';
         let sortDirection = 'desc';
         let currentFilter = 'all';
+        let currentDevice = '';
         let currentPage = 1;
         const itemsPerPage = 50;
         let allRows = [];
@@ -1091,6 +1210,24 @@
             filterAndPaginate();
         }
 
+        function selectDevice(device, label) {
+            currentDevice = device;
+            currentPage = 1;
+            document.getElementById('deviceSelectLabel').textContent = label;
+            document.querySelectorAll('.device-select-option').forEach(option => {
+                option.classList.toggle('selected', option.dataset.device === device);
+            });
+            closeDeviceSelect();
+            filterAndPaginate();
+        }
+
+        function closeDeviceSelect() {
+            const select = document.getElementById('deviceSelect');
+            const button = document.getElementById('deviceSelectButton');
+            if (select) select.classList.remove('open');
+            if (button) button.setAttribute('aria-expanded', 'false');
+        }
+
         function normalizeSearchTerm(str) {
             return str
                 .toLowerCase()
@@ -1121,6 +1258,8 @@
                     (normalizedSearch && normalizedFilenameNoSpaces.includes(normalizedSearch)) ||
                     (normalizedSearchNoSpaces && normalizedFilenameNoSpaces.includes(normalizedSearchNoSpaces));
 
+                const matchesDevice = !currentDevice || row.dataset.device === currentDevice;
+
                 let matchesType = true;
                 if (currentFilter === 'backup') {
                     matchesType = filename.endsWith('.backup');
@@ -1128,7 +1267,7 @@
                     matchesType = filename.endsWith('.rsc');
                 }
 
-                return matchesSearch && matchesType;
+                return matchesSearch && matchesDevice && matchesType;
             });
 
             // Stránkovanie
@@ -1354,6 +1493,25 @@
             if (!tbody) return;
 
             allRows = Array.from(tbody.getElementsByTagName('tr'));
+
+            const deviceSelect = document.getElementById('deviceSelect');
+            const deviceButton = document.getElementById('deviceSelectButton');
+            const deviceMenu = document.getElementById('deviceSelectMenu');
+            deviceButton.addEventListener('click', function () {
+                const willOpen = !deviceSelect.classList.contains('open');
+                deviceSelect.classList.toggle('open', willOpen);
+                deviceButton.setAttribute('aria-expanded', String(willOpen));
+            });
+            deviceMenu.addEventListener('click', function (event) {
+                const option = event.target.closest('.device-select-option');
+                if (option) selectDevice(option.dataset.device, option.querySelector('span').textContent);
+            });
+            document.addEventListener('click', function (event) {
+                if (!deviceSelect.contains(event.target)) closeDeviceSelect();
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') closeDeviceSelect();
+            });
             // Zoradenie je už urobené server-side (mtime desc), klient tu už iba pripraví animáciu
 
             // Animácia až po správnom poradí

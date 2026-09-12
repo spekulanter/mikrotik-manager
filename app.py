@@ -1399,6 +1399,67 @@ def cleanup_old_backups(device_ip, settings, detailed_logging=True):
     except Exception as e:
         add_log('error', f"Chyba pri čistení starých záloh pre {device_ip}: {e}", device_ip)
 
+
+def migrate_backups_for_ip_change(old_ip, new_ip, settings):
+    """Premenuje zálohy po zmene IP, aby fungoval retention aj purge zariadenia."""
+    old_marker = f"_{old_ip}_"
+    new_marker = f"_{new_ip}_"
+    result = {'local': 0, 'ftp': 0, 'skipped': 0, 'errors': []}
+
+    try:
+        for filename in os.listdir(BACKUP_DIR):
+            if old_marker not in filename or not filename.endswith(ALLOWED_BACKUP_EXTENSIONS):
+                continue
+            source_path = os.path.join(BACKUP_DIR, filename)
+            if not os.path.isfile(source_path):
+                continue
+            new_filename = filename.replace(old_marker, new_marker, 1)
+            target_path = os.path.join(BACKUP_DIR, new_filename)
+            if os.path.exists(target_path):
+                result['skipped'] += 1
+                result['errors'].append(f"lokálny súbor {new_filename} už existuje")
+                continue
+            os.rename(source_path, target_path)
+            result['local'] += 1
+    except Exception as e:
+        result['errors'].append(f"lokálne zálohy: {e}")
+
+    try:
+        settings = decrypt_sensitive_settings_map(settings)
+        if not all(settings.get(key) for key in ('ftp_server', 'ftp_username', 'ftp_password')):
+            return result
+        try:
+            ftp_port = int(settings.get('ftp_port', 21))
+        except (TypeError, ValueError):
+            ftp_port = 21
+        try:
+            ftp_timeout = int(settings.get('ftp_timeout_seconds', 15))
+        except (TypeError, ValueError):
+            ftp_timeout = 15
+        ftp_timeout = ftp_timeout if 5 <= ftp_timeout <= 120 else 15
+
+        with FTP(timeout=ftp_timeout) as ftp:
+            ftp.connect(settings['ftp_server'], ftp_port, timeout=ftp_timeout)
+            ftp.login(settings['ftp_username'], settings['ftp_password'])
+            if settings.get('ftp_directory'):
+                ftp.cwd(settings['ftp_directory'])
+            ftp_files = set(ftp.nlst())
+            for filename in sorted(ftp_files):
+                if old_marker not in filename or not filename.endswith(ALLOWED_BACKUP_EXTENSIONS):
+                    continue
+                new_filename = filename.replace(old_marker, new_marker, 1)
+                if new_filename in ftp_files:
+                    result['skipped'] += 1
+                    result['errors'].append(f"FTP súbor {new_filename} už existuje")
+                    continue
+                ftp.rename(filename, new_filename)
+                ftp_files.add(new_filename)
+                result['ftp'] += 1
+    except Exception as e:
+        result['errors'].append(f"FTP zálohy: {e}")
+
+    return result
+
 def get_snmp_data(ip, community='public'):
     oids = {
         'identity': '1.3.6.1.2.1.1.5.0',
@@ -2003,25 +2064,45 @@ def list_backups():
     """Dynamický výpis záloh: zoradené podľa mtime (najnovšie prvé)."""
     try:
         entries = []
+        device_names = {}
+        with get_db_connection() as conn:
+            device_names = {
+                device['ip']: device['name']
+                for device in conn.execute(
+                    'SELECT ip, name FROM devices WHERE deleted_at IS NULL'
+                ).fetchall()
+            }
         for filename in os.listdir(BACKUP_DIR):
             filepath = os.path.join(BACKUP_DIR, filename)
             if os.path.isfile(filepath):
                 try:
                     mtime = os.path.getmtime(filepath)
+                    ip_match = re.search(r'_(\d{1,3}(?:\.\d{1,3}){3})_', filename)
+                    device_ip = ip_match.group(1) if ip_match else ''
                     entries.append({
                         'name': filename,
                         'size': os.path.getsize(filepath),
                         'modified': datetime.fromtimestamp(mtime),
+                        'device_ip': device_ip,
+                        'device_name': device_names.get(device_ip, device_ip or 'Neznáme zariadenie'),
                         '_mtime': mtime
                     })
                 except OSError:
                     continue
         # Server-side zoradenie podľa mtime desc
         entries.sort(key=lambda x: x['_mtime'], reverse=True)
+        # Jedinečné zariadenia so zálohami, zoradené podľa zobrazovaného názvu A–Z.
+        device_filters = {}
+        for entry in entries:
+            if entry['device_ip']:
+                device_filters[entry['device_ip']] = entry['device_name']
+        device_filters = sorted(
+            device_filters.items(), key=lambda device: device[1].casefold()
+        )
         # Odstráň pomocný kľúč
         for e in entries:
             e.pop('_mtime', None)
-        return render_template('backups.html', files=entries)
+        return render_template('backups.html', files=entries, device_filters=device_filters)
     except Exception as e:
         logger.error(f"Chyba pri načítaní zoznamu záloh: {e}")
         return "Chyba pri načítaní zoznamu záloh.", 500
@@ -3782,7 +3863,11 @@ def handle_devices():
             try:
                 if data.get('id'):
                     # Získame staré nastavenia pre detekciu zmien intervalov
-                    old_device = conn.execute('SELECT snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
+                    old_device = conn.execute('SELECT ip, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
+                    if not old_device:
+                        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+                    old_ip = old_device['ip']
+                    ip_changed = old_ip != data['ip']
                     old_snmp_interval = old_device['snmp_interval_minutes'] if old_device else 0
                     old_ping_interval = old_device['ping_interval_seconds'] if old_device else 0
                     old_ping_retry_interval = old_device['ping_retry_interval_seconds'] if old_device else 0
@@ -3811,8 +3896,27 @@ def handle_devices():
                                     new_ping_interval, new_ping_retry_interval,
                                     new_cert_www_port, new_cert_www_ssl_port, data['id']))
                     conn.commit()
+
+                    backup_migration = None
+                    if ip_changed:
+                        migration_settings = {
+                            row['key']: row['value']
+                            for row in conn.execute('SELECT key, value FROM settings').fetchall()
+                        }
+                        backup_migration = migrate_backups_for_ip_change(old_ip, data['ip'], migration_settings)
                     
                     change_messages = []
+                    if ip_changed:
+                        change_messages.append(
+                            f"IP {old_ip}→{data['ip']}; presunuté zálohy: "
+                            f"lokálne {backup_migration['local']}, FTP {backup_migration['ftp']}"
+                        )
+                        if backup_migration['errors']:
+                            add_log(
+                                'warning',
+                                f"Zmena IP {old_ip}→{data['ip']}: " + '; '.join(backup_migration['errors']),
+                                data['ip']
+                            )
                     # Okamžitý health check ak sa zmenil SNMP interval zariadenia
                     if old_snmp_interval != new_snmp_interval:
                         device_name = data.get('name', f'ID {data["id"]}')
@@ -3830,7 +3934,7 @@ def handle_devices():
                     if change_messages:
                         add_log('info', f"Zariadenie {data['ip']} aktualizované: " + ", ".join(change_messages))
                     
-                    return jsonify({'status': 'success'})
+                    return jsonify({'status': 'success', 'backup_migration': backup_migration})
                 else:
                     # Skontroluj či IP nepatrí zariadeniu v koši
                     existing_deleted = conn.execute(

@@ -1257,6 +1257,12 @@
                         <input type="text" id="ftp_directory" name="ftp_directory"
                             class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
                     </div>
+                    <div class="lg:col-span-2">
+                        <label for="ftp_timeout_seconds" class="block mb-2 font-medium">FTP timeout (sekundy)</label>
+                        <input type="number" id="ftp_timeout_seconds" name="ftp_timeout_seconds" value="15" min="5" max="120" step="1"
+                            class="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 focus:border-sky-500 focus:ring-1 focus:ring-sky-500">
+                        <p class="mt-1 text-xs text-gray-400">Predvolene 15 s. Po uplynutí času sa neúspešný FTP pokus ukončí; lokálna záloha ostáva zachovaná.</p>
+                    </div>
                     <div class="lg:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3">
                         <button type="button" id="testFtpBtn"
                             class="btn bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-5 rounded-lg flex items-center justify-center gap-2 text-sm">
@@ -1723,6 +1729,7 @@
             const data = {
                 ftp_server: document.getElementById('ftp_server').value,
                 ftp_port: document.getElementById('ftp_port').value,
+                ftp_timeout_seconds: document.getElementById('ftp_timeout_seconds').value,
                 ftp_username: document.getElementById('ftp_username').value,
                 ftp_password: document.getElementById('ftp_password').value,
                 ftp_directory: document.getElementById('ftp_directory').value

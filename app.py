@@ -78,6 +78,7 @@ SETTING_LABELS = {
     'ftp_password': 'FTP Heslo',
     'ftp_port': 'FTP Port',
     'ftp_server': 'FTP Server',
+    'ftp_timeout_seconds': 'FTP timeout',
     'ftp_username': 'FTP Používateľ',
     'log_max_entries': 'Max zobrazených logov v okne',
     'log_retention_days': 'Uchovávanie aktivity logov (dni)',
@@ -131,6 +132,7 @@ SETTING_VALUE_SUFFIXES = {
     'ping_retention_days': ' dní',
     'ping_retries': ' pokusov',
     'backup_delay_seconds': ' s',
+    'ftp_timeout_seconds': ' s',
     'updater_post_backup_delay': ' s',
     'backup_retention_count': ' ks',
     'snmp_check_interval_minutes': ' min',
@@ -229,6 +231,7 @@ DEFAULT_SETTING_VALUES = {
     'backup_delay_seconds': '30',
     'backup_detailed_logging': 'false',
     'ftp_port': '21',
+    'ftp_timeout_seconds': '15',
     'updater_backup_before_update': 'true',
     'updater_post_backup_delay': '10',
     'updater_stabilization_delay': '120',
@@ -947,6 +950,7 @@ def init_database():
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_health_check_enabled', 'true'))
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_health_check_interval_minutes', '15'))
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('backup_detailed_logging', 'false'))
+        cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ftp_timeout_seconds', '15'))
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('log_retention_days', '30'))  # Pridané: uchovávanie logov
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('ping_retention_days', '30'))  # Pridané: uchovávanie ping dát
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", ('snmp_retention_days', '30'))  # Pridané: uchovávanie SNMP dát
@@ -1154,11 +1158,13 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
     """Vykoná zálohu daného zariadenia s pokročilým logovaním a kontrolou."""
     backup_performed = False  # či sme vytvorili novú zálohu a ťahali ju z routera
     ftp_upload_success = False  # kumulatívny výsledok oboch uploadov na FTP
+    ftp_upload_error = None
 
     def update_results():
         if result_holder is not None:
             result_holder['backup_performed'] = backup_performed
             result_holder['ftp_uploaded'] = ftp_upload_success
+            result_holder['ftp_upload_error'] = ftp_upload_error
 
     # Decrypt device password before use
     device = get_device_with_decrypted_password(device)
@@ -1265,9 +1271,9 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
         
         # Záverečná správa o dokončení zálohy
         if is_sequential:
-            add_log('info', f"Záloha - dokončená{name_suffix} úspešne{' (16MB)' if low_memory else ''}", ip)
+            add_log('info', f"Lokálna záloha - dokončená{name_suffix} úspešne{' (16MB)' if low_memory else ''}", ip)
         else:
-            add_log('info', f"Záloha dokončená{name_suffix}{' (16MB)' if low_memory else ''}.", ip)
+            add_log('info', f"Lokálna záloha dokončená{name_suffix}{' (16MB)' if low_memory else ''}.", ip)
         
         # Odoslanie notifikácie o úspešnej zálohe
         with get_db_connection() as conn:
@@ -1301,6 +1307,7 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
             try:
                 error_details = '; '.join([err for err in [error_backup, error_rsc] if err])
                 error_details = error_details or 'neznáma chyba'
+                ftp_upload_error = error_details
                 if settings.get('notify_backup_failure', 'false').lower() == 'true':
                     send_pushover_notification(
                         f"❌ FTP upload zálohy zlyhal pre {ip}{name_suffix}: {error_details}",
@@ -1363,7 +1370,18 @@ def cleanup_old_backups(device_ip, settings, detailed_logging=True):
 
         # FTP čistenie
         if all(k in settings and settings[k] for k in ['ftp_server', 'ftp_username', 'ftp_password']):
-            with FTP(settings['ftp_server']) as ftp:
+            try:
+                ftp_port = int(settings.get('ftp_port', 21))
+            except (TypeError, ValueError):
+                ftp_port = 21
+            try:
+                ftp_timeout = int(settings.get('ftp_timeout_seconds', 15))
+            except (TypeError, ValueError):
+                ftp_timeout = 15
+            if not 5 <= ftp_timeout <= 120:
+                ftp_timeout = 15
+            with FTP(timeout=ftp_timeout) as ftp:
+                ftp.connect(settings['ftp_server'], ftp_port, timeout=ftp_timeout)
                 ftp.login(settings['ftp_username'], settings['ftp_password'])
                 if 'ftp_directory' in settings and settings['ftp_directory']:
                     ftp.cwd(settings['ftp_directory'])
@@ -1554,8 +1572,11 @@ def upload_to_ftp(local_path, detailed_logging=True, device_ip=None, log_success
             if not (server and username and password):
                 return False, "Chýbajú FTP nastavenia (server/používateľ/heslo)."
             port = parse_int(settings.get('ftp_port'), 21)
-            with FTP() as ftp:
-                ftp.connect(server, port)
+            timeout = parse_int(settings.get('ftp_timeout_seconds'), 15)
+            if not 5 <= timeout <= 120:
+                timeout = 15
+            with FTP(timeout=timeout) as ftp:
+                ftp.connect(server, port, timeout=timeout)
                 ftp.login(username, password)
                 if settings.get('ftp_directory'):
                     ftp.cwd(settings['ftp_directory'])
@@ -4370,6 +4391,16 @@ def handle_settings():
                 except (ValueError, TypeError):
                     return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre SNMP health check interval'}), 400
 
+            # Validácia timeoutu FTP spojenia
+            ftp_timeout = request_data.get('ftp_timeout_seconds')
+            if ftp_timeout is not None:
+                try:
+                    ftp_timeout_int = int(ftp_timeout)
+                    if ftp_timeout_int < 5 or ftp_timeout_int > 120:
+                        return jsonify({'status': 'error', 'message': 'FTP timeout musí byť 5-120 sekúnd'}), 400
+                except (ValueError, TypeError):
+                    return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre FTP timeout'}), 400
+
             # Validácia uchovávania zmazaných zariadení
             deleted_retention = request_data.get('deleted_device_retention_days')
             if deleted_retention is not None:
@@ -4477,6 +4508,8 @@ def handle_settings():
                 backup_general_changes.append(f"retencia záloh: {new_value('backup_retention_count')} ks")
             if setting_changed('backup_detailed_logging'):
                 backup_general_changes.append(f"detailné logovanie: {'zapnuté' if new_value('backup_detailed_logging') == 'true' else 'vypnuté'}")
+            if setting_changed('ftp_timeout_seconds'):
+                backup_general_changes.append(f"FTP timeout: {new_value('ftp_timeout_seconds')}s")
             if backup_general_changes:
                 add_log('info', f"Automatické zálohovanie — upravené nastavenia ({'; '.join(backup_general_changes)}).")
             
@@ -4502,6 +4535,7 @@ def test_ftp_settings():
     password = str(data.get('ftp_password') or '')
     directory = str(data.get('ftp_directory') or '').strip()
     port_value = data.get('ftp_port') or DEFAULT_SETTING_VALUES.get('ftp_port', '21')
+    timeout_value = data.get('ftp_timeout_seconds') or DEFAULT_SETTING_VALUES.get('ftp_timeout_seconds', '15')
 
     if not server:
         return jsonify({'status': 'error', 'message': 'FTP server je povinný.'}), 400
@@ -4518,8 +4552,15 @@ def test_ftp_settings():
         return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre FTP port.'}), 400
 
     try:
-        with FTP(timeout=10) as ftp:
-            ftp.connect(server, port, timeout=10)
+        timeout = int(timeout_value)
+        if timeout < 5 or timeout > 120:
+            return jsonify({'status': 'error', 'message': 'FTP timeout musí byť 5-120 sekúnd.'}), 400
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre FTP timeout.'}), 400
+
+    try:
+        with FTP(timeout=timeout) as ftp:
+            ftp.connect(server, port, timeout=timeout)
             ftp.login(username, password)
             if directory:
                 ftp.cwd(directory)
@@ -5452,7 +5493,7 @@ def _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_do
         return False
 
     backup_tasks[device_ip] = True
-    result_holder = {'backup_performed': False, 'ftp_uploaded': False, 'status': None}
+    result_holder = {'backup_performed': False, 'ftp_uploaded': False, 'ftp_upload_error': None, 'status': None}
 
     try:
         run_backup_logic(dict(device), is_sequential=True, result_holder=result_holder)
@@ -5472,8 +5513,13 @@ def _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_do
         _step_done(2, msg='Pauza po zálohe preskočená, keďže nebolo čo zálohovať.')
         return True
     if status == 'success':
-        add_log('info', f'Záloha pred update [{device_name}]: záloha vytvorená', device_ip)
-        _step_done(1, msg='Záloha konfigurácie dokončená.')
+        if result_holder.get('ftp_uploaded'):
+            add_log('info', f'Záloha pred update [{device_name}]: lokálna aj FTP záloha vytvorená', device_ip)
+            _step_done(1, msg='Lokálna aj FTP záloha konfigurácie dokončená.')
+        else:
+            ftp_error = result_holder.get('ftp_upload_error') or 'neznáma chyba'
+            add_log('warning', f'Záloha pred update [{device_name}]: lokálna záloha vytvorená, FTP kópia zlyhala: {ftp_error}', device_ip)
+            _step_done(1, msg='Lokálna záloha je hotová, FTP kópia zlyhala; aktualizácia pokračuje.')
         _run_post_backup_delay(post_backup_delay, device_name, device_ip, _emit, _step_done)
         return True
 

@@ -1483,25 +1483,66 @@ def get_snmp_data(ip, community='public'):
     }
     results = {}
     try:
-        from pysnmp.hlapi import getCmd, nextCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+        import asyncio
+        import socket
+        from pysnmp.hlapi.v3arch.asyncio import (
+            CommunityData, ContextData, ObjectIdentity, ObjectType, SnmpEngine,
+            UdpTransportTarget, get_cmd, walk_cmd,
+        )
         from datetime import timedelta
-        import time
         
         HRPROCESSORLOAD_TABLE = '1.3.6.1.2.1.25.3.3.1.2'
         
         object_types = [ObjectType(ObjectIdentity(oid)) for oid in oids.values()]
+
+        class SyncDnsUdpTransportTarget(UdpTransportTarget):
+            """Resolve synchronously because this function owns a short-lived event loop."""
+
+            async def _resolve_address(self, address):
+                return socket.getaddrinfo(
+                    address[0], address[1], family=socket.AF_INET,
+                    type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP,
+                )[0][4][:2]
+
+        async def snmp_get():
+            snmp_engine = SnmpEngine()
+            try:
+                transport = await SyncDnsUdpTransportTarget.create(
+                    (ip, 161), timeout=2, retries=1
+                )
+                return await get_cmd(
+                    snmp_engine,
+                    CommunityData(community, mpModel=1),
+                    transport,
+                    ContextData(),
+                    *object_types,
+                )
+            finally:
+                snmp_engine.close_dispatcher()
+
+        async def snmp_walk_cpu_load():
+            snmp_engine = SnmpEngine()
+            try:
+                transport = await SyncDnsUdpTransportTarget.create(
+                    (ip, 161), timeout=2, retries=1
+                )
+                rows = []
+                async for response in walk_cmd(
+                    snmp_engine,
+                    CommunityData(community, mpModel=1),
+                    transport,
+                    ContextData(),
+                    ObjectType(ObjectIdentity(HRPROCESSORLOAD_TABLE)),
+                    lexicographicMode=False,
+                ):
+                    rows.append(response)
+                return rows
+            finally:
+                snmp_engine.close_dispatcher()
         
         # Jeden hromadný SNMPv2c (mpModel=1) dopyt pre všetky hodnoty naraz
         # Odstránená umelá pauza, prenos letí v 1 balíku
-        errorIndication, errorStatus, errorIndex, varBinds = next(
-            getCmd(
-                SnmpEngine(),
-                CommunityData(community, mpModel=1), # v2c je ideálne pre bulk requesty
-                UdpTransportTarget((ip, 161), timeout=2, retries=1),
-                ContextData(),
-                *object_types
-            )
-        )
+        errorIndication, errorStatus, errorIndex, varBinds = asyncio.run(snmp_get())
         
         if errorIndication or errorStatus:
             # Handler pre offline zariadenie (alebo blokovaný SNMP)
@@ -1542,14 +1583,7 @@ def get_snmp_data(ip, community='public'):
             try:
                 core_loads = []
                 core_count = 0
-                for (errInd, errStat, _, varBinds) in nextCmd(
-                    SnmpEngine(),
-                    CommunityData(community, mpModel=1),
-                    UdpTransportTarget((ip, 161), timeout=2, retries=1),
-                    ContextData(),
-                    ObjectType(ObjectIdentity(HRPROCESSORLOAD_TABLE)),
-                    lexicographicMode=False
-                ):
+                for (errInd, errStat, _, varBinds) in asyncio.run(snmp_walk_cpu_load()):
                     if errInd or errStat:
                         break
                     for oid, val in varBinds:

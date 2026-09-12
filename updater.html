@@ -1115,14 +1115,141 @@
             overflow: hidden;
         }
 
-        .changelog-version-select {
-            min-width: 210px;
-            padding: 8px 10px;
+        .changelog-version-dropdown {
+            position: relative;
+            min-width: 245px;
+            z-index: 5;
+        }
+
+        .changelog-version-button {
+            width: 100%;
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 8px 11px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
             background: var(--card-bg);
             color: var(--text-color);
+            font: inherit;
             font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+            transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+        }
+
+        .changelog-version-button:hover,
+        .changelog-version-button:focus-visible,
+        .changelog-version-dropdown.is-open .changelog-version-button {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+            outline: none;
+        }
+
+        .changelog-version-button i {
+            flex: 0 0 auto;
+            color: var(--text-muted);
+            font-size: 11px;
+            transition: transform 160ms ease;
+        }
+
+        .changelog-version-dropdown.is-open .changelog-version-button i {
+            transform: rotate(180deg);
+        }
+
+        .changelog-version-menu {
+            position: absolute;
+            top: calc(100% + 7px);
+            left: 0;
+            right: 0;
+            z-index: 20;
+            max-height: min(340px, 45vh);
+            padding: 6px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--card-bg);
+            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.38);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-5px);
+            pointer-events: none;
+            transition: opacity 150ms ease, visibility 150ms ease, transform 150ms ease;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(75, 85, 99, 0.55) transparent;
+        }
+
+        .changelog-version-dropdown.is-open .changelog-version-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .changelog-version-menu::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .changelog-version-menu::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .changelog-version-menu::-webkit-scrollbar-thumb {
+            background-color: rgba(75, 85, 99, 0.55);
+            border-radius: 999px;
+        }
+
+        .changelog-version-menu::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(107, 114, 128, 0.75);
+        }
+
+        .changelog-version-group {
+            padding: 10px 10px 5px;
+            color: var(--accent-color);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .changelog-version-option {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: var(--text-color);
+            font: inherit;
+            font-size: 13px;
+            line-height: 1.35;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .changelog-version-option:hover,
+        .changelog-version-option:focus-visible {
+            background: rgba(56, 189, 248, 0.10);
+            outline: none;
+        }
+
+        .changelog-version-option.is-selected {
+            background: rgba(56, 189, 248, 0.16);
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        body.light-theme .changelog-version-menu {
+            scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+            box-shadow: 0 16px 38px rgba(30, 41, 59, 0.20);
+        }
+
+        body.light-theme .changelog-version-menu::-webkit-scrollbar-thumb {
+            background-color: rgba(100, 116, 139, 0.4);
         }
 
         .changelog-source-link {
@@ -1231,7 +1358,10 @@
             }
 
             .changelog-stage pre.changelog,
-            .changelog-loading {
+            .changelog-loading,
+            .changelog-version-button,
+            .changelog-version-button i,
+            .changelog-version-menu {
                 transition: none;
             }
         }
@@ -1253,7 +1383,7 @@
             }
 
             .changelog-toolbar,
-            .changelog-version-select {
+            .changelog-version-dropdown {
                 width: 100%;
             }
 
@@ -1946,8 +2076,17 @@
                     style="background:none; border:none; color:var(--text-color); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <div class="changelog-toolbar">
-                <select id="changelogVersionSelect" class="changelog-version-select"
-                    onchange="selectChangelogVersion(this.value)" aria-label="Verzia RouterOS"></select>
+                <div id="changelogVersionDropdown" class="changelog-version-dropdown"
+                    onkeydown="handleChangelogDropdownKeydown(event)" onfocusout="handleChangelogDropdownFocusout(event)">
+                    <button type="button" id="changelogVersionButton" class="changelog-version-button"
+                        onclick="toggleChangelogVersionDropdown(event)" aria-haspopup="listbox" aria-expanded="false"
+                        aria-controls="changelogVersionMenu">
+                        <span id="changelogVersionLabel">Vyberte verziu</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div id="changelogVersionMenu" class="changelog-version-menu" role="listbox"
+                        aria-label="Verzia RouterOS"></div>
+                </div>
                 <a id="changelogSourceLink" class="changelog-source-link" href="#" target="_blank"
                     rel="noopener noreferrer">Otvoriť zdroj <i class="fas fa-external-link-alt"></i></a>
             </div>
@@ -2318,6 +2457,17 @@
                 if (!e.target.closest('.update-dropdown-wrap')) {
                     document.querySelectorAll('.update-dropdown').forEach(d => d.style.display = 'none');
                 }
+                if (!e.target.closest('.changelog-version-dropdown')) {
+                    closeChangelogVersionDropdown();
+                }
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    const dropdown = document.getElementById('changelogVersionDropdown');
+                    if (dropdown && dropdown.classList.contains('is-open')) {
+                        closeChangelogVersionDropdown(true);
+                    }
+                }
             });
             initScheduledUpdateSocket();
             fetchRssData();
@@ -2439,7 +2589,7 @@
 
             const modal = document.getElementById('changelogModal');
             if (modal.style.display === 'flex') {
-                const currentVersion = document.getElementById('changelogVersionSelect').value || rssData.version;
+                const currentVersion = getSelectedChangelogVersion() || (rssData && rssData.version) || '';
                 const selectedVersion = changelogHistory.some(item => item.version === currentVersion)
                     ? currentVersion
                     : (changelogHistory[0] && changelogHistory[0].version);
@@ -2456,31 +2606,112 @@
         }
 
         function populateChangelogVersionSelect(selectedVersion) {
-            const select = document.getElementById('changelogVersionSelect');
+            const menu = document.getElementById('changelogVersionMenu');
             const items = changelogHistory.length
                 ? changelogHistory
                 : (rssData ? [{ version: rssData.version, release_date: '' }] : []);
 
-            select.replaceChildren();
+            menu.replaceChildren();
             let currentBranch = '';
-            let branchGroup = null;
             items.forEach(item => {
                 const versionParts = item.version.split('.');
                 const branch = versionParts.slice(0, 2).join('.');
                 if (branch !== currentBranch) {
                     currentBranch = branch;
-                    branchGroup = document.createElement('optgroup');
-                    branchGroup.label = `Vetva ${branch}.x`;
-                    select.appendChild(branchGroup);
+                    const groupLabel = document.createElement('div');
+                    groupLabel.className = 'changelog-version-group';
+                    groupLabel.textContent = `Vetva ${branch}.x`;
+                    groupLabel.setAttribute('aria-hidden', 'true');
+                    menu.appendChild(groupLabel);
                 }
 
-                const option = document.createElement('option');
-                option.value = item.version;
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = 'changelog-version-option';
+                option.dataset.version = item.version;
+                option.setAttribute('role', 'option');
                 const formattedDate = formatChangelogDate(item.release_date);
                 option.textContent = `RouterOS ${item.version}${formattedDate ? ` — ${formattedDate}` : ''}`;
-                branchGroup.appendChild(option);
+                option.addEventListener('click', () => selectChangelogVersion(item.version));
+                menu.appendChild(option);
             });
-            select.value = selectedVersion || (rssData && rssData.version) || '';
+            setChangelogVersionSelection(selectedVersion || (rssData && rssData.version) || '');
+        }
+
+        function getSelectedChangelogVersion() {
+            return document.getElementById('changelogVersionButton').dataset.version || '';
+        }
+
+        function setChangelogVersionSelection(version) {
+            const button = document.getElementById('changelogVersionButton');
+            const label = document.getElementById('changelogVersionLabel');
+            let selectedOption = null;
+            document.querySelectorAll('.changelog-version-option').forEach(option => {
+                const isSelected = option.dataset.version === version;
+                option.classList.toggle('is-selected', isSelected);
+                option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                if (isSelected) selectedOption = option;
+            });
+            button.dataset.version = version;
+            label.textContent = selectedOption ? selectedOption.textContent : (version ? `RouterOS ${version}` : 'Vyberte verziu');
+        }
+
+        function toggleChangelogVersionDropdown(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('changelogVersionDropdown');
+            const button = document.getElementById('changelogVersionButton');
+            const shouldOpen = !dropdown.classList.contains('is-open');
+            dropdown.classList.toggle('is-open', shouldOpen);
+            button.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (shouldOpen) {
+                requestAnimationFrame(() => {
+                    const selected = dropdown.querySelector('.changelog-version-option.is-selected');
+                    if (selected) selected.scrollIntoView({ block: 'nearest' });
+                });
+            }
+        }
+
+        function closeChangelogVersionDropdown(returnFocus = false) {
+            const dropdown = document.getElementById('changelogVersionDropdown');
+            const button = document.getElementById('changelogVersionButton');
+            if (!dropdown || !button) return;
+            const wasOpen = dropdown.classList.contains('is-open');
+            dropdown.classList.remove('is-open');
+            button.setAttribute('aria-expanded', 'false');
+            if (returnFocus && wasOpen) button.focus();
+        }
+
+        function handleChangelogDropdownFocusout(event) {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+                closeChangelogVersionDropdown();
+            }
+        }
+
+        function handleChangelogDropdownKeydown(event) {
+            const dropdown = document.getElementById('changelogVersionDropdown');
+            const options = Array.from(dropdown.querySelectorAll('.changelog-version-option'));
+            if (!options.length) return;
+
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                closeChangelogVersionDropdown(true);
+                return;
+            }
+            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+
+            event.preventDefault();
+            if (!dropdown.classList.contains('is-open')) {
+                toggleChangelogVersionDropdown(event);
+            }
+            const focusedIndex = options.indexOf(document.activeElement);
+            const selectedIndex = options.findIndex(option => option.classList.contains('is-selected'));
+            let nextIndex;
+            if (event.key === 'Home') nextIndex = 0;
+            else if (event.key === 'End') nextIndex = options.length - 1;
+            else if (event.key === 'ArrowDown') nextIndex = Math.min((focusedIndex >= 0 ? focusedIndex : selectedIndex) + 1, options.length - 1);
+            else nextIndex = Math.max((focusedIndex >= 0 ? focusedIndex : selectedIndex) - 1, 0);
+            options[Math.max(nextIndex, 0)].focus();
         }
 
         function openChangelogModal() {
@@ -2503,10 +2734,10 @@
             if (!version) return;
 
             const requestId = ++changelogRequestId;
-            const select = document.getElementById('changelogVersionSelect');
             const content = document.getElementById('modalContent');
             const sourceLink = document.getElementById('changelogSourceLink');
-            select.value = version;
+            setChangelogVersionSelection(version);
+            closeChangelogVersionDropdown(true);
             document.getElementById('modalTitle').innerText = `RouterOS ${version} [stable]`;
             sourceLink.href = `https://mikrotik.com/download/changelogs?channelFilter=stable&versionFilter=${encodeURIComponent(version)}`;
 
@@ -2532,13 +2763,13 @@
                     throw new Error(json.message || 'Changelog sa nepodarilo načítať.');
                 }
                 changelogDetails[version] = json.data;
-                if (requestId === changelogRequestId && select.value === version) {
+                if (requestId === changelogRequestId && getSelectedChangelogVersion() === version) {
                     content.textContent = json.data.description;
                     sourceLink.href = json.data.source_url || sourceLink.href;
                     setChangelogLoading(false);
                 }
             } catch (err) {
-                if (requestId === changelogRequestId && select.value === version) {
+                if (requestId === changelogRequestId && getSelectedChangelogVersion() === version) {
                     content.textContent = 'Historický changelog sa nepodarilo načítať. Skús to neskôr alebo otvor zdroj na MikroTik.com.';
                     setChangelogLoading(false);
                 }
@@ -2547,6 +2778,7 @@
 
         function closeModal(e) {
             if (e && e.target !== document.getElementById('changelogModal')) return;
+            closeChangelogVersionDropdown();
             document.getElementById('changelogModal').style.display = 'none';
             document.body.style.overflow = 'auto';
         }

@@ -247,6 +247,29 @@ PASSWORD_RECOVERY_REQUEST_COOLDOWN_SECONDS = 60
 # --- Nastavenie aplikácie (upravené pre HTML šablóny) ---
 app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
 
+def create_private_file(path, data):
+    """Create a new file atomically with owner-only permissions."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, 'O_NOFOLLOW'):
+        flags |= os.O_NOFOLLOW
+
+    fd = os.open(path, flags, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, 'wb') as f:
+            fd = None
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+    except Exception:
+        if fd is not None:
+            os.close(fd)
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
+
 # PERSISTENT SECRET KEY - Bezpečnostne optimalizované
 def get_or_create_secret_key():
     """
@@ -270,12 +293,19 @@ def get_or_create_secret_key():
     # Vytvor nový SECRET_KEY
     secret_key = os.urandom(32)
     try:
-        with open(secret_key_file, 'wb') as f:
-            f.write(secret_key)
-        # Nastavenie správnych práv na súbor (600 - read/write owner only)
-        os.chmod(secret_key_file, 0o600)
+        create_private_file(secret_key_file, secret_key)
         print("Vytvorený nový persistent SECRET_KEY")
         return secret_key
+    except FileExistsError:
+        # Iný proces mohol kľúč vytvoriť medzi kontrolou a zápisom.
+        try:
+            with open(secret_key_file, 'rb') as f:
+                existing_key = f.read()
+            if len(existing_key) == 32:
+                return existing_key
+        except Exception as e:
+            print(f"Chyba pri čítaní súbežne vytvoreného SECRET_KEY: {e}")
+        return os.urandom(32)
     except Exception as e:
         print(f"Chyba pri ukladaní SECRET_KEY: {e}")
         # Fallback na session-only kľúč
@@ -349,11 +379,13 @@ def get_encryption_key():
         # Generate new key and save it
         key = Fernet.generate_key()
         os.makedirs(DATA_DIR, exist_ok=True)
-        with open(key_file, 'wb') as f:
-            f.write(key)
-        # Set secure permissions
-        os.chmod(key_file, 0o600)
-        return key
+        try:
+            create_private_file(key_file, key)
+            return key
+        except FileExistsError:
+            # Another process created the key after the existence check.
+            with open(key_file, 'rb') as f:
+                return f.read()
 
 # Initialize encryption
 ENCRYPTION_KEY = get_encryption_key()

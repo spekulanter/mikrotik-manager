@@ -28,6 +28,7 @@ import difflib
 from ftplib import FTP
 import http.client
 import urllib.parse
+from html import unescape
 from contextlib import contextmanager
 import logging
 import schedule
@@ -2148,6 +2149,166 @@ def delete_backup(filename):
 RSS_CACHE = {'timestamp': 0, 'data': None}
 RSS_CACHE_DURATION = 3600 # 1 hour
 MIKROTIK_STABLE_RSS_URL = 'https://cdn.mikrotik.com/routeros/latest-stable.rss'
+MIKROTIK_CHANGELOGS_URL = 'https://mikrotik.com/download/changelogs'
+CHANGELOG_HISTORY_LIMIT = 1000  # Prakticky neobmedzená história RouterOS vydaní
+CHANGELOG_HISTORY_CACHE = {
+    'timestamp': 0,
+    'data': None,
+    'snapshot': None,
+    'csrf_token': None,
+    'update_url': None,
+    'cookies': None
+}
+CHANGELOG_DETAIL_CACHE = {}
+
+
+def fetch_mikrotik_changelog_history(limit=CHANGELOG_HISTORY_LIMIT):
+    """Načíta zoznam stable RouterOS vydaní z oficiálneho archívu."""
+    now = time.time()
+    cached = CHANGELOG_HISTORY_CACHE.get('data')
+    if cached and now - CHANGELOG_HISTORY_CACHE.get('timestamp', 0) < RSS_CACHE_DURATION:
+        return cached[:limit]
+
+    try:
+        source_session = requests.Session()
+        response = source_session.get(
+            MIKROTIK_CHANGELOGS_URL,
+            params={'channelFilter': 'stable'},
+            headers={'User-Agent': 'MikroTik-Manager/1.0'},
+            timeout=15
+        )
+        response.raise_for_status()
+
+        matches = list(re.finditer(r'data-changelog-version="([^"]+)"', response.text))
+        releases = []
+        seen = set()
+        for index, match in enumerate(matches):
+            version = match.group(1).strip()
+            if version in seen or not re.fullmatch(r'\d+(?:\.\d+){1,2}', version):
+                continue
+
+            block_end = matches[index + 1].start() if index + 1 < len(matches) else len(response.text)
+            block = response.text[match.start():block_end]
+            date_match = re.search(r'<span class="mtk-text-xs">\s*(\d{4}-\d{2}-\d{2})\s*</span>', block)
+            releases.append({
+                'version': version,
+                'release_date': date_match.group(1) if date_match else ''
+            })
+            seen.add(version)
+            if len(releases) >= limit:
+                break
+
+        if releases:
+            snapshot_match = re.search(
+                r'<div[^>]+wire:snapshot="([^"]+)"[^>]+wire:name="components\.software\.changelogs"',
+                response.text
+            )
+            csrf_match = re.search(r'data-csrf="([^"]+)"', response.text)
+            update_url_match = re.search(r'data-update-uri="([^"]+)"', response.text)
+            CHANGELOG_HISTORY_CACHE.update({
+                'timestamp': now,
+                'data': releases,
+                'snapshot': unescape(snapshot_match.group(1)) if snapshot_match else None,
+                'csrf_token': csrf_match.group(1) if csrf_match else None,
+                'update_url': urllib.parse.urljoin(response.url, update_url_match.group(1)) if update_url_match else None,
+                'cookies': source_session.cookies.get_dict()
+            })
+            return releases
+    except Exception as e:
+        logger.warning(f"Failed to fetch MikroTik changelog history: {e}")
+
+    return cached[:limit] if cached else []
+
+
+def fetch_mikrotik_changelog_detail(version):
+    """Načíta konkrétny stable changelog priamo z oficiálneho MikroTik archívu."""
+    if not re.fullmatch(r'\d+(?:\.\d+){1,2}', version or ''):
+        return None
+
+    cached = CHANGELOG_DETAIL_CACHE.get(version)
+    if cached:
+        return cached
+
+    # Načítanie zoznamu zároveň pripraví Livewire snapshot a session cookie archívu.
+    available_versions = {item['version'] for item in fetch_mikrotik_changelog_history()}
+    if version not in available_versions:
+        return None
+
+    snapshot = CHANGELOG_HISTORY_CACHE.get('snapshot')
+    csrf_token = CHANGELOG_HISTORY_CACHE.get('csrf_token')
+    update_url = CHANGELOG_HISTORY_CACHE.get('update_url')
+    if not all((snapshot, csrf_token, update_url)):
+        return None
+
+    try:
+        payload = {
+            '_token': csrf_token,
+            'components': [{
+                'snapshot': snapshot,
+                'updates': {},
+                'calls': [{
+                    'path': '',
+                    'method': 'getChangelogs',
+                    'params': [[version]]
+                }]
+            }]
+        }
+        detail_response = requests.post(
+            update_url,
+            json=payload,
+            cookies=CHANGELOG_HISTORY_CACHE.get('cookies') or {},
+            headers={
+                'User-Agent': 'MikroTik-Manager/1.0',
+                'X-Livewire': 'true',
+                'Referer': MIKROTIK_CHANGELOGS_URL
+            },
+            timeout=20
+        )
+        detail_response.raise_for_status()
+        components = detail_response.json().get('components', [])
+        returns = components[0].get('effects', {}).get('returns', []) if components else []
+        changelogs = returns[0] if returns and isinstance(returns[0], dict) else {}
+        description = str(changelogs.get(version, '')).replace('\r', '').strip()
+        if not description:
+            return None
+
+        result = {
+            'version': version,
+            'description': description[:60000],
+            'source_url': f'{MIKROTIK_CHANGELOGS_URL}?channelFilter=stable&versionFilter={urllib.parse.quote(version)}'
+        }
+        CHANGELOG_DETAIL_CACHE[version] = result
+        return result
+    except Exception as e:
+        logger.warning(f"Failed to fetch MikroTik changelog {version}: {e}")
+        return None
+
+
+def get_managed_routeros_major_versions():
+    """Vráti major verzie RouterOS z posledných SNMP údajov spravovaných zariadení."""
+    major_versions = set()
+    try:
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                'SELECT last_snmp_data FROM devices WHERE deleted_at IS NULL AND last_snmp_data IS NOT NULL'
+            ).fetchall()
+        for row in rows:
+            try:
+                snmp_data = json.loads(row['last_snmp_data'])
+                version_match = re.match(r'^(\d+)\.', str(snmp_data.get('version', '')))
+                if version_match:
+                    major_versions.add(int(version_match.group(1)))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+    except Exception as e:
+        logger.warning(f"Failed to determine managed RouterOS versions: {e}")
+
+    if not major_versions:
+        latest = (RSS_CACHE.get('data') or {}).get('latest') or {}
+        version_match = re.match(r'^(\d+)\.', str(latest.get('version', '')))
+        major_versions.add(int(version_match.group(1)) if version_match else 7)
+
+    return sorted(major_versions, reverse=True)
 
 def fetch_mikrotik_rss():
     global RSS_CACHE
@@ -2576,6 +2737,33 @@ def api_updater_rss():
     if data:
         return jsonify({'status': 'success', 'data': data})
     return jsonify({'status': 'error', 'message': 'Nepodarilo sa načítať RSS.'}), 500
+
+
+@app.route('/api/updater/changelog-history')
+@login_required
+def api_updater_changelog_history():
+    major_versions = get_managed_routeros_major_versions()
+    items = [
+        item for item in fetch_mikrotik_changelog_history()
+        if int(item['version'].split('.', 1)[0]) in major_versions
+    ]
+    return jsonify({
+        'status': 'success',
+        'items': items,
+        'major_versions': major_versions
+    })
+
+
+@app.route('/api/updater/changelog/<version>')
+@login_required
+def api_updater_changelog_detail(version):
+    if not re.fullmatch(r'\d+(?:\.\d+){1,2}', version or ''):
+        return jsonify({'status': 'error', 'message': 'Neplatná verzia RouterOS.'}), 400
+
+    data = fetch_mikrotik_changelog_detail(version)
+    if not data:
+        return jsonify({'status': 'error', 'message': 'Changelog sa nepodarilo načítať.'}), 502
+    return jsonify({'status': 'success', 'data': data})
 
 @app.route('/api/updater/ping/<int:device_id>')
 @login_required

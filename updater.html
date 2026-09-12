@@ -1098,8 +1098,168 @@
             border-radius: 8px;
         }
 
+        .changelog-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .changelog-modal-content {
+            height: min(650px, calc(100vh - 40px));
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .changelog-version-select {
+            min-width: 210px;
+            padding: 8px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 13px;
+        }
+
+        .changelog-source-link {
+            color: var(--accent-color);
+            font-size: 12px;
+            text-decoration: none;
+        }
+
+        .changelog-source-link:hover {
+            text-decoration: underline;
+        }
+
+        .changelog-stage {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .changelog-stage pre.changelog {
+            height: 100%;
+            margin: 0;
+            box-sizing: border-box;
+            overflow-y: auto;
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 180ms ease, transform 180ms ease;
+        }
+
+        .changelog-stage.is-loading pre.changelog {
+            opacity: 0;
+            transform: translateY(4px);
+        }
+
+        .changelog-loading {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            padding: 18px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 180ms ease, visibility 180ms ease;
+            pointer-events: none;
+        }
+
+        .changelog-stage.is-loading .changelog-loading {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .changelog-loading-label {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-bottom: 22px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .changelog-loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(96, 165, 250, 0.22);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 800ms linear infinite;
+        }
+
+        .changelog-skeleton-line {
+            height: 11px;
+            margin-bottom: 13px;
+            border-radius: 999px;
+            background: linear-gradient(90deg,
+                    rgba(148, 163, 184, 0.10) 20%,
+                    rgba(148, 163, 184, 0.24) 45%,
+                    rgba(148, 163, 184, 0.10) 70%);
+            background-size: 240% 100%;
+            animation: changelog-shimmer 1.35s ease-in-out infinite;
+        }
+
+        .changelog-skeleton-line.heading {
+            width: 48%;
+            height: 14px;
+            margin-bottom: 22px;
+        }
+
+        .changelog-skeleton-line.medium {
+            width: 78%;
+        }
+
+        .changelog-skeleton-line.short {
+            width: 58%;
+        }
+
+        @keyframes changelog-shimmer {
+            from { background-position: 100% 0; }
+            to { background-position: -100% 0; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .changelog-loading-spinner,
+            .changelog-skeleton-line {
+                animation: none;
+            }
+
+            .changelog-stage pre.changelog,
+            .changelog-loading {
+                transition: none;
+            }
+        }
+
         body.light-theme pre.changelog {
             background: rgba(255, 255, 255, 0.5);
+        }
+
+        body.light-theme .changelog-stage {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        @media (max-width: 640px) {
+            .changelog-modal-content {
+                width: calc(100% - 20px);
+                height: calc(100vh - 24px);
+                max-height: calc(100vh - 24px);
+                padding: 18px;
+            }
+
+            .changelog-toolbar,
+            .changelog-version-select {
+                width: 100%;
+            }
+
+            .changelog-source-link {
+                margin-left: auto;
+            }
         }
 
         /* Checkbox column */
@@ -1778,14 +1938,36 @@
 
     <!-- Changelog modal -->
     <div id="changelogModal" class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-content changelog-modal-content" onclick="event.stopPropagation()">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h2 style="font-size: 1.3rem; font-weight: 600; color: var(--accent-color);" id="modalTitle">Changelog
                 </h2>
                 <button onclick="closeModal()"
                     style="background:none; border:none; color:var(--text-color); font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
-            <pre class="changelog" id="modalContent">Načítavam...</pre>
+            <div class="changelog-toolbar">
+                <select id="changelogVersionSelect" class="changelog-version-select"
+                    onchange="selectChangelogVersion(this.value)" aria-label="Verzia RouterOS"></select>
+                <a id="changelogSourceLink" class="changelog-source-link" href="#" target="_blank"
+                    rel="noopener noreferrer">Otvoriť zdroj <i class="fas fa-external-link-alt"></i></a>
+            </div>
+            <div id="changelogStage" class="changelog-stage" aria-live="polite" aria-busy="false">
+                <div class="changelog-loading" aria-hidden="true">
+                    <div class="changelog-loading-label">
+                        <span class="changelog-loading-spinner"></span>
+                        <span>Načítavam changelog…</span>
+                    </div>
+                    <div class="changelog-skeleton-line heading"></div>
+                    <div class="changelog-skeleton-line"></div>
+                    <div class="changelog-skeleton-line medium"></div>
+                    <div class="changelog-skeleton-line"></div>
+                    <div class="changelog-skeleton-line short"></div>
+                    <div class="changelog-skeleton-line"></div>
+                    <div class="changelog-skeleton-line medium"></div>
+                    <div class="changelog-skeleton-line short"></div>
+                </div>
+                <pre class="changelog" id="modalContent"></pre>
+            </div>
         </div>
     </div>
 
@@ -1802,6 +1984,10 @@
 
     <script>
         let rssData = null;
+        let changelogHistory = [];
+        let changelogMajorVersions = [];
+        const changelogDetails = {};
+        let changelogRequestId = 0;
         let devicesList = [];
 
         // Custom confirm() replacement – works in Android WebView
@@ -2223,6 +2409,7 @@
                     document.getElementById('rssLatestVersion').innerHTML =
                         `<strong>RouterOS ${rssData.version}</strong> <br class="mobile-break">(Vydané: ${pubDateLocal})`;
                     document.getElementById('btnShowChangelog').style.display = 'inline-flex';
+                    fetchChangelogHistory();
                 } else {
                     document.getElementById('rssLatestVersion').innerText = 'Nepodarilo sa načítať stabilnú verziu z RSS.';
                 }
@@ -2231,14 +2418,130 @@
             }
         }
 
+        async function fetchChangelogHistory() {
+            try {
+                const res = await fetch('/api/updater/changelog-history');
+                const json = await res.json();
+                if (json.status === 'success' && Array.isArray(json.items)) {
+                    changelogHistory = json.items;
+                    changelogMajorVersions = Array.isArray(json.major_versions) ? json.major_versions : [];
+                }
+            } catch (err) {
+                changelogHistory = [];
+                changelogMajorVersions = [];
+            }
+
+            const rssMajor = rssData ? Number.parseInt(rssData.version.split('.')[0], 10) : null;
+            const rssMatchesManagedMajor = !changelogMajorVersions.length || changelogMajorVersions.includes(rssMajor);
+            if (rssData && rssMatchesManagedMajor && !changelogHistory.some(item => item.version === rssData.version)) {
+                changelogHistory.unshift({ version: rssData.version, release_date: '' });
+            }
+
+            const modal = document.getElementById('changelogModal');
+            if (modal.style.display === 'flex') {
+                const currentVersion = document.getElementById('changelogVersionSelect').value || rssData.version;
+                const selectedVersion = changelogHistory.some(item => item.version === currentVersion)
+                    ? currentVersion
+                    : (changelogHistory[0] && changelogHistory[0].version);
+                populateChangelogVersionSelect(selectedVersion);
+                if (selectedVersion && selectedVersion !== currentVersion) {
+                    selectChangelogVersion(selectedVersion);
+                }
+            }
+        }
+
+        function formatChangelogDate(dateValue) {
+            const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            return match ? `${match[3]}.${match[2]}.${match[1]}` : '';
+        }
+
+        function populateChangelogVersionSelect(selectedVersion) {
+            const select = document.getElementById('changelogVersionSelect');
+            const items = changelogHistory.length
+                ? changelogHistory
+                : (rssData ? [{ version: rssData.version, release_date: '' }] : []);
+
+            select.replaceChildren();
+            let currentBranch = '';
+            let branchGroup = null;
+            items.forEach(item => {
+                const versionParts = item.version.split('.');
+                const branch = versionParts.slice(0, 2).join('.');
+                if (branch !== currentBranch) {
+                    currentBranch = branch;
+                    branchGroup = document.createElement('optgroup');
+                    branchGroup.label = `Vetva ${branch}.x`;
+                    select.appendChild(branchGroup);
+                }
+
+                const option = document.createElement('option');
+                option.value = item.version;
+                const formattedDate = formatChangelogDate(item.release_date);
+                option.textContent = `RouterOS ${item.version}${formattedDate ? ` — ${formattedDate}` : ''}`;
+                branchGroup.appendChild(option);
+            });
+            select.value = selectedVersion || (rssData && rssData.version) || '';
+        }
+
         function openChangelogModal() {
             if (rssData) {
-                document.getElementById('modalTitle').innerText = `RouterOS ${rssData.version} [stable]`;
-                const div = document.createElement('div');
-                div.innerHTML = rssData.description;
-                document.getElementById('modalContent').innerHTML = div.innerHTML;
+                const defaultVersion = (changelogHistory[0] && changelogHistory[0].version) || rssData.version;
                 document.getElementById('changelogModal').style.display = 'flex';
                 document.body.style.overflow = 'hidden';
+                populateChangelogVersionSelect(defaultVersion);
+                selectChangelogVersion(defaultVersion);
+            }
+        }
+
+        function setChangelogLoading(isLoading) {
+            const stage = document.getElementById('changelogStage');
+            stage.classList.toggle('is-loading', isLoading);
+            stage.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+        }
+
+        async function selectChangelogVersion(version) {
+            if (!version) return;
+
+            const requestId = ++changelogRequestId;
+            const select = document.getElementById('changelogVersionSelect');
+            const content = document.getElementById('modalContent');
+            const sourceLink = document.getElementById('changelogSourceLink');
+            select.value = version;
+            document.getElementById('modalTitle').innerText = `RouterOS ${version} [stable]`;
+            sourceLink.href = `https://mikrotik.com/download/changelogs?channelFilter=stable&versionFilter=${encodeURIComponent(version)}`;
+
+            if (rssData && version === rssData.version) {
+                content.innerHTML = rssData.description;
+                setChangelogLoading(false);
+                return;
+            }
+
+            if (changelogDetails[version]) {
+                content.textContent = changelogDetails[version].description;
+                sourceLink.href = changelogDetails[version].source_url || sourceLink.href;
+                setChangelogLoading(false);
+                return;
+            }
+
+            content.textContent = '';
+            setChangelogLoading(true);
+            try {
+                const res = await fetch(`/api/updater/changelog/${encodeURIComponent(version)}`);
+                const json = await res.json();
+                if (!res.ok || json.status !== 'success' || !json.data) {
+                    throw new Error(json.message || 'Changelog sa nepodarilo načítať.');
+                }
+                changelogDetails[version] = json.data;
+                if (requestId === changelogRequestId && select.value === version) {
+                    content.textContent = json.data.description;
+                    sourceLink.href = json.data.source_url || sourceLink.href;
+                    setChangelogLoading(false);
+                }
+            } catch (err) {
+                if (requestId === changelogRequestId && select.value === version) {
+                    content.textContent = 'Historický changelog sa nepodarilo načítať. Skús to neskôr alebo otvor zdroj na MikroTik.com.';
+                    setChangelogLoading(false);
+                }
             }
         }
 

@@ -1416,11 +1416,19 @@ def migrate_backups_for_ip_change(old_ip, new_ip, settings):
         for filename in os.listdir(BACKUP_DIR):
             if old_marker not in filename or not filename.endswith(ALLOWED_BACKUP_EXTENSIONS):
                 continue
-            source_path = os.path.join(BACKUP_DIR, filename)
+            try:
+                # `new_ip` originates in the device-edit request.  Resolve both
+                # paths through the same containment check used for backup downloads
+                # so a malformed value cannot escape BACKUP_DIR.
+                source_path = resolve_backup_file_path(filename)
+                new_filename = filename.replace(old_marker, new_marker, 1)
+                target_path = resolve_backup_file_path(new_filename)
+            except ValueError as e:
+                result['skipped'] += 1
+                result['errors'].append(f"nepovolený názov lokálnej zálohy {filename}: {e}")
+                continue
             if not os.path.isfile(source_path):
                 continue
-            new_filename = filename.replace(old_marker, new_marker, 1)
-            target_path = os.path.join(BACKUP_DIR, new_filename)
             if os.path.exists(target_path):
                 result['skipped'] += 1
                 result['errors'].append(f"lokálny súbor {new_filename} už existuje")

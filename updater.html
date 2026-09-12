@@ -1407,12 +1407,14 @@
             max-height: 80vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            /* Allow the version picker to overlay the changelog instead of clipping it. */
+            overflow: visible;
         }
 
         .changelog-version-dropdown {
             position: relative;
-            min-width: 245px;
+            width: min(340px, calc(100vw - 72px));
+            max-width: 100%;
             z-index: 5;
         }
 
@@ -1448,6 +1450,11 @@
             color: var(--text-muted);
             font-size: 11px;
             transition: transform 160ms ease;
+        }
+
+        .changelog-version-button span {
+            min-width: 0;
+            overflow-wrap: anywhere;
         }
 
         .changelog-version-dropdown.is-open .changelog-version-button i {
@@ -1514,15 +1521,18 @@
             width: 100%;
             display: flex;
             align-items: center;
-            padding: 8px 10px;
+            padding: 6px 10px;
             border: 0;
             border-radius: 7px;
             background: transparent;
             color: var(--text-color);
             font: inherit;
             font-size: 13px;
-            line-height: 1.35;
+            line-height: 1.25;
             text-align: left;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
             cursor: pointer;
         }
 

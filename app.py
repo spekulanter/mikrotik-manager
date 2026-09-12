@@ -786,7 +786,8 @@ def init_database():
                 last_backup TIMESTAMP, last_snmp_data TEXT, snmp_interval_minutes INTEGER DEFAULT 0,
                 last_snmp_check TIMESTAMP, ping_interval_seconds INTEGER DEFAULT 0,
                 ping_retry_interval_seconds INTEGER DEFAULT 0, monitoring_paused BOOLEAN DEFAULT 0,
-                cert_www_port INTEGER DEFAULT 0, cert_www_ssl_port INTEGER DEFAULT 0
+                cert_www_port INTEGER DEFAULT 0, cert_www_ssl_port INTEGER DEFAULT 0,
+                routeros_update_channel TEXT DEFAULT NULL
             )
         ''')
         # Pridanie nových stĺpcov pre existujúce databázy
@@ -824,6 +825,10 @@ def init_database():
             pass
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN purge_after TIMESTAMP DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN routeros_update_channel TEXT DEFAULT NULL')
         except sqlite3.OperationalError:
             pass
 
@@ -910,6 +915,7 @@ def init_database():
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 result_message TEXT,
+                update_channel TEXT NOT NULL DEFAULT 'stable',
                 FOREIGN KEY (device_id) REFERENCES devices (id)
             )
         ''')
@@ -924,6 +930,10 @@ def init_database():
             pass
         try:
             cursor.execute('ALTER TABLE update_schedule ADD COLUMN bulk_sequence INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE update_schedule ADD COLUMN update_channel TEXT NOT NULL DEFAULT 'stable'")
         except sqlite3.OperationalError:
             pass
         conn.commit()
@@ -2150,30 +2160,54 @@ RSS_CACHE = {'timestamp': 0, 'data': None}
 RSS_CACHE_DURATION = 3600 # 1 hour
 MIKROTIK_STABLE_RSS_URL = 'https://cdn.mikrotik.com/routeros/latest-stable.rss'
 MIKROTIK_CHANGELOGS_URL = 'https://mikrotik.com/download/changelogs'
+ROUTEROS_UPDATE_CHANNELS = ('long-term', 'stable', 'testing', 'development')
+ROUTEROS_VERSION_PATTERN = re.compile(r'\d+(?:\.\d+){1,2}(?:(?:alpha|beta|rc)\d+)?', re.IGNORECASE)
 CHANGELOG_HISTORY_LIMIT = 1000  # Prakticky neobmedzená história RouterOS vydaní
-CHANGELOG_HISTORY_CACHE = {
-    'timestamp': 0,
-    'data': None,
-    'snapshot': None,
-    'csrf_token': None,
-    'update_url': None,
-    'cookies': None
-}
+CHANGELOG_HISTORY_CACHE = {}
 CHANGELOG_DETAIL_CACHE = {}
 
 
-def fetch_mikrotik_changelog_history(limit=CHANGELOG_HISTORY_LIMIT):
-    """Načíta zoznam stable RouterOS vydaní z oficiálneho archívu."""
+def normalize_routeros_channel(value, default=None):
+    """Normalizuje a validuje RouterOS update channel."""
+    channel = str(value or '').strip().lower()
+    if channel == 'longterm':
+        channel = 'long-term'
+    return channel if channel in ROUTEROS_UPDATE_CHANNELS else default
+
+
+def get_device_update_channel(device_id, fallback='stable'):
+    """Vráti efektívny kanál; individuálne nastavenie má prednosť pred globálnym."""
+    fallback = normalize_routeros_channel(fallback, 'stable')
+    with get_db_connection() as conn:
+        row = conn.execute(
+            'SELECT routeros_update_channel FROM devices WHERE id = ? AND deleted_at IS NULL',
+            (device_id,)
+        ).fetchone()
+    override = normalize_routeros_channel(row['routeros_update_channel']) if row else None
+    return override or fallback, override
+
+
+def fetch_mikrotik_changelog_history(channel='stable', limit=CHANGELOG_HISTORY_LIMIT):
+    """Načíta vydania zvoleného RouterOS kanála z oficiálneho archívu."""
+    channel = normalize_routeros_channel(channel, 'stable')
     now = time.time()
-    cached = CHANGELOG_HISTORY_CACHE.get('data')
-    if cached and now - CHANGELOG_HISTORY_CACHE.get('timestamp', 0) < RSS_CACHE_DURATION:
+    channel_cache = CHANGELOG_HISTORY_CACHE.setdefault(channel, {
+        'timestamp': 0,
+        'data': None,
+        'snapshot': None,
+        'csrf_token': None,
+        'update_url': None,
+        'cookies': None
+    })
+    cached = channel_cache.get('data')
+    if cached and now - channel_cache.get('timestamp', 0) < RSS_CACHE_DURATION:
         return cached[:limit]
 
     try:
         source_session = requests.Session()
         response = source_session.get(
             MIKROTIK_CHANGELOGS_URL,
-            params={'channelFilter': 'stable'},
+            params={'channelFilter': channel},
             headers={'User-Agent': 'MikroTik-Manager/1.0'},
             timeout=15
         )
@@ -2184,7 +2218,7 @@ def fetch_mikrotik_changelog_history(limit=CHANGELOG_HISTORY_LIMIT):
         seen = set()
         for index, match in enumerate(matches):
             version = match.group(1).strip()
-            if version in seen or not re.fullmatch(r'\d+(?:\.\d+){1,2}', version):
+            if version in seen or not ROUTEROS_VERSION_PATTERN.fullmatch(version):
                 continue
 
             block_end = matches[index + 1].start() if index + 1 < len(matches) else len(response.text)
@@ -2192,7 +2226,8 @@ def fetch_mikrotik_changelog_history(limit=CHANGELOG_HISTORY_LIMIT):
             date_match = re.search(r'<span class="mtk-text-xs">\s*(\d{4}-\d{2}-\d{2})\s*</span>', block)
             releases.append({
                 'version': version,
-                'release_date': date_match.group(1) if date_match else ''
+                'release_date': date_match.group(1) if date_match else '',
+                'channel': channel
             })
             seen.add(version)
             if len(releases) >= limit:
@@ -2205,7 +2240,7 @@ def fetch_mikrotik_changelog_history(limit=CHANGELOG_HISTORY_LIMIT):
             )
             csrf_match = re.search(r'data-csrf="([^"]+)"', response.text)
             update_url_match = re.search(r'data-update-uri="([^"]+)"', response.text)
-            CHANGELOG_HISTORY_CACHE.update({
+            channel_cache.update({
                 'timestamp': now,
                 'data': releases,
                 'snapshot': unescape(snapshot_match.group(1)) if snapshot_match else None,
@@ -2215,28 +2250,31 @@ def fetch_mikrotik_changelog_history(limit=CHANGELOG_HISTORY_LIMIT):
             })
             return releases
     except Exception as e:
-        logger.warning(f"Failed to fetch MikroTik changelog history: {e}")
+        logger.warning(f"Failed to fetch MikroTik {channel} changelog history: {e}")
 
     return cached[:limit] if cached else []
 
 
-def fetch_mikrotik_changelog_detail(version):
-    """Načíta konkrétny stable changelog priamo z oficiálneho MikroTik archívu."""
-    if not re.fullmatch(r'\d+(?:\.\d+){1,2}', version or ''):
+def fetch_mikrotik_changelog_detail(version, channel='stable'):
+    """Načíta konkrétny changelog zvoleného kanála z oficiálneho MikroTik archívu."""
+    channel = normalize_routeros_channel(channel, 'stable')
+    if not ROUTEROS_VERSION_PATTERN.fullmatch(version or ''):
         return None
 
-    cached = CHANGELOG_DETAIL_CACHE.get(version)
+    cache_key = (channel, version)
+    cached = CHANGELOG_DETAIL_CACHE.get(cache_key)
     if cached:
         return cached
 
     # Načítanie zoznamu zároveň pripraví Livewire snapshot a session cookie archívu.
-    available_versions = {item['version'] for item in fetch_mikrotik_changelog_history()}
+    available_versions = {item['version'] for item in fetch_mikrotik_changelog_history(channel)}
     if version not in available_versions:
         return None
 
-    snapshot = CHANGELOG_HISTORY_CACHE.get('snapshot')
-    csrf_token = CHANGELOG_HISTORY_CACHE.get('csrf_token')
-    update_url = CHANGELOG_HISTORY_CACHE.get('update_url')
+    channel_cache = CHANGELOG_HISTORY_CACHE.get(channel) or {}
+    snapshot = channel_cache.get('snapshot')
+    csrf_token = channel_cache.get('csrf_token')
+    update_url = channel_cache.get('update_url')
     if not all((snapshot, csrf_token, update_url)):
         return None
 
@@ -2256,7 +2294,7 @@ def fetch_mikrotik_changelog_detail(version):
         detail_response = requests.post(
             update_url,
             json=payload,
-            cookies=CHANGELOG_HISTORY_CACHE.get('cookies') or {},
+            cookies=channel_cache.get('cookies') or {},
             headers={
                 'User-Agent': 'MikroTik-Manager/1.0',
                 'X-Livewire': 'true',
@@ -2275,12 +2313,13 @@ def fetch_mikrotik_changelog_detail(version):
         result = {
             'version': version,
             'description': description[:60000],
-            'source_url': f'{MIKROTIK_CHANGELOGS_URL}?channelFilter=stable&versionFilter={urllib.parse.quote(version)}'
+            'channel': channel,
+            'source_url': f'{MIKROTIK_CHANGELOGS_URL}?channelFilter={urllib.parse.quote(channel)}&versionFilter={urllib.parse.quote(version)}'
         }
-        CHANGELOG_DETAIL_CACHE[version] = result
+        CHANGELOG_DETAIL_CACHE[cache_key] = result
         return result
     except Exception as e:
-        logger.warning(f"Failed to fetch MikroTik changelog {version}: {e}")
+        logger.warning(f"Failed to fetch MikroTik {channel} changelog {version}: {e}")
         return None
 
 
@@ -2385,6 +2424,32 @@ def fetch_mikrotik_rss():
         logger.error(f"Failed to fetch MikroTik RSS: {e}")
         return None
 
+
+def fetch_mikrotik_channel_feed(channel='stable'):
+    """Vráti najnovšie vydanie vo formáte RSS endpointu pre ľubovoľný kanál."""
+    channel = normalize_routeros_channel(channel, 'stable')
+    if channel == 'stable':
+        data = fetch_mikrotik_rss()
+        if data and data.get('latest'):
+            data['latest']['channel'] = channel
+        return data
+
+    history = fetch_mikrotik_changelog_history(channel)
+    if not history:
+        return None
+
+    latest_release = history[0]
+    detail = fetch_mikrotik_changelog_detail(latest_release['version'], channel)
+    latest = {
+        'title': f"RouterOS {latest_release['version']} [{channel}]",
+        'version': latest_release['version'],
+        'description': detail.get('description', '') if detail else '',
+        'pubDate': latest_release.get('release_date', ''),
+        'release_date': latest_release.get('release_date', ''),
+        'channel': channel
+    }
+    return {'items': [latest], 'latest': latest}
+
 def parse_int_setting(value, default, min_value=None, max_value=None):
     try:
         parsed = int(value)
@@ -2485,6 +2550,28 @@ def mk_api(device_id, method, endpoint, payload=None, timeout_val=20):
             return None, {'status': 'error', 'message': f'Chyba spojenia: {str(e)}'}, 500
     
     return None, {'status': 'error', 'message': 'Zariadenie nedostupné cez HTTPS ani HTTP.'}, 500
+
+
+def set_routeros_update_channel(device_id, channel):
+    """Nastaví overený update channel priamo na RouterOS zariadení."""
+    channel = normalize_routeros_channel(channel)
+    if not channel:
+        return None, {'status': 'error', 'message': 'Neplatný RouterOS kanál.'}, 400
+    return mk_api(
+        device_id,
+        'POST',
+        'system/package/update/set',
+        {'channel': channel}
+    )
+
+
+def check_routeros_updates(device_id, channel='stable'):
+    """Nastaví channel a až potom skontroluje dostupnú RouterOS verziu."""
+    channel = normalize_routeros_channel(channel, 'stable')
+    _, err, code = set_routeros_update_channel(device_id, channel)
+    if err:
+        return None, err, code
+    return mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
 
 
 def parse_mikrotik_date(date_str):
@@ -2733,34 +2820,44 @@ def updater_page():
 @app.route('/api/updater/rss')
 @login_required
 def api_updater_rss():
-    data = fetch_mikrotik_rss()
+    channel = normalize_routeros_channel(request.args.get('channel', 'stable'))
+    if not channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+    data = fetch_mikrotik_channel_feed(channel)
     if data:
-        return jsonify({'status': 'success', 'data': data})
-    return jsonify({'status': 'error', 'message': 'Nepodarilo sa načítať RSS.'}), 500
+        return jsonify({'status': 'success', 'data': data, 'channel': channel})
+    return jsonify({'status': 'error', 'message': f'Nepodarilo sa načítať kanál {channel}.'}), 500
 
 
 @app.route('/api/updater/changelog-history')
 @login_required
 def api_updater_changelog_history():
+    channel = normalize_routeros_channel(request.args.get('channel', 'stable'))
+    if not channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
     major_versions = get_managed_routeros_major_versions()
     items = [
-        item for item in fetch_mikrotik_changelog_history()
+        item for item in fetch_mikrotik_changelog_history(channel)
         if int(item['version'].split('.', 1)[0]) in major_versions
     ]
     return jsonify({
         'status': 'success',
         'items': items,
-        'major_versions': major_versions
+        'major_versions': major_versions,
+        'channel': channel
     })
 
 
 @app.route('/api/updater/changelog/<version>')
 @login_required
 def api_updater_changelog_detail(version):
-    if not re.fullmatch(r'\d+(?:\.\d+){1,2}', version or ''):
+    channel = normalize_routeros_channel(request.args.get('channel', 'stable'))
+    if not channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+    if not ROUTEROS_VERSION_PATTERN.fullmatch(version or ''):
         return jsonify({'status': 'error', 'message': 'Neplatná verzia RouterOS.'}), 400
 
-    data = fetch_mikrotik_changelog_detail(version)
+    data = fetch_mikrotik_changelog_detail(version, channel)
     if not data:
         return jsonify({'status': 'error', 'message': 'Changelog sa nepodarilo načítať.'}), 502
     return jsonify({'status': 'success', 'data': data})
@@ -2805,7 +2902,7 @@ def api_updater_schedules():
         rows = conn.execute('''
             SELECT us.id, us.device_id, us.scheduled_time, us.status,
                    us.created_at, us.started_at, us.completed_at, us.result_message,
-                   us.bulk_group_id,
+                   us.bulk_group_id, us.update_channel,
                    d.name AS device_name, d.ip AS device_ip
             FROM update_schedule us
             JOIN devices d ON d.id = us.device_id AND d.deleted_at IS NULL
@@ -2846,10 +2943,14 @@ def api_updater_schedule_create(device_id):
         device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     scheduled_time_str = data.get('scheduled_time', '')
     bulk_group_id = data.get('bulk_group_id', None)
     bulk_sequence = data.get('bulk_sequence', 0)
+    requested_channel = normalize_routeros_channel(data.get('channel', 'stable'))
+    if not requested_channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+    update_channel, _ = get_device_update_channel(device_id, requested_channel)
     try:
         scheduled_time = datetime.fromisoformat(scheduled_time_str)
     except (ValueError, TypeError):
@@ -2858,12 +2959,12 @@ def api_updater_schedule_create(device_id):
         return jsonify({'status': 'error', 'message': 'Čas musí byť v budúcnosti.'}), 400
     with get_db_connection() as conn:
         cursor = conn.execute(
-            'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence) VALUES (?, ?, ?, ?, ?, ?)',
-            (device_id, scheduled_time, 'pending', datetime.now(), bulk_group_id, bulk_sequence)
+            'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence, update_channel) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (device_id, scheduled_time, 'pending', datetime.now(), bulk_group_id, bulk_sequence, update_channel)
         )
         new_id = cursor.lastrowid
         conn.commit()
-    add_log('info', f"Naplánovaný update zariadenia {device['name']}: {scheduled_time.strftime('%d.%m.%Y %H:%M')}")
+    add_log('info', f"Naplánovaný update zariadenia {device['name']}: {scheduled_time.strftime('%d.%m.%Y %H:%M')} (kanál {update_channel})")
     return jsonify({'status': 'success', 'id': new_id})
 
 
@@ -2871,9 +2972,12 @@ def api_updater_schedule_create(device_id):
 @login_required
 def api_updater_schedule_bulk():
     """Vytvorí naplánované updaty pre viac zariadení naraz (sekvenčné spúšťanie)."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     device_ids = data.get('device_ids', [])
     scheduled_time_str = data.get('scheduled_time', '')
+    requested_channel = normalize_routeros_channel(data.get('channel', 'stable'))
+    if not requested_channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
     if not device_ids:
         return jsonify({'status': 'error', 'message': 'Žiadne zariadenia.'}), 400
     try:
@@ -2887,21 +2991,22 @@ def api_updater_schedule_bulk():
     bulk_group_id = str(uuid.uuid4())
     created_ids = []
     with get_db_connection() as conn:
-        devices = {row['id']: row['name'] for row in conn.execute(
-            f"SELECT id, name FROM devices WHERE id IN ({','.join('?' * len(device_ids))}) AND deleted_at IS NULL",
+        devices = {row['id']: dict(row) for row in conn.execute(
+            f"SELECT id, name, routeros_update_channel FROM devices WHERE id IN ({','.join('?' * len(device_ids))}) AND deleted_at IS NULL",
             device_ids
         ).fetchall()}
         for seq, dev_id in enumerate(device_ids):
             if dev_id not in devices:
                 continue
+            update_channel = normalize_routeros_channel(devices[dev_id]['routeros_update_channel']) or requested_channel
             cursor = conn.execute(
-                'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence) VALUES (?, ?, ?, ?, ?, ?)',
-                (dev_id, scheduled_time, 'pending', datetime.now(), bulk_group_id, seq)
+                'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence, update_channel) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                (dev_id, scheduled_time, 'pending', datetime.now(), bulk_group_id, seq, update_channel)
             )
             created_ids.append(cursor.lastrowid)
         conn.commit()
-    names = ', '.join(devices[d] for d in device_ids if d in devices)
-    add_log('info', f"Hromadný naplánovaný update ({len(created_ids)} zariadení): {names}")
+    names = ', '.join(devices[d]['name'] for d in device_ids if d in devices)
+    add_log('info', f"Hromadný naplánovaný update ({len(created_ids)} zariadení, rešpektované individuálne kanály): {names}")
     return jsonify({'status': 'success', 'ids': created_ids, 'bulk_group_id': bulk_group_id})
 
 @app.route('/api/updater/schedule/<int:schedule_id>', methods=['DELETE'])
@@ -2929,8 +3034,18 @@ def api_updater_schedule_delete(schedule_id):
 @app.route('/api/updater/device/<int:device_id>')
 @login_required
 def api_updater_device(device_id):
+    requested_channel = normalize_routeros_channel(request.args.get('channel', 'stable'))
+    if not requested_channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+    with get_db_connection() as conn:
+        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
+        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
+    if not device:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+    channel_override = normalize_routeros_channel(dict(device).get('routeros_update_channel'))
+    channel = channel_override or requested_channel
     # OS Version Check
-    os_data, err, code = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
+    os_data, err, code = check_routeros_updates(device_id, channel)
     if err: return jsonify(err), code
     
     os_info = {}
@@ -2951,9 +3066,6 @@ def api_updater_device(device_id):
     # Kontrola HTTPS dostupnosti (či zariadenie má platný certifikát)
     ssl_ok = False
     cert_expiry = None
-    with get_db_connection() as conn:
-        device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
-        settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     http_port, https_port = get_updater_web_ports(settings, device)
     if device:
         device_dec = get_device_with_decrypted_password(dict(device))
@@ -3009,11 +3121,13 @@ def api_updater_device(device_id):
         'cert_expiry_warning_days': cert_expiry_warning_days,
         'cert_www_port': http_port,
         'cert_www_ssl_port': https_port,
+        'update_channel_override': channel_override,
+        'effective_update_channel': channel,
         'os': {
             'installed-version': os_info.get('installed-version', 'N/A'),
             'latest-version': os_info.get('latest-version', 'N/A'),
             'status': os_info.get('status', 'N/A'),
-            'channel': os_info.get('channel', 'N/A')
+            'channel': os_info.get('channel', channel)
         },
         'firmware': {
             'current-firmware': fw_info.get('current-firmware', 'N/A'),
@@ -3023,9 +3137,68 @@ def api_updater_device(device_id):
         }
     })
 
+
+@app.route('/api/updater/device/<int:device_id>/channel', methods=['POST'])
+@login_required
+def api_updater_device_channel(device_id):
+    """Uloží alebo zruší individuálny RouterOS kanál a aplikuje ho na zariadenie."""
+    payload = request.get_json(silent=True) or {}
+    global_channel = normalize_routeros_channel(payload.get('global_channel', 'stable'))
+    if not global_channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný globálny RouterOS kanál.'}), 400
+
+    raw_channel = payload.get('channel')
+    channel_override = None if raw_channel in (None, '', 'global') else normalize_routeros_channel(raw_channel)
+    if raw_channel not in (None, '', 'global') and not channel_override:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+
+    with get_db_connection() as conn:
+        device = conn.execute(
+            'SELECT id, name, ip FROM devices WHERE id = ? AND deleted_at IS NULL',
+            (device_id,)
+        ).fetchone()
+        if not device:
+            return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+        conn.execute(
+            'UPDATE devices SET routeros_update_channel = ? WHERE id = ? AND deleted_at IS NULL',
+            (channel_override, device_id)
+        )
+        conn.commit()
+
+    effective_channel = channel_override or global_channel
+    _, err, code = set_routeros_update_channel(device_id, effective_channel)
+    mode = 'individuálny' if channel_override else 'globálny'
+    add_log(
+        'info' if not err else 'warning',
+        f"RouterOS kanál pre {device['name']}: {effective_channel} ({mode}).",
+        device_ip=device['ip']
+    )
+    if err:
+        return jsonify({
+            'status': 'warning',
+            'message': 'Nastavenie sa uložilo, ale zariadenie je momentálne nedostupné. Kanál sa aplikuje pri najbližšej kontrole.',
+            'channel': effective_channel,
+            'channel_override': channel_override
+        }), 202
+    return jsonify({
+        'status': 'success',
+        'message': f'Kanál zariadenia bol nastavený na {effective_channel}.',
+        'channel': effective_channel,
+        'channel_override': channel_override
+    })
+
+
 @app.route('/api/updater/install-os/<int:device_id>', methods=['POST'])
 @login_required
 def api_updater_install_os(device_id):
+    payload = request.get_json(silent=True) or {}
+    requested_channel = normalize_routeros_channel(payload.get('channel', 'stable'))
+    if not requested_channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+    channel, _ = get_device_update_channel(device_id, requested_channel)
+    _, err, code = set_routeros_update_channel(device_id, channel)
+    if err:
+        return jsonify(err), code
     data, err, code = mk_api(device_id, 'POST', 'system/package/update/install')
     # 500 = connection error – device started updating and rebooted before responding
     if err and code != 500:
@@ -3125,13 +3298,18 @@ def api_updater_certificate_save_settings(device_id):
 @login_required
 def api_updater_run_update(device_id):
     """Spustí manuálny full update zariadenia ako server-side daemon thread."""
+    payload = request.get_json(silent=True) or {}
+    requested_channel = normalize_routeros_channel(payload.get('channel', 'stable'))
+    if not requested_channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+    channel, _ = get_device_update_channel(device_id, requested_channel)
     if device_id in _running_manual_updates:
         return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
         device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
-    threading.Thread(target=run_device_update, args=(device_id,), daemon=True).start()
+    threading.Thread(target=run_device_update, args=(device_id, channel), daemon=True).start()
     return jsonify({'status': 'success', 'message': 'Aktualizácia spustená.'})
 
 
@@ -3139,13 +3317,18 @@ def api_updater_run_update(device_id):
 @login_required
 def api_updater_run_update_os(device_id):
     """Spustí manuálny RouterOS-only update (kroky 1–5) ako server-side daemon thread."""
+    payload = request.get_json(silent=True) or {}
+    requested_channel = normalize_routeros_channel(payload.get('channel', 'stable'))
+    if not requested_channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
+    channel, _ = get_device_update_channel(device_id, requested_channel)
     if device_id in _running_manual_updates:
         return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
         device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
-    threading.Thread(target=run_device_update_os, args=(device_id,), daemon=True).start()
+    threading.Thread(target=run_device_update_os, args=(device_id, channel), daemon=True).start()
     return jsonify({'status': 'success', 'message': 'Aktualizácia RouterOS spustená.'})
 
 
@@ -3176,7 +3359,8 @@ def api_updater_running_updates():
             'steps_done': info.get('steps_done', []),
             'current_msg': info.get('current_msg', ''),
             'started_at': info.get('started_at', ''),
-            'update_type': info.get('update_type', 'full')
+            'update_type': info.get('update_type', 'full'),
+            'channel': info.get('channel', 'stable')
         })
     return jsonify({'running': result})
 
@@ -3195,7 +3379,8 @@ def api_updater_running_scheduled_updates():
             'steps_done': info.get('steps_done', []),
             'current_msg': info.get('current_msg', ''),
             'started_at': info.get('started_at', ''),
-            'update_type': info.get('update_type', 'full')
+            'update_type': info.get('update_type', 'full'),
+            'channel': info.get('channel', 'stable')
         })
     return jsonify({'running': result})
 
@@ -3206,6 +3391,9 @@ def api_updater_run_bulk_update():
     """Spustí sekvenčnú hromadnú manuálnu aktualizáciu viacerých zariadení (server-side, F5-odolné)."""
     import uuid
     data = request.json or {}
+    channel = normalize_routeros_channel(data.get('channel', 'stable'))
+    if not channel:
+        return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
     try:
         device_ids = [int(x) for x in data.get('device_ids', [])]
     except (TypeError, ValueError):
@@ -3220,9 +3408,10 @@ def api_updater_run_bulk_update():
         'device_ids': device_ids,
         'remaining_ids': device_ids[1:],
         'current_device_id': device_ids[0],
+        'channel': channel,
         'cancelled_ids': set()
     }
-    threading.Thread(target=run_manual_bulk_update, args=(device_ids, bulk_group_id), daemon=True).start()
+    threading.Thread(target=run_manual_bulk_update, args=(device_ids, bulk_group_id, channel), daemon=True).start()
     return jsonify({'status': 'success', 'bulk_group_id': bulk_group_id, 'queued_ids': device_ids[1:]})
 
 
@@ -3235,7 +3424,8 @@ def api_updater_running_bulk_queue():
         groups.append({
             'bulk_group_id': group_id,
             'remaining_ids': list(group.get('remaining_ids', [])),
-            'current_device_id': group.get('current_device_id')
+            'current_device_id': group.get('current_device_id'),
+            'channel': group.get('channel', 'stable')
         })
     return jsonify({'groups': groups})
 
@@ -5307,6 +5497,7 @@ def run_scheduled_update(schedule_id):
             device_id = row['device_id']
             device_ip = row['ip']
             device_name = row['name']
+            update_channel = normalize_routeros_channel(row['update_channel'], 'stable')
 
             def _upd_sched(step=None, msg=None, steps_done_add=None):
                 entry = _running_scheduled_updates.get(device_id, {})
@@ -5374,10 +5565,11 @@ def run_scheduled_update(schedule_id):
                 'current_step': 0,
                 'steps_done': [],
                 'current_msg': '',
-                'update_type': 'full'
+                'update_type': 'full',
+                'channel': update_channel
             }
 
-            add_log('info', f'Naplánovaný update [{device_name}]: Spúšťam...', device_ip)
+            add_log('info', f'Naplánovaný update [{device_name}]: Spúšťam (kanál {update_channel})...', device_ip)
             _emit('start', msg=f'Naplánovaný update: {device_name}')
 
             if not _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
@@ -5396,7 +5588,7 @@ def run_scheduled_update(schedule_id):
 
             # Krok 3: Zisti dostupnosť OS update
             _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
-            os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
+            os_data, err, _ = check_routeros_updates(device_id, update_channel)
             if err:
                 _emit('step_error', step=3)
                 _fail(f'Zariadenie nedostupné: {err}')
@@ -5583,10 +5775,11 @@ def run_scheduled_update(schedule_id):
             except Exception:
                 pass
 
-def run_device_update(device_id):
+def run_device_update(device_id, update_channel='stable'):
     """Vykoná manuálny full update (OS + Firmware + Reboot) pre zariadenie (server-side daemon thread)."""
     with app.app_context():
         try:
+            update_channel = normalize_routeros_channel(update_channel, 'stable')
             with get_db_connection() as conn:
                 device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
             if not device:
@@ -5651,10 +5844,11 @@ def run_device_update(device_id):
                 'current_step': 0,
                 'steps_done': [],
                 'current_msg': '',
-                'update_type': 'full'
+                'update_type': 'full',
+                'channel': update_channel
             }
 
-            add_log('info', f'Manuálny update [{device_name}]: Spúšťam...', device_ip)
+            add_log('info', f'Manuálny update [{device_name}]: Spúšťam (kanál {update_channel})...', device_ip)
             _emit('start', msg=f'Manuálny update: {device_name}')
 
             if not _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
@@ -5673,7 +5867,7 @@ def run_device_update(device_id):
 
             # Krok 3: Zisti dostupnosť OS update
             _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
-            os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
+            os_data, err, _ = check_routeros_updates(device_id, update_channel)
             if err:
                 _emit('step_error', step=3)
                 _fail(f'Zariadenie nedostupné: {err}')
@@ -5814,10 +6008,11 @@ def run_device_update(device_id):
             _running_manual_updates.pop(device_id, None)
 
 
-def run_device_update_os(device_id):
+def run_device_update_os(device_id, update_channel='stable'):
     """Vykoná manuálny RouterOS-only update (kroky 1–5) pre zariadenie (server-side daemon thread)."""
     with app.app_context():
         try:
+            update_channel = normalize_routeros_channel(update_channel, 'stable')
             with get_db_connection() as conn:
                 device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
             if not device:
@@ -5871,10 +6066,11 @@ def run_device_update_os(device_id):
                 'current_step': 0,
                 'steps_done': [],
                 'current_msg': '',
-                'update_type': 'os'
+                'update_type': 'os',
+                'channel': update_channel
             }
 
-            add_log('info', f'RouterOS update [{device_name}]: Spúšťam...', device_ip)
+            add_log('info', f'RouterOS update [{device_name}]: Spúšťam (kanál {update_channel})...', device_ip)
             _emit('start', msg=f'RouterOS update: {device_name}')
 
             if not _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
@@ -5882,7 +6078,7 @@ def run_device_update_os(device_id):
 
             # Krok 3: Zisti dostupnosť OS update
             _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
-            os_data, err, _ = mk_api(device_id, 'POST', 'system/package/update/check-for-updates')
+            os_data, err, _ = check_routeros_updates(device_id, update_channel)
             if err:
                 _emit('step_error', step=3)
                 _fail(f'Zariadenie nedostupné: {err}')
@@ -6111,7 +6307,7 @@ def run_device_update_firmware(device_id):
             _running_manual_updates.pop(device_id, None)
 
 
-def run_manual_bulk_update(device_ids, bulk_group_id):
+def run_manual_bulk_update(device_ids, bulk_group_id, update_channel='stable'):
     """Vykoná sekvenčnú hromadnú manuálnu aktualizáciu – rovnaký vzor ako run_scheduled_update_bulk.
     Beží ako daemon thread, volá run_device_update() blokujúco pre každé zariadenie."""
     with app.app_context():
@@ -6133,7 +6329,8 @@ def run_manual_bulk_update(device_ids, bulk_group_id):
                 _manual_bulk_groups[bulk_group_id]['remaining_ids'] = [
                     d for d in device_ids[i + 1:] if d not in cancelled
                 ]
-                run_device_update(device_id)
+                device_channel, _ = get_device_update_channel(device_id, update_channel)
+                run_device_update(device_id, device_channel)
                 if i < len(device_ids) - 1:
                     time.sleep(delay)
         finally:

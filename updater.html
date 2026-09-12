@@ -144,6 +144,29 @@
                 font-size: 0.85rem;
             }
 
+            .release-info {
+                width: 100%;
+            }
+
+            .update-channel-selector {
+                width: 100%;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 10px;
+                flex-direction: row;
+            }
+
+            .update-channel-options {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .update-channel-btn {
+                padding: 7px 8px;
+            }
+
             .cert-dropdown-wrap .update-dropdown {
                 left: auto;
                 right: 0;
@@ -478,6 +501,249 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 10px;
+        }
+
+        .release-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .update-channel-selector,
+        .changelog-channel-selector {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .changelog-channel-selector {
+            margin-bottom: 10px;
+        }
+
+        .update-channel-label {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .update-channel-options,
+        .changelog-channel-options {
+            display: flex;
+            gap: 4px;
+            padding: 3px;
+            border-radius: 8px;
+            background: rgba(15, 23, 42, 0.38);
+        }
+
+        .global-channel-dropdown {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .global-channel-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-width: 0;
+            padding: 5px 3px 5px 7px;
+            border: 0;
+            border-radius: 5px;
+            background: transparent;
+            color: #22d3ee;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: color 150ms ease;
+        }
+
+        .global-channel-trigger:hover,
+        .global-channel-trigger:focus-visible {
+            color: #67e8f9;
+            outline: none;
+        }
+
+        .global-channel-trigger:disabled {
+            cursor: wait;
+            opacity: 0.65;
+        }
+
+        .global-channel-trigger i {
+            margin-left: 2px;
+            font-size: 9px;
+            opacity: 0.8;
+            transition: transform 150ms ease;
+        }
+
+        .global-channel-dropdown.is-open .global-channel-trigger i {
+            transform: rotate(180deg);
+        }
+
+        .global-channel-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 5px);
+            left: 0;
+            z-index: 100;
+            min-width: 100%;
+            padding: 4px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: #182333;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+        }
+
+        .global-channel-dropdown.is-open .global-channel-menu {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .global-channel-menu .update-channel-btn {
+            width: 100%;
+            padding: 6px 8px;
+            text-align: left;
+        }
+
+        body:not(.light-theme) .global-channel-menu .update-channel-btn:hover,
+        body:not(.light-theme) .global-channel-menu .update-channel-btn:focus-visible {
+            background: rgba(56, 189, 248, 0.08);
+            color: #bae6fd;
+        }
+
+        body:not(.light-theme) .global-channel-menu .update-channel-btn.is-active {
+            padding-left: 8px;
+            border-left: 0;
+            border-radius: 4px;
+            background: rgba(56, 189, 248, 0.14);
+            color: #e0f2fe;
+            box-shadow: none;
+        }
+
+        body.light-theme .global-channel-menu {
+            background: #fff;
+        }
+
+        .update-channel-btn,
+        .changelog-channel-btn {
+            padding: 5px 9px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-muted);
+            font: inherit;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+        }
+
+        .update-channel-btn:hover:not(:disabled),
+        .update-channel-btn:focus-visible,
+        .changelog-channel-btn:hover,
+        .changelog-channel-btn:focus-visible {
+            color: var(--text-color);
+            background: rgba(56, 189, 248, 0.10);
+            outline: none;
+        }
+
+        .update-channel-btn.is-active,
+        .changelog-channel-btn.is-active {
+            color: #ecfeff;
+            background: linear-gradient(135deg, #0d9488, #0891b2);
+            box-shadow: 0 2px 8px rgba(8, 145, 178, 0.28);
+        }
+
+        .update-channel-btn:disabled {
+            cursor: wait;
+            opacity: 0.65;
+        }
+
+        body.light-theme .update-channel-options,
+        body.light-theme .changelog-channel-options {
+            background: rgba(3, 105, 161, 0.08);
+        }
+
+        .device-channel-panel {
+            display: none;
+            padding: 2px 10px 8px 34px;
+        }
+
+        .device-channel-panel.is-open {
+            display: block;
+        }
+
+        .device-channel-toggle {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .device-channel-toggle-text {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex: 1;
+        }
+
+        .device-channel-current {
+            color: #22d3ee;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .device-channel-mode {
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+
+        .device-channel-chevron {
+            margin-left: 7px;
+            font-size: 9px;
+            transition: transform 150ms ease;
+        }
+
+        .device-channel-toggle.is-open .device-channel-chevron {
+            transform: rotate(180deg);
+        }
+
+        .device-channel-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1px;
+        }
+
+        .device-channel-choice {
+            border: 0;
+            background: transparent;
+            color: var(--text-muted);
+            padding: 5px 2px;
+            text-align: left;
+            font: inherit;
+            font-size: 11.5px;
+            cursor: pointer;
+        }
+
+        .device-channel-choice:hover,
+        .device-channel-choice:focus-visible,
+        .device-channel-choice.is-active {
+            color: #22d3ee;
+            outline: none;
+        }
+
+        .device-channel-choice.is-active::before {
+            content: '\2713';
+            margin-right: 5px;
+            font-weight: 700;
+        }
+
+        .device-channel-choice.use-global {
+            margin-bottom: 2px;
         }
 
         .table-container {
@@ -846,7 +1112,35 @@
             --success-color: #15803d;
             --warning-color: #c27a00;
             --danger-color: #b91c1c;
-            --input-bg: #deeafa;
+            --input-bg: #e3edfa;
+        }
+
+        body.light-theme .main-container {
+            background: linear-gradient(145deg, #e3eefb 0%, #dfe9f9 65%, #deeafa 100%);
+            border-color: #c3d4eb;
+            box-shadow: 0 8px 18px rgba(60, 100, 160, 0.12);
+        }
+
+        body.light-theme .global-channel-trigger,
+        body.light-theme .device-channel-current {
+            color: #0369a1;
+        }
+
+        body.light-theme .global-channel-trigger:hover,
+        body.light-theme .global-channel-trigger:focus-visible {
+            color: #0284c7;
+        }
+
+        body.light-theme .global-channel-menu {
+            background: #ffffff;
+            border-color: #d9e4eb;
+            box-shadow: 0 10px 24px rgba(15, 49, 66, 0.12);
+        }
+
+        body.light-theme .update-channel-btn.is-active,
+        body.light-theme .changelog-channel-btn.is-active {
+            background: linear-gradient(135deg, #0ea5e9, #0369a1);
+            box-shadow: 0 2px 8px rgba(3, 105, 161, 0.20);
         }
 
         body.light-theme .table-container,
@@ -876,7 +1170,7 @@
         }
 
         body.light-theme #scheduleDateTime {
-            background-color: #deeafa;
+            background-color: #e3edfa;
             color: #1f2937;
         }
 
@@ -888,7 +1182,7 @@
         body.light-theme .update-dropdown {
             background-color: #ffffff;
             border-color: #c5d8f0;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 10px 24px rgba(15, 49, 66, 0.12);
         }
 
         body.light-theme .update-dropdown .dropdown-item {
@@ -970,12 +1264,13 @@
 
         /* Light theme – info card (RSS / bulk update) */
         body.light-theme .info-card {
-            background-color: rgba(3, 105, 161, 0.07);
-            border-color: rgba(3, 105, 161, 0.25);
+            background: linear-gradient(135deg, #eaf2fd 0%, #e0ecfa 100%);
+            border-color: #7da8d0;
+            box-shadow: 0 4px 10px -1px rgba(60, 100, 160, 0.15), 0 2px 4px -1px rgba(60, 100, 160, 0.10);
         }
 
         body.light-theme .info-card p {
-            color: #374151;
+            color: #334155;
         }
 
         /* Light theme – table */
@@ -1361,7 +1656,9 @@
             .changelog-loading,
             .changelog-version-button,
             .changelog-version-button i,
-            .changelog-version-menu {
+            .changelog-version-menu,
+            .update-channel-btn,
+            .changelog-channel-btn {
                 transition: none;
             }
         }
@@ -1385,6 +1682,22 @@
             .changelog-toolbar,
             .changelog-version-dropdown {
                 width: 100%;
+            }
+
+            .changelog-channel-selector,
+            .changelog-channel-options {
+                width: 100%;
+            }
+
+            .changelog-channel-selector {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .changelog-channel-options {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                box-sizing: border-box;
             }
 
             .changelog-source-link {
@@ -1976,11 +2289,29 @@
 
         <!-- RSS info card – bulk update button moved here -->
         <div class="info-card" id="rssInfoCard">
-            <div>
-                <h3
-                    style="font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: var(--accent-color); white-space: nowrap;">
-                    Najnovšia verzia (mikrotik.com)</h3>
-                <p id="rssLatestVersion">Načítavam dáta z RSS feedu...</p>
+            <div class="release-info">
+                <div>
+                    <p id="rssLatestVersion">Načítavam dostupnú verziu...</p>
+                </div>
+                <div class="update-channel-selector" aria-label="Kanál aktualizácií RouterOS">
+                    <span class="update-channel-label">Kanál aktualizácií</span>
+                    <div class="global-channel-dropdown" id="updateChannelOptions">
+                        <button type="button" class="global-channel-trigger" id="globalChannelTrigger"
+                            onclick="toggleGlobalChannelDropdown(event)" aria-expanded="false">
+                            <span id="globalChannelLabel">Stable</span><i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="global-channel-menu">
+                            <button type="button" class="update-channel-btn" data-channel="long-term"
+                                onclick="selectUpdateChannel('long-term')" title="Dlhodobo podporovaný kanál; môže ponúknuť staršiu verziu">Long-term</button>
+                            <button type="button" class="update-channel-btn" data-channel="stable"
+                                onclick="selectUpdateChannel('stable')">Stable</button>
+                            <button type="button" class="update-channel-btn" data-channel="testing"
+                                onclick="selectUpdateChannel('testing')" title="Testovacie vydania – nie sú určené pre produkciu">Testing</button>
+                            <button type="button" class="update-channel-btn" data-channel="development"
+                                onclick="selectUpdateChannel('development')" title="Vývojové vydania – iba na testovanie">Development</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="rss-actions" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <button id="bulkUpdateBtn" class="btn-bulk-update" onclick="bulkUpdateDevices()" disabled
@@ -2052,7 +2383,8 @@
             <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">
                 <i class="fas fa-info-circle" style="color:var(--accent-color);"></i> Vykoná sa automaticky <i
                     class="fas fa-sync-alt" style="color:var(--accent-color);"></i> <strong
-                    style="color:var(--accent-color);">Update RouterOS</strong>.
+                    style="color:var(--accent-color);">Update RouterOS</strong> cez kanál <strong
+                    id="scheduleChannelName" style="color:var(--accent-color);">Stable</strong>.
             </p>
             <div id="scheduleModalError"
                 style="display:none;color:var(--danger-color);font-size:13px;margin-bottom:12px;"></div>
@@ -2074,6 +2406,19 @@
                 </h2>
                 <button onclick="closeModal()"
                     style="background:none; border:none; color:var(--text-color); font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div class="changelog-channel-selector">
+                <span class="update-channel-label">Changelog kanál</span>
+                <div class="changelog-channel-options" id="changelogChannelOptions">
+                    <button type="button" class="changelog-channel-btn" data-channel="long-term"
+                        onclick="selectChangelogChannel('long-term')">Long-term</button>
+                    <button type="button" class="changelog-channel-btn" data-channel="stable"
+                        onclick="selectChangelogChannel('stable')">Stable</button>
+                    <button type="button" class="changelog-channel-btn" data-channel="testing"
+                        onclick="selectChangelogChannel('testing')">Testing</button>
+                    <button type="button" class="changelog-channel-btn" data-channel="development"
+                        onclick="selectChangelogChannel('development')">Development</button>
+                </div>
             </div>
             <div class="changelog-toolbar">
                 <div id="changelogVersionDropdown" class="changelog-version-dropdown"
@@ -2124,10 +2469,102 @@
     <script>
         let rssData = null;
         let changelogHistory = [];
+        let changelogHistoryChannel = '';
         let changelogMajorVersions = [];
         const changelogDetails = {};
         let changelogRequestId = 0;
         let devicesList = [];
+        const UPDATE_CHANNEL_LABELS = {
+            'long-term': 'Long-term',
+            stable: 'Stable',
+            testing: 'Testing',
+            development: 'Development'
+        };
+        const storedUpdateChannel = localStorage.getItem('mikrotik-updater-channel');
+        let selectedUpdateChannel = UPDATE_CHANNEL_LABELS[storedUpdateChannel] ? storedUpdateChannel : 'stable';
+        let selectedChangelogChannel = selectedUpdateChannel;
+        let channelSwitchInProgress = false;
+
+        function getChannelLabel(channel) {
+            return UPDATE_CHANNEL_LABELS[channel] || UPDATE_CHANNEL_LABELS.stable;
+        }
+
+        function getDeviceUpdateChannel(deviceId) {
+            const data = deviceDataMap[deviceId];
+            return data?.effective_update_channel || data?.os?.channel || selectedUpdateChannel;
+        }
+
+        function renderUpdateChannelControls() {
+            document.querySelectorAll('.update-channel-btn').forEach(button => {
+                const isActive = button.dataset.channel === selectedUpdateChannel;
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                button.disabled = channelSwitchInProgress;
+            });
+            const globalLabel = document.getElementById('globalChannelLabel');
+            if (globalLabel) globalLabel.textContent = getChannelLabel(selectedUpdateChannel);
+            const globalTrigger = document.getElementById('globalChannelTrigger');
+            if (globalTrigger) globalTrigger.disabled = channelSwitchInProgress;
+            const heading = document.getElementById('latestVersionHeading');
+            if (heading) heading.textContent = `Najnovšia verzia — ${getChannelLabel(selectedUpdateChannel)} (mikrotik.com)`;
+        }
+
+        function closeGlobalChannelDropdown() {
+            const dropdown = document.getElementById('updateChannelOptions');
+            const trigger = document.getElementById('globalChannelTrigger');
+            if (dropdown) dropdown.classList.remove('is-open');
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        }
+
+        function toggleGlobalChannelDropdown(event) {
+            event.stopPropagation();
+            if (channelSwitchInProgress) return;
+            const dropdown = document.getElementById('updateChannelOptions');
+            const trigger = document.getElementById('globalChannelTrigger');
+            if (!dropdown || !trigger) return;
+            const isOpen = dropdown.classList.toggle('is-open');
+            trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+
+        function renderChangelogChannelControls() {
+            document.querySelectorAll('.changelog-channel-btn').forEach(button => {
+                const isActive = button.dataset.channel === selectedChangelogChannel;
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        }
+
+        async function selectUpdateChannel(channel) {
+            if (!UPDATE_CHANNEL_LABELS[channel] || channelSwitchInProgress) return;
+            closeGlobalChannelDropdown();
+            if (channel === selectedUpdateChannel) return;
+            selectedUpdateChannel = channel;
+            selectedChangelogChannel = channel;
+            localStorage.setItem('mikrotik-updater-channel', channel);
+            channelSwitchInProgress = true;
+            renderUpdateChannelControls();
+            closeModal();
+            rssData = null;
+            changelogHistory = [];
+            changelogHistoryChannel = '';
+            deviceDataMap = {};
+            document.getElementById('bulkUpdateBtn').disabled = true;
+            document.getElementById('rssLatestVersion').innerHTML = '<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;margin-right:6px;"></span> Načítavam dostupnú verziu...';
+            document.getElementById('btnShowChangelog').style.display = 'none';
+            try {
+                await Promise.all([fetchRssData(channel), refreshDevices()]);
+                if (channel === 'testing' || channel === 'development') {
+                    showToast(`Aktívny je kanál ${getChannelLabel(channel)}. Tento kanál je určený najmä na testovanie.`, 'warning', 6500);
+                } else if (channel === 'long-term') {
+                    showToast('Aktívny je kanál Long-term. Ak obsahuje staršiu verziu než zariadenie, RouterOS môže ponúknuť downgrade.', 'warning', 7500);
+                } else {
+                    showToast(`Globálny kanál bol zmenený na ${getChannelLabel(channel)}. Individuálne nastavenia zariadení zostali zachované.`, 'success');
+                }
+            } finally {
+                channelSwitchInProgress = false;
+                renderUpdateChannelControls();
+            }
+        }
 
         // Custom confirm() replacement – works in Android WebView
         function showConfirm(message, onConfirm) {
@@ -2452,10 +2889,14 @@
                 document.body.classList.add('light-theme');
                 document.querySelector('#themeToggle i').className = 'fas fa-moon';
             }
+            renderUpdateChannelControls();
             // Close all dropdowns on outside click
             document.addEventListener('click', function (e) {
                 if (!e.target.closest('.update-dropdown-wrap')) {
                     document.querySelectorAll('.update-dropdown').forEach(d => d.style.display = 'none');
+                }
+                if (!e.target.closest('.global-channel-dropdown')) {
+                    closeGlobalChannelDropdown();
                 }
                 if (!e.target.closest('.changelog-version-dropdown')) {
                     closeChangelogVersionDropdown();
@@ -2463,6 +2904,7 @@
             });
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') {
+                    closeGlobalChannelDropdown();
                     const dropdown = document.getElementById('changelogVersionDropdown');
                     if (dropdown && dropdown.classList.contains('is-open')) {
                         closeChangelogVersionDropdown(true);
@@ -2538,58 +2980,73 @@
         });
 
         // ─── RSS ──────────────────────────────────────────────────────────────────
-        async function fetchRssData() {
+        async function fetchRssData(channel = selectedUpdateChannel) {
             try {
-                const res = await fetch('/api/updater/rss');
+                const res = await fetch(`/api/updater/rss?channel=${encodeURIComponent(channel)}`);
                 const json = await res.json();
+                if (channel !== selectedUpdateChannel) return;
                 if (json.status === 'success' && json.data.latest) {
                     rssData = json.data.latest;
                     let pubDateLocal = '';
                     if (rssData.release_date) {
-                        // Format: "2026-Mar-09 10:38" -> "09.03.2026 10:38"
-                        const _months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-                        const _m = rssData.release_date.match(/(\d{4})-(\w{3})-(\d{2})\s+(\d{2}:\d{2})/);
-                        if (_m) pubDateLocal = `${_m[3]}.${_months[_m[2]]}.${_m[1]} ${_m[4]}`;
+                        const _isoDate = rssData.release_date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                        if (_isoDate) {
+                            pubDateLocal = `${_isoDate[3]}.${_isoDate[2]}.${_isoDate[1]}`;
+                        } else {
+                            // Format: "2026-Mar-09 10:38" -> "09.03.2026 10:38"
+                            const _months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+                            const _m = rssData.release_date.match(/(\d{4})-(\w{3})-(\d{2})\s+(\d{2}:\d{2})/);
+                            if (_m) pubDateLocal = `${_m[3]}.${_months[_m[2]]}.${_m[1]} ${_m[4]}`;
+                        }
                     }
-                    if (!pubDateLocal) {
+                    if (!pubDateLocal && rssData.pubDate) {
                         const _d = new Date(rssData.pubDate);
-                        const _p = n => String(n).padStart(2, '0');
-                        pubDateLocal = `${_p(_d.getDate())}.${_p(_d.getMonth() + 1)}.${_d.getFullYear()} ${_p(_d.getHours())}:${_p(_d.getMinutes())}`;
+                        if (!Number.isNaN(_d.getTime())) {
+                            const _p = n => String(n).padStart(2, '0');
+                            pubDateLocal = `${_p(_d.getDate())}.${_p(_d.getMonth() + 1)}.${_d.getFullYear()} ${_p(_d.getHours())}:${_p(_d.getMinutes())}`;
+                        }
                     }
                     document.getElementById('rssLatestVersion').innerHTML =
-                        `<strong>RouterOS ${rssData.version}</strong> <br class="mobile-break">(Vydané: ${pubDateLocal})`;
+                        `<strong>RouterOS ${rssData.version}</strong> <br class="mobile-break">${pubDateLocal ? `(Vydané: ${pubDateLocal})` : ''}`;
                     document.getElementById('btnShowChangelog').style.display = 'inline-flex';
-                    fetchChangelogHistory();
+                    await fetchChangelogHistory(channel);
                 } else {
-                    document.getElementById('rssLatestVersion').innerText = 'Nepodarilo sa načítať stabilnú verziu z RSS.';
+                    document.getElementById('rssLatestVersion').innerText = `Nepodarilo sa načítať kanál ${getChannelLabel(channel)}.`;
                 }
             } catch (err) {
-                document.getElementById('rssLatestVersion').innerText = 'Chyba API pri načítaní RSS.';
+                if (channel === selectedUpdateChannel) {
+                    document.getElementById('rssLatestVersion').innerText = 'Chyba pri načítaní údajov z MikroTik.com.';
+                }
             }
         }
 
-        async function fetchChangelogHistory() {
+        async function fetchChangelogHistory(channel = selectedChangelogChannel) {
             try {
-                const res = await fetch('/api/updater/changelog-history');
+                const res = await fetch(`/api/updater/changelog-history?channel=${encodeURIComponent(channel)}`);
                 const json = await res.json();
+                if (channel !== selectedChangelogChannel) return;
                 if (json.status === 'success' && Array.isArray(json.items)) {
                     changelogHistory = json.items;
+                    changelogHistoryChannel = channel;
                     changelogMajorVersions = Array.isArray(json.major_versions) ? json.major_versions : [];
                 }
             } catch (err) {
+                if (channel !== selectedChangelogChannel) return;
                 changelogHistory = [];
+                changelogHistoryChannel = channel;
                 changelogMajorVersions = [];
             }
 
-            const rssMajor = rssData ? Number.parseInt(rssData.version.split('.')[0], 10) : null;
+            const matchingRss = rssData && rssData.channel === channel ? rssData : null;
+            const rssMajor = matchingRss ? Number.parseInt(matchingRss.version.split('.')[0], 10) : null;
             const rssMatchesManagedMajor = !changelogMajorVersions.length || changelogMajorVersions.includes(rssMajor);
-            if (rssData && rssMatchesManagedMajor && !changelogHistory.some(item => item.version === rssData.version)) {
-                changelogHistory.unshift({ version: rssData.version, release_date: '' });
+            if (matchingRss && rssMatchesManagedMajor && !changelogHistory.some(item => item.version === matchingRss.version)) {
+                changelogHistory.unshift({ version: matchingRss.version, release_date: '', channel });
             }
 
             const modal = document.getElementById('changelogModal');
             if (modal.style.display === 'flex') {
-                const currentVersion = getSelectedChangelogVersion() || (rssData && rssData.version) || '';
+                const currentVersion = getSelectedChangelogVersion();
                 const selectedVersion = changelogHistory.some(item => item.version === currentVersion)
                     ? currentVersion
                     : (changelogHistory[0] && changelogHistory[0].version);
@@ -2609,13 +3066,15 @@
             const menu = document.getElementById('changelogVersionMenu');
             const items = changelogHistory.length
                 ? changelogHistory
-                : (rssData ? [{ version: rssData.version, release_date: '' }] : []);
+                : (rssData && rssData.channel === selectedChangelogChannel
+                    ? [{ version: rssData.version, release_date: '' }]
+                    : []);
 
             menu.replaceChildren();
             let currentBranch = '';
             items.forEach(item => {
-                const versionParts = item.version.split('.');
-                const branch = versionParts.slice(0, 2).join('.');
+                const branchMatch = item.version.match(/^(\d+\.\d+)/);
+                const branch = branchMatch ? branchMatch[1] : item.version;
                 if (branch !== currentBranch) {
                     currentBranch = branch;
                     const groupLabel = document.createElement('div');
@@ -2635,7 +3094,8 @@
                 option.addEventListener('click', () => selectChangelogVersion(item.version));
                 menu.appendChild(option);
             });
-            setChangelogVersionSelection(selectedVersion || (rssData && rssData.version) || '');
+            const matchingRssVersion = rssData && rssData.channel === selectedChangelogChannel ? rssData.version : '';
+            setChangelogVersionSelection(selectedVersion || matchingRssVersion);
         }
 
         function getSelectedChangelogVersion() {
@@ -2714,14 +3174,44 @@
             options[Math.max(nextIndex, 0)].focus();
         }
 
-        function openChangelogModal() {
-            if (rssData) {
-                const defaultVersion = (changelogHistory[0] && changelogHistory[0].version) || rssData.version;
-                document.getElementById('changelogModal').style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-                populateChangelogVersionSelect(defaultVersion);
-                selectChangelogVersion(defaultVersion);
+        async function selectChangelogChannel(channel) {
+            if (!UPDATE_CHANNEL_LABELS[channel] || channel === selectedChangelogChannel) return;
+            selectedChangelogChannel = channel;
+            changelogHistory = [];
+            changelogHistoryChannel = '';
+            changelogRequestId++;
+            renderChangelogChannelControls();
+            closeChangelogVersionDropdown();
+            document.getElementById('changelogVersionMenu').replaceChildren();
+            setChangelogVersionSelection('');
+            document.getElementById('modalTitle').innerText = `${getChannelLabel(channel)} changelog`;
+            document.getElementById('modalContent').textContent = '';
+            setChangelogLoading(true);
+            await fetchChangelogHistory(channel);
+            if (channel !== selectedChangelogChannel) return;
+            if (!changelogHistory.length) {
+                document.getElementById('modalContent').textContent = 'Pre tento kanál sa nepodarilo načítať žiadne changelogy.';
+                setChangelogLoading(false);
             }
+        }
+
+        async function openChangelogModal() {
+            selectedChangelogChannel = selectedUpdateChannel;
+            renderChangelogChannelControls();
+            document.getElementById('changelogModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+
+            if (changelogHistoryChannel !== selectedChangelogChannel || !changelogHistory.length) {
+                document.getElementById('modalContent').textContent = '';
+                setChangelogLoading(true);
+                await fetchChangelogHistory(selectedChangelogChannel);
+                return;
+            }
+
+            const matchingRssVersion = rssData && rssData.channel === selectedChangelogChannel ? rssData.version : '';
+            const defaultVersion = (changelogHistory[0] && changelogHistory[0].version) || matchingRssVersion;
+            populateChangelogVersionSelect(defaultVersion);
+            selectChangelogVersion(defaultVersion);
         }
 
         function setChangelogLoading(isLoading) {
@@ -2734,22 +3224,25 @@
             if (!version) return;
 
             const requestId = ++changelogRequestId;
+            const requestChannel = selectedChangelogChannel;
+            const detailCacheKey = `${requestChannel}:${version}`;
             const content = document.getElementById('modalContent');
             const sourceLink = document.getElementById('changelogSourceLink');
             setChangelogVersionSelection(version);
             closeChangelogVersionDropdown(true);
-            document.getElementById('modalTitle').innerText = `RouterOS ${version} [stable]`;
-            sourceLink.href = `https://mikrotik.com/download/changelogs?channelFilter=stable&versionFilter=${encodeURIComponent(version)}`;
+            document.getElementById('modalTitle').innerText = `RouterOS ${version} [${getChannelLabel(requestChannel)}]`;
+            sourceLink.href = `https://mikrotik.com/download/changelogs?channelFilter=${encodeURIComponent(requestChannel)}&versionFilter=${encodeURIComponent(version)}`;
 
-            if (rssData && version === rssData.version) {
-                content.innerHTML = rssData.description;
+            if (rssData && rssData.channel === requestChannel && version === rssData.version && rssData.description) {
+                if (requestChannel === 'stable') content.innerHTML = rssData.description;
+                else content.textContent = rssData.description;
                 setChangelogLoading(false);
                 return;
             }
 
-            if (changelogDetails[version]) {
-                content.textContent = changelogDetails[version].description;
-                sourceLink.href = changelogDetails[version].source_url || sourceLink.href;
+            if (changelogDetails[detailCacheKey]) {
+                content.textContent = changelogDetails[detailCacheKey].description;
+                sourceLink.href = changelogDetails[detailCacheKey].source_url || sourceLink.href;
                 setChangelogLoading(false);
                 return;
             }
@@ -2757,19 +3250,19 @@
             content.textContent = '';
             setChangelogLoading(true);
             try {
-                const res = await fetch(`/api/updater/changelog/${encodeURIComponent(version)}`);
+                const res = await fetch(`/api/updater/changelog/${encodeURIComponent(version)}?channel=${encodeURIComponent(requestChannel)}`);
                 const json = await res.json();
                 if (!res.ok || json.status !== 'success' || !json.data) {
                     throw new Error(json.message || 'Changelog sa nepodarilo načítať.');
                 }
-                changelogDetails[version] = json.data;
-                if (requestId === changelogRequestId && getSelectedChangelogVersion() === version) {
+                changelogDetails[detailCacheKey] = json.data;
+                if (requestId === changelogRequestId && selectedChangelogChannel === requestChannel && getSelectedChangelogVersion() === version) {
                     content.textContent = json.data.description;
                     sourceLink.href = json.data.source_url || sourceLink.href;
                     setChangelogLoading(false);
                 }
             } catch (err) {
-                if (requestId === changelogRequestId && getSelectedChangelogVersion() === version) {
+                if (requestId === changelogRequestId && selectedChangelogChannel === requestChannel && getSelectedChangelogVersion() === version) {
                     content.textContent = 'Historický changelog sa nepodarilo načítať. Skús to neskôr alebo otvor zdroj na MikroTik.com.';
                     setChangelogLoading(false);
                 }
@@ -3074,11 +3567,13 @@
         async function fetchDeviceDetails(id) {
             // Do not overwrite the cell if an update is actively running on this device
             if (_deviceUpdateState[id]?.active) return;
+            const requestChannel = selectedUpdateChannel;
 
             try {
-                const res = await fetch(`/api/updater/device/${id}`);
+                const res = await fetch(`/api/updater/device/${id}?channel=${encodeURIComponent(requestChannel)}`);
                 if (!res.ok) throw new Error('API Chyba');
                 const data = await res.json();
+                if (requestChannel !== selectedUpdateChannel) return;
                 deviceDataMap[id] = data;
 
                 if (data.status === 'success') {
@@ -3199,6 +3694,7 @@
                     if (cardActEl2) { cardActEl2.innerHTML = `<span style="color:var(--danger-color);font-size:13px;">Zariadenie nedostupné</span>`; cardActEl2.style.opacity = '1'; }
                 }
             } catch (err) {
+                if (requestChannel !== selectedUpdateChannel) return;
                 // Don't overwrite cells if an update is actively running on this device
                 if (_deviceUpdateState[id]?.active) return;
                 setDeviceSelectable(id, false);
@@ -3230,6 +3726,9 @@
             const noSsl = !data.ssl_ok;
             const certLabel = noSsl ? 'Vytvoriť TLS Cert ⚠️' : 'Obnoviť TLS Cert';
             const certClass = noSsl ? 'danger' : '';
+            const channelOverride = data.update_channel_override || null;
+            const effectiveChannel = data.effective_update_channel || data.os.channel || selectedUpdateChannel;
+            const channelModeLabel = channelOverride ? 'vlastný' : 'globálny';
 
             let certDropdownSub = '';
             if (data.cert_expiry && data.cert_expiry.days_remaining !== undefined) {
@@ -3266,6 +3765,22 @@
                             <button onclick="openScheduleModal(${id}, (devicesList.find(d=>d.id===${id})||{}).name||'', ${anyUpdate})" class="action-btn dropdown-item ${anyUpdate ? '' : 'disabled-item'}" title="${anyUpdate ? 'Naplánovať automatický update' : 'Zariadenie je na aktuálnej verzii'}">
                                 <i class="fas fa-calendar-plus"></i> Naplánovať update
                             </button>
+                            <div class="dropdown-divider"></div>
+                            <button type="button" onclick="toggleDeviceChannelOptions(event, this)" class="action-btn dropdown-item device-channel-toggle" aria-expanded="false">
+                                <i class="fas fa-code-branch"></i>
+                                <span class="device-channel-toggle-text">
+                                    <span><span class="device-channel-current">${getChannelLabel(effectiveChannel)}</span><span class="device-channel-mode">${channelModeLabel}</span></span>
+                                </span>
+                                <i class="fas fa-chevron-down device-channel-chevron"></i>
+                            </button>
+                            <div class="device-channel-panel">
+                                <div class="device-channel-grid">
+                                    <button type="button" onclick="selectDeviceUpdateChannel(${id}, null, this)" class="device-channel-choice use-global ${channelOverride ? '' : 'is-active'}">Použiť globálny</button>
+                                    ${Object.entries(UPDATE_CHANNEL_LABELS).map(([channel, label]) => `
+                                        <button type="button" onclick="selectDeviceUpdateChannel(${id}, '${channel}', this)" class="device-channel-choice ${channelOverride === channel ? 'is-active' : ''}">${label}</button>
+                                    `).join('')}
+                                </div>
+                            </div>
                             <div class="dropdown-divider"></div>
                             <button onclick="rebootDevice(${id}, this)" class="action-btn dropdown-item danger">
                                 <i class="fas fa-power-off"></i> Reštart
@@ -3313,6 +3828,76 @@
             }
         }
 
+        function toggleDeviceChannelOptions(event, button) {
+            event.stopPropagation();
+            const panel = button?.nextElementSibling;
+            if (!panel?.classList.contains('device-channel-panel')) return;
+
+            const willOpen = !panel.classList.contains('is-open');
+            panel.classList.toggle('is-open', willOpen);
+            button.classList.toggle('is-open', willOpen);
+            button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+
+            if (willOpen) {
+                requestAnimationFrame(() => {
+                    const dropdown = button.closest('.update-dropdown');
+                    if (!dropdown || dropdown.style.bottom) return;
+                    const rect = dropdown.getBoundingClientRect();
+                    const container = dropdown.closest('.table-container');
+                    const containerBottom = container ? container.getBoundingClientRect().bottom : window.innerHeight;
+                    if (rect.bottom > Math.min(window.innerHeight, containerBottom)) {
+                        dropdown.style.top = 'auto';
+                        dropdown.style.bottom = 'calc(100% + 4px)';
+                    }
+                });
+            }
+        }
+
+        function reopenDeviceChannelDropdown(id) {
+            document.querySelectorAll(`#actions-${id} .update-dropdown, #card-actions-${id} .update-dropdown`).forEach(dropdown => {
+                const panel = dropdown.querySelector('.device-channel-panel');
+                const toggle = dropdown.querySelector('.device-channel-toggle');
+                if (!panel || !toggle) return;
+                dropdown.style.display = 'block';
+                panel.classList.add('is-open');
+                toggle.classList.add('is-open');
+                toggle.setAttribute('aria-expanded', 'true');
+            });
+        }
+
+        async function selectDeviceUpdateChannel(id, channel, button) {
+            if (channel !== null && !UPDATE_CHANNEL_LABELS[channel]) return;
+            const panel = button?.closest('.device-channel-panel');
+            const controls = panel ? Array.from(panel.querySelectorAll('.device-channel-choice')) : [];
+            controls.forEach(control => { control.disabled = true; });
+
+            try {
+                const res = await fetch(`/api/updater/device/${id}/channel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel, global_channel: selectedUpdateChannel })
+                });
+                const result = await res.json();
+                if (!res.ok && result.status !== 'warning') {
+                    showToast(result.message || 'Kanál zariadenia sa nepodarilo uložiť.', 'error');
+                    return;
+                }
+
+                if (result.status === 'warning') {
+                    showToast(result.message, 'warning', 6500);
+                } else {
+                    const mode = channel ? 'individuálny' : 'globálny';
+                    showToast(`Kanál zariadenia: ${getChannelLabel(result.channel)} (${mode}).`, 'success');
+                }
+                await fetchDeviceDetails(id);
+                reopenDeviceChannelDropdown(id);
+            } catch (error) {
+                showToast('Chyba spojenia pri ukladaní kanála zariadenia.', 'error');
+            } finally {
+                controls.forEach(control => { control.disabled = false; });
+            }
+        }
+
         // ─── Generic dropdown toggle ──────────────────────────────────────────────
         function toggleDropdown(ddId, event) {
             event.stopPropagation();
@@ -3334,6 +3919,11 @@
                 d.style.display = 'none';
                 d.style.top = '';
                 d.style.bottom = '';
+                d.querySelectorAll('.device-channel-panel.is-open').forEach(panel => panel.classList.remove('is-open'));
+                d.querySelectorAll('.device-channel-toggle.is-open').forEach(toggle => {
+                    toggle.classList.remove('is-open');
+                    toggle.setAttribute('aria-expanded', 'false');
+                });
             });
             if (!isOpen) {
                 dd.style.display = 'block';
@@ -3410,7 +4000,11 @@
             setUpdatingCells(id);
             setInlineStep(id, 1, 'active');
             try {
-                const res = await fetch(`/api/updater/run-update-os/${id}`, { method: 'POST' });
+                const res = await fetch(`/api/updater/run-update-os/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel: getDeviceUpdateChannel(id) })
+                });
                 const result = await res.json();
                 if (!res.ok) {
                     showToast(result.message || 'Chyba pri spúšťaní aktualizácie.', 'error');
@@ -3885,7 +4479,7 @@
             setInlineStep(id, 7, 'active');
             let fwUpdateNeeded = true;
             try {
-                const freshRes = await fetch(`/api/updater/device/${id}`);
+                const freshRes = await fetch(`/api/updater/device/${id}?channel=${encodeURIComponent(selectedUpdateChannel)}`);
                 const freshData = await freshRes.json();
                 if (freshData.status === 'success') {
                     deviceDataMap[id] = freshData;
@@ -4052,7 +4646,11 @@
             setInlineStep(id, 1, 'active');
 
             try {
-                const res = await fetch(`/api/updater/run-update/${id}`, { method: 'POST' });
+                const res = await fetch(`/api/updater/run-update/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel: getDeviceUpdateChannel(id) })
+                });
                 const json = await res.json();
 
                 if (res.status === 409) {
@@ -4153,7 +4751,7 @@
                     const res = await fetch('/api/updater/run-bulk-update', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ device_ids: idsToUpdate })
+                        body: JSON.stringify({ device_ids: idsToUpdate, channel: selectedUpdateChannel })
                     });
                     const data = await res.json();
                     if (res.status === 409 || data.status !== 'success') {
@@ -4233,6 +4831,7 @@
 
         let _scheduleTargetDeviceId = null;
         let _scheduleTargetDeviceIds = []; // multiple devices for bulk schedule
+        let _scheduleSelectedChannel = 'stable';
         let _deviceSchedules = {}; // device_id -> schedule (iba pending/running)
 
         function formatScheduleTime(isoStr) {
@@ -4257,11 +4856,12 @@
             const badge = document.createElement('div');
             badge.className = 'schedule-badge';
             badge.style.cssText = 'margin-top:5px;font-size:11px;color:#a78bfa;display:flex;align-items:center;justify-content:center;gap:4px;';
+            const scheduleChannel = getChannelLabel(schedule.update_channel || 'stable');
             if (schedule.status === 'running') {
                 // Running: show scheduled time centered, no cancel button (inline progress in actions cell is sufficient)
-                badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`;
+                badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)} · ${scheduleChannel}</span>`;
             } else {
-                badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)}</span>`
+                badge.innerHTML = `<i class="fas fa-calendar-clock"></i> <span>Naplánovaný: ${formatScheduleTime(schedule.scheduled_time)} · ${scheduleChannel}</span>`
                     + ` <button onclick="event.stopPropagation(); cancelSchedule(${schedule.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:5px 7px;margin-left:2px;line-height:1;" title="Zrušiť plán"><i class="fas fa-times"></i></button>`;
             }
             statusEl.appendChild(badge);
@@ -4326,6 +4926,7 @@
 
                 _scheduleTargetDeviceIds = updatableIds;
                 _scheduleTargetDeviceId = null;
+                _scheduleSelectedChannel = selectedUpdateChannel;
                 const names = updatableIds.map(id => {
                     const d = devicesList.find(x => x.id === id);
                     return d ? d.name : `ID ${id}`;
@@ -4336,10 +4937,14 @@
                 // Single device
                 _scheduleTargetDeviceIds = [];
                 _scheduleTargetDeviceId = deviceId;
+                _scheduleSelectedChannel = getDeviceUpdateChannel(deviceId);
                 document.getElementById('scheduleDeviceName').textContent = deviceName || ('ID ' + deviceId);
             }
 
             document.getElementById('scheduleModalError').style.display = 'none';
+            document.getElementById('scheduleChannelName').textContent = _scheduleTargetDeviceIds.length > 1
+                ? 'podľa nastavenia jednotlivých zariadení'
+                : getChannelLabel(_scheduleSelectedChannel);
             const minDt = new Date(Date.now() + 1 * 60000);
             // Round to next :00 or :30
             const rounded = new Date(minDt);
@@ -4395,13 +5000,17 @@
                     res = await fetch('/api/updater/schedule/bulk', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ device_ids: _scheduleTargetDeviceIds, scheduled_time: val })
+                        body: JSON.stringify({
+                            device_ids: _scheduleTargetDeviceIds,
+                            scheduled_time: val,
+                            channel: selectedUpdateChannel
+                        })
                     });
                 } else {
                     res = await fetch(`/api/updater/schedule/${id}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ scheduled_time: val })
+                        body: JSON.stringify({ scheduled_time: val, channel: _scheduleSelectedChannel })
                     });
                 }
                 data = await res.json();

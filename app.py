@@ -1213,6 +1213,15 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
         if remote_config is None:
             raise Exception("Nepodarilo sa získať konfiguráciu na porovnanie.")
         if not compare_with_local_backup(ip, remote_config, detailed_logging):
+            # Aj pri nezmenenej konfigurácii doplníme zálohy, ktoré lokálne vznikli
+            # počas nedostupnosti FTP. Ide len o výpis názvov a upload chýbajúcich súborov.
+            ftp_sync = sync_missing_backups_to_ftp(ip, settings)
+            ftp_upload_success = ftp_sync['success']
+            ftp_upload_error = '; '.join(ftp_sync['errors']) or None
+            if ftp_sync['uploaded']:
+                add_log('info', f"FTP synchronizácia doplnila {ftp_sync['uploaded']} starších záloh.", ip)
+            elif ftp_sync['errors'] and detailed_logging:
+                add_log('warning', f"FTP synchronizácia záloh neprebehla: {ftp_upload_error}", ip)
             # Záverečná správa o preskočení zálohy
             if is_sequential:
                 add_log('info', f"Záloha - preskočená{name_suffix} (žiadne zmeny){' (16MB)' if low_memory else ''}", ip)
@@ -1289,23 +1298,14 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'success', 'last_backup': datetime.now(timezone.utc).isoformat()})
         if result_holder is not None:
             result_holder['status'] = 'success'
-        upload_success_backup, error_backup = upload_to_ftp(
-            os.path.join(BACKUP_DIR, f"{base_filename}.backup"),
-            detailed_logging,
-            device_ip=ip,
-            log_success_entries=not is_sequential
-        )
-        upload_success_rsc, error_rsc = upload_to_ftp(
-            os.path.join(BACKUP_DIR, f"{base_filename}.rsc"),
-            detailed_logging,
-            device_ip=ip,
-            log_success_entries=not is_sequential
-        )
-        ftp_upload_success = upload_success_backup and upload_success_rsc
+        # Jeden FTP prístup porovná lokálne a vzdialené názvy a prenesie iba chýbajúce
+        # súbory vrátane prípadných starších záloh po predchádzajúcom výpadku FTP.
+        ftp_sync = sync_missing_backups_to_ftp(ip, settings)
+        ftp_upload_success = ftp_sync['success']
         if not ftp_upload_success:
             # Pushover upozornenie na zlyhanie uploadu (aj pri hromadných zálohách)
             try:
-                error_details = '; '.join([err for err in [error_backup, error_rsc] if err])
+                error_details = '; '.join(ftp_sync['errors'])
                 error_details = error_details or 'neznáma chyba'
                 ftp_upload_error = error_details
                 if settings.get('notify_backup_failure', 'false').lower() == 'true':
@@ -1317,10 +1317,16 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
             except Exception as e_push:
                 add_log('error', f"Pushover notifikácia pre zlyhaný FTP upload zlyhala: {e_push}", ip)
         if not is_sequential and ftp_upload_success:
-            add_log('info', f"Záloha{name_suffix} nahratá na FTP server.", ip)
+            if ftp_sync['uploaded']:
+                add_log('info', f"Záloha{name_suffix} nahratá na FTP server; doplnených súborov: {ftp_sync['uploaded']}.", ip)
+            elif detailed_logging:
+                add_log('info', f"FTP server už obsahuje všetky lokálne zálohy{name_suffix}.", ip)
 
-        # Vyčistenie starých záloh
-        cleanup_old_backups(ip, settings, detailed_logging)
+        # Lokálne súbory nemažeme, kým FTP nie je úplne zosynchronizované.
+        if ftp_upload_success or not ftp_sync['configured']:
+            cleanup_old_backups(ip, settings, detailed_logging)
+        else:
+            add_log('warning', "Čistenie starých záloh preskočené, aby sa zachovali súbory čakajúce na FTP synchronizáciu.", ip)
 
     except Exception as e:
         add_log('error', f"Chyba pri zálohe: {e}", ip)
@@ -1617,6 +1623,52 @@ def get_snmp_data(ip, community='public'):
         fallback = {k: 'N/A' for k in ['identity','uptime','version','board_name','cpu_load','temperature','cpu_count','memory_usage','used_memory','total_memory','free_memory']}
         fallback['uptime_seconds'] = '0'
         return fallback
+
+def sync_missing_backups_to_ftp(device_ip, settings):
+    """Doplní na FTP iba lokálne zálohy daného zariadenia, ktoré tam chýbajú."""
+    result = {'success': False, 'configured': False, 'uploaded': 0, 'errors': []}
+    try:
+        settings = decrypt_sensitive_settings_map(settings)
+        if not all(settings.get(key) for key in ('ftp_server', 'ftp_username', 'ftp_password')):
+            result['errors'].append('Chýbajú FTP nastavenia (server/používateľ/heslo).')
+            return result
+        result['configured'] = True
+
+        marker = f"_{device_ip}_"
+        local_files = sorted(
+            filename for filename in os.listdir(BACKUP_DIR)
+            if marker in filename
+            and filename.endswith(ALLOWED_BACKUP_EXTENSIONS)
+            and os.path.isfile(os.path.join(BACKUP_DIR, filename))
+        )
+        try:
+            ftp_port = int(settings.get('ftp_port', 21))
+        except (TypeError, ValueError):
+            ftp_port = 21
+        try:
+            ftp_timeout = int(settings.get('ftp_timeout_seconds', 15))
+        except (TypeError, ValueError):
+            ftp_timeout = 15
+        ftp_timeout = ftp_timeout if 5 <= ftp_timeout <= 120 else 15
+
+        with FTP(timeout=ftp_timeout) as ftp:
+            ftp.connect(settings['ftp_server'], ftp_port, timeout=ftp_timeout)
+            ftp.login(settings['ftp_username'], settings['ftp_password'])
+            if settings.get('ftp_directory'):
+                ftp.cwd(settings['ftp_directory'])
+            remote_files = set(ftp.nlst())
+            for filename in local_files:
+                if filename in remote_files:
+                    continue
+                with open(os.path.join(BACKUP_DIR, filename), 'rb') as backup_file:
+                    ftp.storbinary(f'STOR {filename}', backup_file)
+                remote_files.add(filename)
+                result['uploaded'] += 1
+        result['success'] = True
+    except Exception as e:
+        result['errors'].append(str(e))
+    return result
+
 
 def upload_to_ftp(local_path, detailed_logging=True, device_ip=None, log_success_entries=True):
     def parse_int(value, default):

@@ -1481,6 +1481,18 @@
             box-shadow: 0 0 16px rgba(14, 165, 233, 0.35);
             flex-shrink: 0;
         }
+        .device-modal-icon-wrap.ssh-trusted {
+            background: linear-gradient(135deg, #10b981, #047857);
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+        }
+        .device-modal-icon-wrap.ssh-unverified {
+            background: linear-gradient(135deg, #f59e0b, #b45309);
+            box-shadow: 0 0 16px rgba(245, 158, 11, 0.38);
+        }
+        .device-modal-icon-wrap.ssh-changed {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.42);
+        }
 
         /* Section titles */
         .device-form-section-title {
@@ -2642,6 +2654,14 @@
                     </div>
                 </div>
 
+                <button id="sshHostKeyBanner" type="button"
+                    class="hidden w-full mb-5 p-4 rounded-lg border border-amber-500/60 bg-amber-950/40 text-left text-amber-200 hover:bg-amber-900/40 transition-colors">
+                    <span class="flex items-center gap-3">
+                        <i class="fas fa-shield-halved text-amber-400"></i>
+                        <span id="sshHostKeyBannerText" class="font-semibold"></span>
+                    </span>
+                </button>
+
                 <div id="devicesGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8"></div>
 
                 <div id="devicesTableContainer"
@@ -2824,9 +2844,11 @@
 
             <!-- Modal header -->
             <div class="device-modal-header px-8 py-5 flex items-center gap-4">
-                <div class="device-modal-icon-wrap flex items-center justify-center w-11 h-11 rounded-xl">
-                    <i class="fas fa-router text-xl text-white"></i>
-                </div>
+                <button id="deviceModalIdentityBtn" type="button"
+                    class="device-modal-icon-wrap flex items-center justify-center w-11 h-11 rounded-xl"
+                    title="Nové zariadenie">
+                    <i id="deviceModalIdentityIcon" class="fas fa-router text-xl text-white"></i>
+                </button>
                 <div>
                     <h2 id="deviceModalTitle" class="text-xl font-bold text-white leading-tight">Pridať/Upraviť zariadenie</h2>
                     <p class="text-xs text-sky-300/70 mt-0.5">Konfigurácia pripojenia a monitorovania</p>
@@ -3004,6 +3026,81 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="sshHostKeyModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-[60] p-4">
+        <div class="card rounded-xl w-full max-w-2xl modal-content overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-700 bg-slate-900/70 flex items-center gap-3">
+                <i class="fas fa-shield-halved text-amber-400 text-xl"></i>
+                <div>
+                    <h2 class="text-xl font-bold text-white">SSH identita zariadenia</h2>
+                    <p id="sshHostKeyDevice" class="text-sm text-gray-400"></p>
+                </div>
+            </div>
+            <div class="p-6 space-y-5">
+                <div id="sshHostKeyMessage" class="rounded-lg border p-4 text-sm"></div>
+                <div class="space-y-3">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Potvrdený fingerprint</div>
+                        <div id="sshTrustedFingerprint" class="font-mono text-sm break-all text-gray-300">—</div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Nový fingerprint čakajúci na potvrdenie</div>
+                        <div id="sshPendingFingerprint" class="font-mono text-sm break-all text-amber-300">—</div>
+                    </div>
+                    <div id="sshPendingDetectedWrap" class="hidden">
+                        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Zistený</div>
+                        <div id="sshPendingDetected" class="text-sm text-gray-300"></div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400">
+                    Nový fingerprint potvrďte iba vtedy, keď viete overiť, že patrí tomuto MikroTiku.
+                </p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex flex-wrap justify-end gap-3">
+                <button id="closeSshHostKeyBtn" type="button"
+                    class="btn bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg">Zavrieť</button>
+                <button id="probeSshHostKeyBtn" type="button"
+                    class="btn bg-sky-700 hover:bg-sky-600 text-white py-2 px-4 rounded-lg flex items-center gap-2">
+                    <i class="fas fa-satellite-dish"></i>Načítať fingerprint
+                </button>
+                <button id="approveSshHostKeyBtn" type="button"
+                    class="hidden btn bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
+                    <i class="fas fa-check"></i>Potvrdiť nový kľúč
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="sshHostKeyConfirmModal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center hidden z-[70] p-4">
+        <div class="card rounded-xl w-full max-w-lg modal-content overflow-hidden border border-amber-600/60">
+            <div class="px-6 py-5 border-b border-amber-700/50 bg-amber-950/40 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-shield-halved text-amber-400 text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">Potvrdiť SSH identitu?</h2>
+                    <p id="sshConfirmDevice" class="text-sm text-gray-400"></p>
+                </div>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-300">
+                    Potvrďte iba kľúč, ktorý ste overili ako dôveryhodný. Od tejto chvíle ho aplikácia použije na kontrolu identity MikroTiku.
+                </p>
+                <div class="rounded-lg border border-amber-700/60 bg-slate-950/60 p-4">
+                    <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Fingerprint na potvrdenie</div>
+                    <div id="sshConfirmFingerprint" class="font-mono text-sm break-all text-amber-300"></div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
+                <button id="cancelSshHostKeyApprovalBtn" type="button"
+                    class="btn bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg">Zrušiť</button>
+                <button id="confirmSshHostKeyApprovalBtn" type="button"
+                    class="btn bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
+                    <i class="fas fa-check"></i>Áno, potvrdiť kľúč
+                </button>
+            </div>
         </div>
     </div>
 
@@ -3761,6 +3858,7 @@
             const notificationTypes = {
                 notify_device_offline: "🔴 Zariadenie offline", notify_device_online: "✅ Zariadenie online",
                 notify_backup_success: "✅ Záloha úspešná",
+                notify_ssh_host_key_change: "🔑 SSH kľúč vyžaduje potvrdenie",
                 notify_high_temperature: "🌡️ Vysoká teplota", notify_high_cpu: "⚡ Vysoké CPU",
                 notify_low_memory: "💾 Málo pamäte",
                 notify_reboot_detected: "🔄 Reboot detekovaný", notify_version_change: "🆕 Zmena verzie OS",
@@ -3988,6 +4086,202 @@
                 }
             });
 
+            socket.on('ssh_host_key_status', () => {
+                loadDevices();
+            });
+
+            const sshHostKeyBadge = (device, compact = false) => {
+                const status = device.ssh_host_key_status || 'unverified';
+                if (status === 'trusted') return '';
+                const config = {
+                    unverified: {
+                        icon: 'fa-shield',
+                        label: compact ? '' : 'Overiť SSH',
+                        title: 'SSH identita ešte nie je potvrdená',
+                        classes: 'border-amber-600/60 bg-amber-950/40 text-amber-300'
+                    },
+                    pending: {
+                        icon: 'fa-triangle-exclamation',
+                        label: compact ? '' : 'Potvrdiť SSH',
+                        title: 'SSH fingerprint čaká na potvrdenie',
+                        classes: 'border-amber-500 bg-amber-900/50 text-amber-200'
+                    },
+                    changed: {
+                        icon: 'fa-triangle-exclamation',
+                        label: compact ? '' : 'SSH kľúč zmenený',
+                        title: 'SSH fingerprint sa zmenil a vyžaduje potvrdenie',
+                        classes: 'border-red-500 bg-red-950/50 text-red-300'
+                    }
+                }[status];
+                return `<button type="button" class="ssh-key-btn inline-flex items-center justify-center gap-1.5 border rounded-md ${compact ? 'p-1.5' : 'px-2.5 py-1.5'} text-xs font-semibold ${config.classes}" title="${config.title}"><i class="fas ${config.icon}"></i>${config.label}</button>`;
+            };
+
+            let activeSshHostKeyDeviceId = null;
+
+            const applySshHostKeyState = (device, state) => {
+                device.ssh_host_key_status = state.status;
+                device.ssh_trusted_key_type = state.trusted_key_type || null;
+                device.ssh_trusted_fingerprint = state.trusted_fingerprint || null;
+                device.ssh_trusted_at = state.trusted_at || null;
+                device.ssh_pending_key_type = state.pending_key_type || null;
+                device.ssh_pending_fingerprint = state.pending_fingerprint || null;
+                device.ssh_pending_detected_at = state.pending_detected_at || null;
+            };
+
+            const renderSshHostKeyModal = (device) => {
+                const status = device.ssh_host_key_status || 'unverified';
+                document.getElementById('sshHostKeyDevice').textContent = `${device.name} (${device.ip})`;
+                document.getElementById('sshTrustedFingerprint').textContent = device.ssh_trusted_fingerprint || '—';
+                document.getElementById('sshPendingFingerprint').textContent = device.ssh_pending_fingerprint || '—';
+
+                const detectedWrap = document.getElementById('sshPendingDetectedWrap');
+                if (device.ssh_pending_detected_at) {
+                    document.getElementById('sshPendingDetected').textContent = formatLocalDate(device.ssh_pending_detected_at);
+                    detectedWrap.classList.remove('hidden');
+                } else {
+                    detectedWrap.classList.add('hidden');
+                }
+
+                const message = document.getElementById('sshHostKeyMessage');
+                const messages = {
+                    trusted: ['SSH identita zariadenia je potvrdená.', 'border-emerald-700 bg-emerald-950/40 text-emerald-300'],
+                    unverified: ['SSH identita ešte nebola načítaná. Načítanie fingerprintu neodošle prihlasovacie heslo.', 'border-amber-700 bg-amber-950/40 text-amber-200'],
+                    pending: ['Nový SSH fingerprint čaká na vaše potvrdenie. Dovtedy sú SSH zálohy tohto zariadenia zablokované.', 'border-amber-600 bg-amber-950/40 text-amber-200'],
+                    changed: ['Pozor: SSH identita zariadenia sa zmenila. Potvrďte ju iba po overení zmeny na MikroTiku.', 'border-red-600 bg-red-950/40 text-red-300']
+                }[status];
+                message.textContent = messages[0];
+                message.className = `rounded-lg border p-4 text-sm ${messages[1]}`;
+
+                const approveButton = document.getElementById('approveSshHostKeyBtn');
+                approveButton.classList.toggle('hidden', !device.ssh_pending_fingerprint);
+                document.getElementById('probeSshHostKeyBtn').innerHTML = status === 'unverified'
+                    ? '<i class="fas fa-satellite-dish"></i>Načítať fingerprint'
+                    : '<i class="fas fa-rotate"></i>Overiť znova';
+            };
+
+            const openSshHostKeyModal = (device) => {
+                activeSshHostKeyDeviceId = device.id;
+                renderSshHostKeyModal(device);
+                document.getElementById('sshHostKeyModal').classList.remove('hidden');
+            };
+
+            const closeSshHostKeyModal = () => {
+                document.getElementById('sshHostKeyModal').classList.add('hidden');
+                activeSshHostKeyDeviceId = null;
+            };
+
+            const openSshHostKeyConfirmModal = (device) => {
+                document.getElementById('sshConfirmDevice').textContent = `${device.name} (${device.ip})`;
+                document.getElementById('sshConfirmFingerprint').textContent = device.ssh_pending_fingerprint;
+                document.getElementById('sshHostKeyConfirmModal').classList.remove('hidden');
+            };
+
+            const closeSshHostKeyConfirmModal = () => {
+                document.getElementById('sshHostKeyConfirmModal').classList.add('hidden');
+            };
+
+            const updateDeviceModalIdentity = (device) => {
+                const button = document.getElementById('deviceModalIdentityBtn');
+                const icon = document.getElementById('deviceModalIdentityIcon');
+                button.classList.remove('ssh-trusted', 'ssh-unverified', 'ssh-changed');
+                button.disabled = !device;
+
+                if (!device) {
+                    icon.className = 'fas fa-router text-xl text-white';
+                    button.title = 'Nové zariadenie';
+                    return;
+                }
+
+                const status = device.ssh_host_key_status || 'unverified';
+                icon.className = 'fas fa-shield-halved text-xl text-white';
+                if (status === 'trusted') {
+                    button.classList.add('ssh-trusted');
+                    button.title = 'SSH identita je potvrdená';
+                } else if (status === 'changed') {
+                    button.classList.add('ssh-changed');
+                    button.title = 'SSH identita sa zmenila a vyžaduje potvrdenie';
+                } else {
+                    button.classList.add('ssh-unverified');
+                    button.title = 'SSH identita ešte nie je potvrdená';
+                }
+            };
+
+            const bindSshHostKeyButton = (container, device) => {
+                const button = container.querySelector('.ssh-key-btn');
+                if (button) button.addEventListener('click', () => openSshHostKeyModal(device));
+            };
+
+            document.getElementById('closeSshHostKeyBtn').addEventListener('click', closeSshHostKeyModal);
+            document.getElementById('sshHostKeyModal').addEventListener('click', (event) => {
+                if (event.target.id === 'sshHostKeyModal') closeSshHostKeyModal();
+            });
+            document.getElementById('cancelSshHostKeyApprovalBtn').addEventListener('click', closeSshHostKeyConfirmModal);
+            document.getElementById('sshHostKeyConfirmModal').addEventListener('click', (event) => {
+                if (event.target.id === 'sshHostKeyConfirmModal') closeSshHostKeyConfirmModal();
+            });
+            document.getElementById('deviceModalIdentityBtn').addEventListener('click', () => {
+                const deviceId = document.getElementById('deviceId').value;
+                const device = window.allDevicesData.find(item => String(item.id) === String(deviceId));
+                if (device) openSshHostKeyModal(device);
+            });
+            document.getElementById('sshHostKeyBanner').addEventListener('click', () => {
+                const device = window.allDevicesData.find(item =>
+                    !item.deleted_at && (item.ssh_host_key_status || 'unverified') !== 'trusted'
+                );
+                if (device) openSshHostKeyModal(device);
+            });
+            document.getElementById('probeSshHostKeyBtn').addEventListener('click', async (event) => {
+                const device = window.allDevicesData.find(item => String(item.id) === String(activeSshHostKeyDeviceId));
+                if (!device) return;
+                const button = event.currentTarget;
+                const originalHtml = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Načítavam...';
+                try {
+                    const result = await api.post(`devices/${device.id}/ssh-host-key/probe`, {});
+                    applySshHostKeyState(device, result.ssh_host_key);
+                    renderSshHostKeyModal(device);
+                    renderDevices();
+                    showToast(result.message, 'info');
+                } catch (error) {
+                    showToast(error.message || 'Načítanie SSH fingerprintu zlyhalo.', 'error', 7000);
+                } finally {
+                    button.disabled = false;
+                    if (button.innerHTML.includes('Načítavam')) button.innerHTML = originalHtml;
+                }
+            });
+            document.getElementById('approveSshHostKeyBtn').addEventListener('click', () => {
+                const device = window.allDevicesData.find(item => String(item.id) === String(activeSshHostKeyDeviceId));
+                if (!device || !device.ssh_pending_fingerprint) return;
+                openSshHostKeyConfirmModal(device);
+            });
+
+            document.getElementById('confirmSshHostKeyApprovalBtn').addEventListener('click', async (event) => {
+                const device = window.allDevicesData.find(item => String(item.id) === String(activeSshHostKeyDeviceId));
+                if (!device || !device.ssh_pending_fingerprint) {
+                    closeSshHostKeyConfirmModal();
+                    return;
+                }
+                const fingerprint = device.ssh_pending_fingerprint;
+
+                const button = event.currentTarget;
+                button.disabled = true;
+                try {
+                    const result = await api.post(`devices/${device.id}/ssh-host-key/approve`, { fingerprint });
+                    applySshHostKeyState(device, result.ssh_host_key);
+                    renderSshHostKeyModal(device);
+                    renderDevices();
+                    updateDeviceModalIdentity(device);
+                    closeSshHostKeyConfirmModal();
+                    showToast(result.message, 'success');
+                } catch (error) {
+                    showToast(error.message || 'Potvrdenie SSH fingerprintu zlyhalo.', 'error', 7000);
+                    await loadDevices();
+                } finally {
+                    button.disabled = false;
+                }
+            });
+
             const createDeviceCard = (device) => {
                 if (device.deleted_at) {
                     const remainingDays = device.remaining_seconds ? Math.ceil(device.remaining_seconds / 86400) : 0;
@@ -4055,6 +4349,7 @@
                     </div>
                 </div>
                 <div class="col-span-2"><strong>Posl. záloha:</strong><br><span class="font-mono text-gray-300 last-backup-val">${lastBackupDisplay}</span></div>
+                ${(device.ssh_host_key_status || 'unverified') === 'trusted' ? '' : `<div class="col-span-2">${sshHostKeyBadge(device)}</div>`}
             </div>
             <div class="flex gap-2 mt-auto pt-4 border-t border-gray-700">
                 <button class="backup-btn btn flex-grow bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1 px-1.5 rounded-lg device-btn-text flex items-center justify-center gap-1.5"><i class="fas fa-save device-btn-icon"></i> Zálohovať</button>
@@ -4077,6 +4372,7 @@
                 });
                 card.querySelector('.edit-btn').addEventListener('click', () => openDeviceModal(device));
                 card.querySelector('.delete-btn').addEventListener('click', () => deleteDevice(device.id, device.ip));
+                bindSshHostKeyButton(card, device);
                 return card;
             };
 
@@ -4194,6 +4490,7 @@
                     <td class="px-2.5 py-2 font-mono text-gray-300 text-center"><span class="val-version">${snmpData.version || 'N/A'}</span></td>
                     <td class="px-2.5 py-2 text-center whitespace-nowrap">
                         <div class="flex items-center justify-center gap-1.5">
+                            ${sshHostKeyBadge(device, true)}
                             <button class="backup-btn btn bg-emerald-600 hover:bg-emerald-700 text-white rounded p-1.5" title="Zálohovať"><i class="fas fa-save w-4 h-4 flex items-center justify-center"></i></button>
                             <button class="snmp-btn btn bg-sky-600 hover:bg-sky-700 text-white rounded p-1.5" title="SNMP"><i class="fas fa-sync w-4 h-4 flex items-center justify-center"></i></button>
                             <button class="edit-btn btn bg-amber-500 hover:bg-amber-600 text-white rounded p-1.5" title="Upraviť"><i class="fas fa-pencil-alt w-4 h-4 flex items-center justify-center"></i></button>
@@ -4215,6 +4512,7 @@
                 });
                 row.querySelector('.edit-btn').addEventListener('click', () => openDeviceModal(device));
                 row.querySelector('.delete-btn').addEventListener('click', () => deleteDevice(device.id, device.ip));
+                bindSshHostKeyButton(row, device);
 
                 return row;
             };
@@ -4757,6 +5055,7 @@
 
                 deviceForm.reset();
                 document.getElementById('deviceId').value = device ? device.id : '';
+                updateDeviceModalIdentity(device);
                 document.getElementById('deviceName').value = device ? device.name : '';
                 document.getElementById('deviceIp').value = device ? device.ip : '';
                 document.getElementById('deviceUsername').value = device ? device.username : '';
@@ -4875,6 +5174,21 @@
             const renderDevices = () => {
                 devicesGrid.innerHTML = '';
                 if (devicesTableBody) devicesTableBody.innerHTML = '';
+
+                const sshAttentionDevices = window.allDevicesData.filter(device =>
+                    !device.deleted_at && (device.ssh_host_key_status || 'unverified') !== 'trusted'
+                );
+                const sshBanner = document.getElementById('sshHostKeyBanner');
+                const sshBannerText = document.getElementById('sshHostKeyBannerText');
+                if (sshAttentionDevices.length) {
+                    const changedCount = sshAttentionDevices.filter(device => device.ssh_host_key_status === 'changed').length;
+                    sshBannerText.textContent = changedCount
+                        ? `${changedCount} zariadení má zmenený SSH kľúč; spolu ${sshAttentionDevices.length} vyžaduje kontrolu.`
+                        : `${sshAttentionDevices.length} zariadení vyžaduje potvrdenie SSH identity.`;
+                    sshBanner.classList.remove('hidden');
+                } else {
+                    sshBanner.classList.add('hidden');
+                }
 
                 const parseUptime = (str) => {
                     if (!str || str === 'N/A') return null;

@@ -15,6 +15,8 @@ import re
 import platform
 import statistics
 import secrets
+import hashlib
+import socket
 import string
 import csv
 from contextlib import contextmanager
@@ -60,7 +62,8 @@ BOOLEAN_SETTING_KEYS = {
     'notify_cpu_critical', 'notify_memory_critical', 'notify_reboot_detected',
     'notify_version_change', 'notify_failed_login', 'notify_failed_2fa', 'notify_password_recovery_failure', 'quiet_hours_enabled', 'availability_monitoring_enabled',
     'debug_terminal', 'notify_cert_expiry', 'notify_new_routeros_version',
-    'updater_backup_before_update', 'notify_device_purged'
+    'updater_backup_before_update', 'notify_device_purged',
+    'notify_ssh_host_key_change'
 }
 
 SETTING_LABELS = {
@@ -114,6 +117,7 @@ SETTING_LABELS = {
     'notify_password_recovery_failure': 'Notifikácia: neúspešná obnova hesla',
     'notify_new_routeros_version': 'Notifikácia: nová verzia RouterOS (RSS)',
     'notify_device_purged': 'Notifikácia: zariadenie automaticky vymazané z koša',
+    'notify_ssh_host_key_change': 'Notifikácia: SSH kľúč vyžaduje potvrdenie',
     'updater_backup_before_update': 'Záloha pred aktualizáciou',
     'updater_post_backup_delay': 'Pauza po zálohe pred aktualizáciou',
     'cert_www_port': 'Port služby www (HTTP)',
@@ -236,6 +240,7 @@ DEFAULT_SETTING_VALUES = {
     'updater_post_backup_delay': '10',
     'updater_stabilization_delay': '120',
     'updater_pre_reboot_delay': '20',
+    'notify_ssh_host_key_change': 'true',
     'cert_www_port': '80',
     'cert_www_ssl_port': '443'
 }
@@ -825,6 +830,22 @@ def init_database():
                 routeros_update_channel TEXT DEFAULT NULL
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ssh_host_keys (
+                device_id INTEGER PRIMARY KEY,
+                trusted_host TEXT,
+                trusted_key_type TEXT,
+                trusted_key_data TEXT,
+                trusted_fingerprint TEXT,
+                trusted_at TIMESTAMP,
+                pending_key_type TEXT,
+                pending_key_data TEXT,
+                pending_fingerprint TEXT,
+                pending_detected_at TIMESTAMP,
+                notified_pending_fingerprint TEXT,
+                FOREIGN KEY (device_id) REFERENCES devices (id)
+            )
+        ''')
         # Pridanie nových stĺpcov pre existujúce databázy
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN snmp_interval_minutes INTEGER DEFAULT 0')
@@ -1015,6 +1036,7 @@ def init_database():
             'notify_password_recovery_failure': 'true',
             'notify_new_routeros_version': 'true',
             'notify_device_purged': 'true',
+            'notify_ssh_host_key_change': 'true',
             'temp_critical_threshold': '75',
             'cpu_critical_threshold': '85',
             'memory_critical_threshold': '90',
@@ -1114,6 +1136,188 @@ def get_mikrotik_export_direct(ssh_client, ip, detailed_logging=True):
     except Exception as e:
         add_log('error', f"Priamy SSH export zlyhal: {e}", ip)
         return None
+
+
+class SSHHostKeyVerificationRequired(paramiko.SSHException):
+    """SSH server identity must be explicitly approved before authentication."""
+
+
+def ssh_host_key_fingerprint(key):
+    """Return the OpenSSH-style SHA-256 fingerprint for a Paramiko public key."""
+    digest = hashlib.sha256(key.asbytes()).digest()
+    return f"SHA256:{base64.b64encode(digest).decode('ascii').rstrip('=')}"
+
+
+def _ssh_host_key_details(key):
+    return key.get_name(), key.get_base64(), ssh_host_key_fingerprint(key)
+
+
+def get_ssh_host_key_state(device_id, device_ip=None):
+    """Return public SSH trust metadata without exposing the stored key material."""
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''SELECT trusted_host, trusted_key_type, trusted_fingerprint, trusted_at,
+                      pending_key_type, pending_fingerprint, pending_detected_at
+               FROM ssh_host_keys WHERE device_id = ?''',
+            (device_id,)
+        ).fetchone()
+
+    if not row:
+        return {'status': 'unverified'}
+
+    state = dict(row)
+    trusted_for_host = bool(state.get('trusted_fingerprint')) and (
+        device_ip is None or state.get('trusted_host') == device_ip
+    )
+    if state.get('pending_fingerprint'):
+        state['status'] = 'changed' if trusted_for_host else 'pending'
+    elif trusted_for_host:
+        state['status'] = 'trusted'
+    else:
+        state['status'] = 'unverified'
+    state.pop('trusted_host', None)
+    return state
+
+
+def remember_pending_ssh_host_key(device_id, expected_ip, key):
+    """Persist an untrusted key and return whether it already matches the trusted pin."""
+    key_type, key_data, fingerprint = _ssh_host_key_details(key)
+    now = datetime.now(timezone.utc).isoformat()
+
+    with get_db_connection() as conn:
+        device = conn.execute(
+            'SELECT id, name, ip FROM devices WHERE id = ? AND deleted_at IS NULL',
+            (device_id,)
+        ).fetchone()
+        if not device or device['ip'] != expected_ip:
+            raise SSHHostKeyVerificationRequired('Zariadenie alebo jeho IP adresa sa počas SSH overovania zmenili.')
+
+        existing = conn.execute(
+            'SELECT * FROM ssh_host_keys WHERE device_id = ?',
+            (device_id,)
+        ).fetchone()
+        existing = dict(existing) if existing else {}
+        trusted = (
+            existing.get('trusted_host') == expected_ip
+            and existing.get('trusted_key_type') == key_type
+            and existing.get('trusted_key_data')
+            and secrets.compare_digest(existing['trusted_key_data'], key_data)
+        )
+        if trusted:
+            if existing.get('pending_fingerprint'):
+                conn.execute(
+                    '''UPDATE ssh_host_keys
+                       SET pending_key_type = NULL, pending_key_data = NULL,
+                           pending_fingerprint = NULL, pending_detected_at = NULL,
+                           notified_pending_fingerprint = NULL
+                       WHERE device_id = ?''',
+                    (device_id,)
+                )
+                conn.commit()
+            return {'trusted': True, 'fingerprint': fingerprint, 'new_pending': False}
+
+        same_pending = (
+            existing.get('pending_key_type') == key_type
+            and existing.get('pending_key_data')
+            and secrets.compare_digest(existing['pending_key_data'], key_data)
+        )
+        if not same_pending:
+            conn.execute(
+                '''INSERT INTO ssh_host_keys (
+                       device_id, pending_key_type, pending_key_data,
+                       pending_fingerprint, pending_detected_at,
+                       notified_pending_fingerprint
+                   ) VALUES (?, ?, ?, ?, ?, NULL)
+                   ON CONFLICT(device_id) DO UPDATE SET
+                       pending_key_type = excluded.pending_key_type,
+                       pending_key_data = excluded.pending_key_data,
+                       pending_fingerprint = excluded.pending_fingerprint,
+                       pending_detected_at = excluded.pending_detected_at,
+                       notified_pending_fingerprint = NULL''',
+                (device_id, key_type, key_data, fingerprint, now)
+            )
+            conn.commit()
+
+        return {
+            'trusted': False,
+            'fingerprint': fingerprint,
+            'new_pending': not same_pending,
+            'already_notified': existing.get('notified_pending_fingerprint') == fingerprint,
+            'changed': bool(existing.get('trusted_fingerprint')),
+            'device_name': device['name'],
+            'device_ip': device['ip']
+        }
+
+
+def notify_pending_ssh_host_key(observation):
+    """Send one Pushover alert per observed pending fingerprint."""
+    if observation.get('trusted') or observation.get('already_notified'):
+        return
+
+    change_text = 'zmenil sa' if observation.get('changed') else 'zatiaľ nie je potvrdený'
+    sent = send_pushover_notification(
+        f"SSH kľúč zariadenia {observation['device_name']} "
+        f"({observation['device_ip']}) {change_text}.\n"
+        f"Fingerprint: {observation['fingerprint']}\n"
+        "Záloha je zablokovaná, kým kľúč nepotvrdíte v aplikácii.",
+        title='MikroTik Manager - potvrdenie SSH kľúča',
+        notification_key='notify_ssh_host_key_change',
+        ignore_quiet_hours=True
+    )
+    if not sent:
+        return
+
+    with get_db_connection() as conn:
+        conn.execute(
+            '''UPDATE ssh_host_keys SET notified_pending_fingerprint = ?
+               WHERE device_id = ? AND pending_fingerprint = ?''',
+            (observation['fingerprint'], observation['device_id'], observation['fingerprint'])
+        )
+        conn.commit()
+
+
+class PinnedSSHHostKeyPolicy(paramiko.MissingHostKeyPolicy):
+    """Allow only the exact SSH key explicitly trusted for this device."""
+
+    def __init__(self, device_id, device_ip):
+        self.device_id = device_id
+        self.device_ip = device_ip
+
+    def missing_host_key(self, client, hostname, key):
+        observation = remember_pending_ssh_host_key(self.device_id, self.device_ip, key)
+        observation['device_id'] = self.device_id
+        if observation['trusted']:
+            return
+
+        notify_pending_ssh_host_key(observation)
+        socketio.emit('ssh_host_key_status', {
+            'id': self.device_id,
+            'ip': self.device_ip,
+            'status': 'changed' if observation.get('changed') else 'pending'
+        })
+        raise SSHHostKeyVerificationRequired(
+            f"SSH fingerprint {observation['fingerprint']} vyžaduje potvrdenie v aplikácii."
+        )
+
+
+def probe_ssh_host_key(ip, timeout=10):
+    """Read the SSH server key without sending device credentials."""
+    sock = None
+    transport = None
+    try:
+        sock = socket.create_connection((ip, 22), timeout=timeout)
+        transport = paramiko.Transport(sock)
+        transport.banner_timeout = timeout
+        transport.start_client(timeout=timeout)
+        key = transport.get_remote_server_key()
+        if key is None:
+            raise paramiko.SSHException('SSH server neposkytol host key.')
+        return key
+    finally:
+        if transport is not None:
+            transport.close()
+        elif sock is not None:
+            sock.close()
 
 def compare_with_local_backup(ip, remote_content, detailed_logging=True):
     try:
@@ -1235,8 +1439,15 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
     client = None
     try:
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(ip, username=username, password=password, timeout=30)
+        client.set_missing_host_key_policy(PinnedSSHHostKeyPolicy(device['id'], ip))
+        client.connect(
+            ip,
+            username=username,
+            password=password,
+            timeout=30,
+            banner_timeout=30,
+            auth_timeout=30
+        )
         
         if detailed_logging:
             add_log('info', "SSH pripojenie úspešne.", ip)
@@ -1361,6 +1572,7 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
             add_log('warning', "Čistenie starých záloh preskočené, aby sa zachovali súbory čakajúce na FTP synchronizáciu.", ip)
 
     except Exception as e:
+        host_key_blocked = isinstance(e, SSHHostKeyVerificationRequired)
         add_log('error', f"Chyba pri zálohe: {e}", ip)
         socketio.emit('backup_status', {'ip': ip, 'id': device['id'], 'status': 'error', 'message': str(e)})
         if result_holder is not None:
@@ -1370,7 +1582,7 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
         try:
             with get_db_connection() as conn:
                 settings_fail = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
-            if settings_fail.get('notify_backup_failure', 'false').lower() == 'true':
+            if not host_key_blocked and settings_fail.get('notify_backup_failure', 'false').lower() == 'true':
                 device_name = device.get('name', ip)
                 send_pushover_notification(
                     f"❌ Záloha MikroTik {ip} ({device_name}) zlyhala: {e}",
@@ -1845,21 +2057,26 @@ def send_pushover_notification(
                 debug_log('debug_notifications', "Pushover notifikácia neodoslaná - chýba app key alebo user key.")
                 return False
         
-        conn_pushover = http.client.HTTPSConnection("api.pushover.net:443")
+        conn_pushover = http.client.HTTPSConnection("api.pushover.net:443", timeout=15)
         conn_pushover.request(
             "POST",
             "/1/messages.json",
             urllib.parse.urlencode({"token": app_key, "user": user_key, "title": title, "message": message}),
             {"Content-type": "application/x-www-form-urlencoded"}
         )
-        conn_pushover.getresponse()
+        pushover_response = conn_pushover.getresponse()
+        pushover_response.read()
+        conn_pushover.close()
+        if not 200 <= pushover_response.status < 300:
+            raise RuntimeError(f"Pushover API vrátilo HTTP {pushover_response.status}")
         
         level_map = {
             'notify_device_offline': 'warning',
             'notify_backup_failure': 'error',
             'notify_failed_login': 'warning',
             'notify_failed_2fa': 'warning',
-            'notify_password_recovery_failure': 'warning'
+            'notify_password_recovery_failure': 'warning',
+            'notify_ssh_host_key_change': 'warning'
         }
         log_level = level_map.get(notification_key, 'info')
         if log_message:
@@ -3964,8 +4181,35 @@ def handle_devices():
         if request.method == 'GET':
             # Include all necessary fields including status and last_snmp_data
             devices = []
-            for row in conn.execute('SELECT id, name, ip, username, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port, monitoring_paused, status, last_snmp_data, last_backup FROM devices WHERE deleted_at IS NULL ORDER BY LOWER(name)').fetchall():
+            for row in conn.execute('''
+                SELECT d.id, d.name, d.ip, d.username, d.low_memory, d.snmp_community,
+                       d.snmp_interval_minutes, d.ping_interval_seconds,
+                       d.ping_retry_interval_seconds, d.cert_www_port,
+                       d.cert_www_ssl_port, d.monitoring_paused, d.status,
+                       d.last_snmp_data, d.last_backup,
+                       k.trusted_host AS ssh_trusted_host,
+                       k.trusted_key_type AS ssh_trusted_key_type,
+                       k.trusted_fingerprint AS ssh_trusted_fingerprint,
+                       k.trusted_at AS ssh_trusted_at,
+                       k.pending_key_type AS ssh_pending_key_type,
+                       k.pending_fingerprint AS ssh_pending_fingerprint,
+                       k.pending_detected_at AS ssh_pending_detected_at
+                FROM devices d
+                LEFT JOIN ssh_host_keys k ON k.device_id = d.id
+                WHERE d.deleted_at IS NULL
+                ORDER BY LOWER(d.name)
+            ''').fetchall():
                 device = get_device_with_decrypted_password(dict(row))
+                trusted_for_current_ip = bool(device.get('ssh_trusted_fingerprint')) and (
+                    device.get('ssh_trusted_host') == device['ip']
+                )
+                if device.get('ssh_pending_fingerprint'):
+                    device['ssh_host_key_status'] = 'changed' if trusted_for_current_ip else 'pending'
+                elif trusted_for_current_ip:
+                    device['ssh_host_key_status'] = 'trusted'
+                else:
+                    device['ssh_host_key_status'] = 'unverified'
+                device.pop('ssh_trusted_host', None)
                 # Convert last_backup to ISO format with UTC timezone for consistent parsing across browsers
                 if device.get('last_backup'):
                     try:
@@ -4034,6 +4278,10 @@ def handle_devices():
                                     encrypted_snmp_community, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval,
                                     new_cert_www_port, new_cert_www_ssl_port, data['id']))
+                    if ip_changed:
+                        # A pinned key belongs to a network endpoint. A new IP must be
+                        # explicitly enrolled instead of inheriting the previous pin.
+                        conn.execute('DELETE FROM ssh_host_keys WHERE device_id = ?', (data['id'],))
                     conn.commit()
 
                     backup_migration = None
@@ -4100,6 +4348,108 @@ def handle_devices():
                     add_log('info', f"Zariadenie {data['ip']} pridané.")
                     return jsonify({'status': 'success', 'device_id': device_id})
             except sqlite3.IntegrityError: return jsonify({'status': 'error', 'message': 'Zariadenie s touto IP už existuje'}), 409
+
+
+@app.route('/api/devices/<int:device_id>/ssh-host-key/probe', methods=['POST'])
+@login_required
+def probe_device_ssh_host_key(device_id):
+    with get_db_connection() as conn:
+        device = conn.execute(
+            'SELECT id, name, ip FROM devices WHERE id = ? AND deleted_at IS NULL',
+            (device_id,)
+        ).fetchone()
+    if not device:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+
+    try:
+        key = probe_ssh_host_key(device['ip'])
+        observation = remember_pending_ssh_host_key(device_id, device['ip'], key)
+        state = get_ssh_host_key_state(device_id, device['ip'])
+        if observation['trusted']:
+            message = 'SSH fingerprint zodpovedá potvrdenému kľúču.'
+        else:
+            message = 'SSH fingerprint bol načítaný a čaká na vaše potvrdenie.'
+            add_log(
+                'warning',
+                f"SSH fingerprint {observation['fingerprint']} čaká na potvrdenie používateľom.",
+                device['ip']
+            )
+        socketio.emit('ssh_host_key_status', {
+            'id': device_id,
+            'ip': device['ip'],
+            'status': state['status']
+        })
+        return jsonify({'status': 'success', 'message': message, 'ssh_host_key': state})
+    except (OSError, paramiko.SSHException) as e:
+        error_message = str(e) or e.__class__.__name__
+        add_log('warning', f"Načítanie SSH fingerprintu zlyhalo: {error_message}", device['ip'])
+        return jsonify({
+            'status': 'error',
+            'message': f'Nepodarilo sa načítať SSH fingerprint: {error_message}'
+        }), 400
+
+
+@app.route('/api/devices/<int:device_id>/ssh-host-key/approve', methods=['POST'])
+@login_required
+def approve_device_ssh_host_key(device_id):
+    data = request.get_json(silent=True) or {}
+    requested_fingerprint = str(data.get('fingerprint') or '')
+    if not requested_fingerprint:
+        return jsonify({'status': 'error', 'message': 'Chýba fingerprint na potvrdenie.'}), 400
+
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''SELECT d.name, d.ip, k.pending_key_type, k.pending_key_data,
+                      k.pending_fingerprint
+               FROM devices d
+               LEFT JOIN ssh_host_keys k ON k.device_id = d.id
+               WHERE d.id = ? AND d.deleted_at IS NULL''',
+            (device_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+        if not row['pending_fingerprint']:
+            return jsonify({'status': 'error', 'message': 'Zariadenie nemá SSH kľúč čakajúci na potvrdenie.'}), 409
+        if not secrets.compare_digest(row['pending_fingerprint'], requested_fingerprint):
+            return jsonify({
+                'status': 'error',
+                'message': 'Čakajúci fingerprint sa medzitým zmenil. Obnovte údaje a skontrolujte ho znova.'
+            }), 409
+
+        approved_at = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            '''UPDATE ssh_host_keys SET
+                   trusted_host = ?,
+                   trusted_key_type = pending_key_type,
+                   trusted_key_data = pending_key_data,
+                   trusted_fingerprint = pending_fingerprint,
+                   trusted_at = ?,
+                   pending_key_type = NULL,
+                   pending_key_data = NULL,
+                   pending_fingerprint = NULL,
+                   pending_detected_at = NULL,
+                   notified_pending_fingerprint = NULL
+               WHERE device_id = ? AND pending_fingerprint = ?''',
+            (row['ip'], approved_at, device_id, requested_fingerprint)
+        )
+        conn.commit()
+
+    add_log(
+        'warning',
+        f"Používateľ '{current_user.username}' potvrdil SSH fingerprint {requested_fingerprint}.",
+        row['ip']
+    )
+    state = get_ssh_host_key_state(device_id, row['ip'])
+    socketio.emit('ssh_host_key_status', {
+        'id': device_id,
+        'ip': row['ip'],
+        'status': state['status']
+    })
+    return jsonify({
+        'status': 'success',
+        'message': 'SSH kľúč bol potvrdený. Ďalšie zálohy môžu pokračovať.',
+        'ssh_host_key': state
+    })
 
 @app.route('/api/devices/<int:device_id>', methods=['DELETE'])
 @login_required
@@ -4227,6 +4577,7 @@ def purge_device(device_id, manual=False):
             conn.execute('DELETE FROM ping_history WHERE device_id = ?', (device_id,))
             conn.execute('DELETE FROM snmp_history WHERE device_id = ?', (device_id,))
             conn.execute('DELETE FROM update_schedule WHERE device_id = ?', (device_id,))
+            conn.execute('DELETE FROM ssh_host_keys WHERE device_id = ?', (device_id,))
             conn.execute('DELETE FROM logs WHERE device_ip = ?', (device_ip,))
 
             # 2. Lokálne backup súbory
@@ -4837,6 +5188,7 @@ def test_notification():
         'notify_failed_login':          ("🔐 Test: Neúspešné prihlásenie\nIP: 10.0.0.1\nPokus o prihlásenie s nesprávnym heslom.", "Test – Neúspešné Prihlásenie"),
         'notify_failed_2fa':            ("🛡️ Test: Neúspešné 2FA overenie\nIP: 10.0.0.1\nNesprávny TOTP kód.", "Test – Neúspešné 2FA"),
         'notify_password_recovery_failure': ("🚨 Test: Neúspešná obnova hesla\nIP: 10.0.0.1\nNeplatný kód alebo záložný kód.", "Test – Neúspešná Obnova Hesla"),
+        'notify_ssh_host_key_change':  ("🛡️ Test: SSH kľúč vyžaduje potvrdenie\nZariadenie: Router-Test (192.168.1.1)\nFingerprint: SHA256:TEST", "Test – Potvrdenie SSH Kľúča"),
         'notify_temp_critical':         ("🌡️ Test: Kritická teplota\nZariadenie: Router-Test (192.168.1.1)\nTeplota: 78°C (prah: 75°C)", "Test – Kritická Teplota"),
         'notify_cpu_critical':          ("🖥️ Test: Kritická záťaž CPU\nZariadenie: Router-Test (192.168.1.1)\nCPU: 92% (prah: 80%)", "Test – Kritická CPU"),
         'notify_memory_critical':       ("💾 Test: Kritická pamäť\nZariadenie: Router-Test (192.168.1.1)\nPamäť: 87% (prah: 80%)", "Test – Kritická Pamäť"),

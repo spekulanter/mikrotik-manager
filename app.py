@@ -2357,10 +2357,23 @@ RSS_CACHE_DURATION = 3600 # 1 hour
 MIKROTIK_STABLE_RSS_URL = 'https://cdn.mikrotik.com/routeros/latest-stable.rss'
 MIKROTIK_CHANGELOGS_URL = 'https://mikrotik.com/download/changelogs'
 ROUTEROS_UPDATE_CHANNELS = ('long-term', 'stable', 'testing', 'development')
-ROUTEROS_VERSION_PATTERN = re.compile(r'\d+(?:\.\d+){1,2}(?:(?:alpha|beta|rc)\d+)?', re.IGNORECASE)
+ROUTEROS_VERSION_MAX_LENGTH = 32
+ROUTEROS_VERSION_PATTERN = re.compile(
+    r'[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:(?:alpha|beta|rc)[0-9]+)?',
+    re.IGNORECASE
+)
 CHANGELOG_HISTORY_LIMIT = 1000  # Prakticky neobmedzená história RouterOS vydaní
 CHANGELOG_HISTORY_CACHE = {}
 CHANGELOG_DETAIL_CACHE = {}
+
+
+def is_valid_routeros_version(value):
+    """Validuje RouterOS verziu s pevnou hranicou pre vstup do regexu."""
+    return (
+        isinstance(value, str)
+        and 0 < len(value) <= ROUTEROS_VERSION_MAX_LENGTH
+        and ROUTEROS_VERSION_PATTERN.fullmatch(value) is not None
+    )
 
 
 def normalize_routeros_channel(value, default=None):
@@ -2414,7 +2427,7 @@ def fetch_mikrotik_changelog_history(channel='stable', limit=CHANGELOG_HISTORY_L
         seen = set()
         for index, match in enumerate(matches):
             version = match.group(1).strip()
-            if version in seen or not ROUTEROS_VERSION_PATTERN.fullmatch(version):
+            if version in seen or not is_valid_routeros_version(version):
                 continue
 
             block_end = matches[index + 1].start() if index + 1 < len(matches) else len(response.text)
@@ -2454,7 +2467,7 @@ def fetch_mikrotik_changelog_history(channel='stable', limit=CHANGELOG_HISTORY_L
 def fetch_mikrotik_changelog_detail(version, channel='stable'):
     """Načíta konkrétny changelog zvoleného kanála z oficiálneho MikroTik archívu."""
     channel = normalize_routeros_channel(channel, 'stable')
-    if not ROUTEROS_VERSION_PATTERN.fullmatch(version or ''):
+    if not is_valid_routeros_version(version):
         return None
 
     cache_key = (channel, version)
@@ -3050,7 +3063,7 @@ def api_updater_changelog_detail(version):
     channel = normalize_routeros_channel(request.args.get('channel', 'stable'))
     if not channel:
         return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
-    if not ROUTEROS_VERSION_PATTERN.fullmatch(version or ''):
+    if not is_valid_routeros_version(version):
         return jsonify({'status': 'error', 'message': 'Neplatná verzia RouterOS.'}), 400
 
     data = fetch_mikrotik_changelog_detail(version, channel)

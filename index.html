@@ -746,10 +746,34 @@
         body.light-theme .custom-select.snmp-config-select .custom-select-option.selected::after {
             color: #0369a1;
         }
+        @media (max-width: 767px) {
+            .snmp-v3-selectors-row > div:nth-child(2) {
+                position: relative;
+                z-index: 2;
+            }
+            .snmp-v3-selectors-row > div:nth-child(3) {
+                position: relative;
+                z-index: 1;
+            }
+        }
         @media (max-width: 640px) {
             .custom-select[data-select-id="deviceSnmpVersion"] {
                 width: auto;
                 min-width: 0;
+            }
+
+            #deviceSnmpAddressFields {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                width: 100%;
+            }
+            #deviceSnmpAllowedAddress {
+                width: 100%;
+                min-width: 0;
+            }
+            #detectSnmpSourceBtn {
+                max-width: 100%;
+                white-space: nowrap;
             }
         }
 

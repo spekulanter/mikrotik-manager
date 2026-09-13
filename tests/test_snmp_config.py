@@ -26,6 +26,9 @@ class SnmpConfigTests(unittest.TestCase):
     def test_database_contains_migration_safe_snmp_columns(self):
         with app.get_db_connection() as conn:
             columns = {row['name']: row for row in conn.execute('PRAGMA table_info(devices)').fetchall()}
+            indexes = {row['name'] for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            ).fetchall()}
         for name in (
             'snmp_version', 'snmp_v3_username', 'snmp_v3_security_level',
             'snmp_v3_auth_protocol', 'snmp_v3_auth_password',
@@ -34,6 +37,13 @@ class SnmpConfigTests(unittest.TestCase):
         ):
             self.assertIn(name, columns)
         self.assertEqual(columns['snmp_version']['dflt_value'], "'2c'")
+        self.assertTrue({
+            'idx_ping_history_device_timestamp',
+            'idx_snmp_history_device_timestamp',
+            'idx_logs_device_ip',
+            'idx_update_schedule_device_id',
+            'idx_devices_deleted_purge',
+        }.issubset(indexes))
 
     def test_v3_supported_protocol_combinations(self):
         for auth_protocol in ('SHA1', 'MD5'):
@@ -89,6 +99,52 @@ class SnmpConfigTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(merged['snmp_v3_auth_password'], 'stored-auth')
         self.assertEqual(merged['snmp_v3_priv_password'], 'stored-privacy')
+
+    def test_purge_commits_database_cleanup_and_defers_ftp(self):
+        device_id = 50
+        device_ip = '192.0.2.50'
+        with app.get_db_connection() as conn:
+            conn.execute(
+                '''INSERT OR REPLACE INTO devices
+                   (id, name, ip, username, password, snmp_community, deleted_at, purge_after)
+                   VALUES (?, 'Purge test', ?, 'admin', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)''',
+                (
+                    device_id, device_ip,
+                    app.encrypt_password('ssh-password'),
+                    app.encrypt_password('community'),
+                )
+            )
+            conn.execute(
+                "INSERT INTO ping_history (device_id, timestamp, packet_loss, status) VALUES (?, CURRENT_TIMESTAMP, 0, 'online')",
+                (device_id,)
+            )
+            conn.execute(
+                "INSERT INTO snmp_history (device_id, timestamp) VALUES (?, CURRENT_TIMESTAMP)",
+                (device_id,)
+            )
+            conn.execute(
+                "INSERT INTO logs (timestamp, level, message, device_ip) VALUES (CURRENT_TIMESTAMP, 'info', 'test', ?)",
+                (device_ip,)
+            )
+            conn.commit()
+
+        with mock.patch.object(app.threading, 'Thread') as thread_class:
+            thread = thread_class.return_value
+            self.assertTrue(app.purge_device(device_id, manual=True))
+            thread.start.assert_called_once_with()
+            self.assertTrue(thread_class.call_args.kwargs['daemon'])
+
+        with app.get_db_connection() as conn:
+            self.assertIsNone(conn.execute('SELECT id FROM devices WHERE id = ?', (device_id,)).fetchone())
+            self.assertEqual(conn.execute(
+                'SELECT COUNT(*) FROM ping_history WHERE device_id = ?', (device_id,)
+            ).fetchone()[0], 0)
+            self.assertEqual(conn.execute(
+                'SELECT COUNT(*) FROM snmp_history WHERE device_id = ?', (device_id,)
+            ).fetchone()[0], 0)
+            self.assertEqual(conn.execute(
+                'SELECT COUNT(*) FROM logs WHERE device_ip = ?', (device_ip,)
+            ).fetchone()[0], 0)
 
     def test_routeros_quoting_blocks_script_interpolation(self):
         quoted = app.routeros_quote('a"b\\c$d\n')

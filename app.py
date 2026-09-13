@@ -1026,6 +1026,17 @@ def init_database():
             cursor.execute("ALTER TABLE update_schedule ADD COLUMN update_channel TEXT NOT NULL DEFAULT 'stable'")
         except sqlite3.OperationalError:
             pass
+
+        # Indexy zrýchľujú per-device grafy, retention a definitívne mazanie.
+        # CREATE INDEX IF NOT EXISTS je bezpečné aj pre existujúce databázy.
+        for index_sql in (
+            'CREATE INDEX IF NOT EXISTS idx_ping_history_device_timestamp ON ping_history (device_id, timestamp)',
+            'CREATE INDEX IF NOT EXISTS idx_snmp_history_device_timestamp ON snmp_history (device_id, timestamp)',
+            'CREATE INDEX IF NOT EXISTS idx_logs_device_ip ON logs (device_ip)',
+            'CREATE INDEX IF NOT EXISTS idx_update_schedule_device_id ON update_schedule (device_id)',
+            'CREATE INDEX IF NOT EXISTS idx_devices_deleted_purge ON devices (purge_after) WHERE deleted_at IS NOT NULL',
+        ):
+            cursor.execute(index_sql)
         conn.commit()
         
         # ODSTRÁNENÉ: Automatické mazanie logov o zálohovani - logy si budú pamätať aj po reštarte
@@ -4956,6 +4967,7 @@ def restore_device(device_id):
 
 def purge_device(device_id, manual=False):
     """Definitívne vymaže zariadenie a všetky súvisiace dáta. Vracia True ak úspešné."""
+    started_at = time.monotonic()
     try:
         with get_db_connection() as conn:
             device = conn.execute('SELECT id, name, ip FROM devices WHERE id = ?', (device_id,)).fetchone()
@@ -4966,6 +4978,7 @@ def purge_device(device_id, manual=False):
             device_ip = device['ip']
             retention_row = conn.execute("SELECT value FROM settings WHERE key = 'deleted_device_retention_days'").fetchone()
             retention_days = int(retention_row['value'] if retention_row else 7)
+            settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
 
             # 1. DB cleanup
             conn.execute('DELETE FROM ping_history WHERE device_id = ?', (device_id,))
@@ -4973,54 +4986,96 @@ def purge_device(device_id, manual=False):
             conn.execute('DELETE FROM update_schedule WHERE device_id = ?', (device_id,))
             conn.execute('DELETE FROM ssh_host_keys WHERE device_id = ?', (device_id,))
             conn.execute('DELETE FROM logs WHERE device_ip = ?', (device_ip,))
-
-            # 2. Lokálne backup súbory
-            file_pattern = f"_{device_ip}_"
-            try:
-                if os.path.isdir(BACKUP_DIR):
-                    for f in os.listdir(BACKUP_DIR):
-                        if file_pattern in f:
-                            os.remove(os.path.join(BACKUP_DIR, f))
-            except Exception as e:
-                add_log('error', f"Purge: chyba pri mazaní lokálnych backupov pre {device_ip}: {e}", device_ip)
-
-            # 3. FTP backup súbory (best-effort)
-            try:
-                settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
-                settings = decrypt_sensitive_settings_map(settings)
-                if all(settings.get(k) for k in ['ftp_server', 'ftp_username', 'ftp_password']):
-                    from ftplib import FTP
-                    with FTP(settings['ftp_server'], timeout=15) as ftp:
-                        ftp.login(settings['ftp_username'], settings['ftp_password'])
-                        if settings.get('ftp_directory'):
-                            ftp.cwd(settings['ftp_directory'])
-                        try:
-                            ftp_files = [f for f in ftp.nlst() if file_pattern in f]
-                            for f in ftp_files:
-                                try:
-                                    ftp.delete(f)
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-            except Exception as e:
-                add_log('warning', f"Purge: FTP mazanie zlyhalo pre {device_ip}: {safe_ftp_error(e)}", device_ip)
-                # Best-effort — pokračujeme ďalej
-
-            # 4. In-memory cleanup
-            with snmp_task_lock:
-                snmp_task_state.pop(device_id, None)
-            _cert_expiry_notified.pop(device_id, None)
-            _running_manual_updates.pop(device_id, None)
-            _running_scheduled_updates.pop(device_id, None)
-            _recent_updates.discard(device_id)
-            backup_tasks.pop(device_ip, None)
-
-            # 5. Vymazať samotné zariadenie (posledný krok)
             conn.execute('DELETE FROM devices WHERE id = ?', (device_id,))
             conn.commit()
 
-        # 6. Pushover notifikácia — len pri automatickom purge po lehote
+        db_elapsed_ms = int((time.monotonic() - started_at) * 1000)
+
+        # 2. Lokálne backup súbory — už mimo DB transakcie.
+        file_pattern = f"_{device_ip}_"
+        local_deleted = 0
+        try:
+            if os.path.isdir(BACKUP_DIR):
+                for filename in os.listdir(BACKUP_DIR):
+                    if file_pattern in filename:
+                        os.remove(os.path.join(BACKUP_DIR, filename))
+                        local_deleted += 1
+        except Exception as e:
+            add_log('error', f"Purge: chyba pri mazaní lokálnych backupov pre {device_ip}: {e}", device_ip)
+
+        # 3. FTP backup súbory sú best-effort a nesmú blokovať HTTP worker.
+        def cleanup_ftp_backups():
+            ftp_started_at = time.monotonic()
+            try:
+                ftp_settings = decrypt_sensitive_settings_map(settings)
+                if not all(ftp_settings.get(key) for key in ('ftp_server', 'ftp_username', 'ftp_password')):
+                    return
+                try:
+                    ftp_port = int(ftp_settings.get('ftp_port', 21))
+                except (TypeError, ValueError):
+                    ftp_port = 21
+                try:
+                    ftp_timeout = int(ftp_settings.get('ftp_timeout_seconds', 15))
+                except (TypeError, ValueError):
+                    ftp_timeout = 15
+                ftp_timeout = ftp_timeout if 5 <= ftp_timeout <= 120 else 15
+
+                deleted_count = 0
+                failed_count = 0
+                from ftplib import FTP
+                with FTP(timeout=ftp_timeout) as ftp:
+                    ftp.connect(ftp_settings['ftp_server'], ftp_port, timeout=ftp_timeout)
+                    ftp.login(ftp_settings['ftp_username'], ftp_settings['ftp_password'])
+                    if ftp_settings.get('ftp_directory'):
+                        ftp.cwd(ftp_settings['ftp_directory'])
+                    ftp_files = [name for name in ftp.nlst() if file_pattern in name]
+                    for filename in ftp_files:
+                        try:
+                            ftp.delete(filename)
+                            deleted_count += 1
+                        except Exception as e:
+                            failed_count += 1
+                            logger.warning(
+                                "Purge FTP: súbor pre %s sa nepodarilo vymazať: %s",
+                                device_ip, safe_ftp_error(e)
+                            )
+                logger.info(
+                    "Purge FTP pre %s dokončený: vymazané=%s, zlyhané=%s, trvanie=%sms",
+                    device_ip, deleted_count, failed_count,
+                    int((time.monotonic() - ftp_started_at) * 1000)
+                )
+            except Exception as e:
+                add_log('warning', f"Purge: FTP mazanie zlyhalo pre {device_ip}: {safe_ftp_error(e)}", device_ip)
+                logger.warning(
+                    "Purge FTP pre %s zlyhal po %sms",
+                    device_ip, int((time.monotonic() - ftp_started_at) * 1000)
+                )
+
+        try:
+            threading.Thread(
+                target=cleanup_ftp_backups,
+                name=f"purge-ftp-{device_id}",
+                daemon=True
+            ).start()
+        except Exception as e:
+            # DB purge je už bezpečne commitnutý; zlyhanie best-effort FTP
+            # cleanupu preto nesmie zmeniť úspešnú HTTP odpoveď na chybu.
+            add_log(
+                'warning',
+                f"Purge: FTP cleanup sa nepodarilo spustiť pre {device_ip}: {safe_ftp_error(e)}",
+                device_ip
+            )
+
+        # 4. In-memory cleanup
+        with snmp_task_lock:
+            snmp_task_state.pop(device_id, None)
+        _cert_expiry_notified.pop(device_id, None)
+        _running_manual_updates.pop(device_id, None)
+        _running_scheduled_updates.pop(device_id, None)
+        _recent_updates.discard(device_id)
+        backup_tasks.pop(device_ip, None)
+
+        # 5. Pushover notifikácia — len pri automatickom purge po lehote
         if not manual:
             send_pushover_notification(
                 f"🗑️ Zariadenie {device_name} ({device_ip}) bolo definitívne odstránené po {retention_days}-dňovej lehote",
@@ -5029,6 +5084,11 @@ def purge_device(device_id, manual=False):
             )
 
         add_log('info', f"Zariadenie {device_name} ({device_ip}) bolo definitívne vymazané (purge)")
+        logger.info(
+            "Purge zariadenia %s dokončený bez čakania na FTP: DB=%sms, lokálne_súbory=%s, spolu=%sms",
+            device_ip, db_elapsed_ms, local_deleted,
+            int((time.monotonic() - started_at) * 1000)
+        )
         return True
 
     except Exception as e:

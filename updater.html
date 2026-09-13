@@ -3439,6 +3439,11 @@
             syncCard(`status-${id}`);
         }
 
+        function managerConnectionFailure(action, error) {
+            const detail = error?.message ? ` Detail: ${error.message}` : '';
+            return `${action} Skontrolujte sieťové spojenie a dostupnosť MikroTik Managera, potom skúste operáciu znova.${detail}`;
+        }
+
         async function cancelBulkDevice(deviceId) {
             showConfirm('Zrušiť zariadenie z čakajúcej fronty?', async () => {
                 try {
@@ -3452,7 +3457,7 @@
                         showToast(data.message || 'Nepodarilo sa zrušiť.', 'warning');
                     }
                 } catch (e) {
-                    showToast('Chyba pri rušení zariadenia.', 'danger');
+                    showToast(managerConnectionFailure('Zariadenie sa nepodarilo zrušiť z fronty.', e), 'danger', 7000);
                 }
             });
         }
@@ -3581,8 +3586,19 @@
 
             try {
                 const res = await fetch(`/api/updater/device/${id}?channel=${encodeURIComponent(requestChannel)}`);
-                if (!res.ok) throw new Error('API Chyba');
-                const data = await res.json();
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    // The actionable fallback below is used for non-JSON responses.
+                }
+                if (!res.ok) {
+                    throw new Error(
+                        data?.message ||
+                        `Server vrátil chybu ${res.status}. Skontrolujte RouterOS REST API, služby www/www-ssl a ich porty.`
+                    );
+                }
+                if (!data) throw new Error('Server vrátil nečitateľnú odpoveď pre stav zariadenia.');
                 if (requestChannel !== selectedUpdateChannel) return;
                 deviceDataMap[id] = data;
 
@@ -3689,26 +3705,30 @@
                     // Don't overwrite cells if an update is actively running on this device
                     if (_deviceUpdateState[id]?.active) return;
                     setDeviceSelectable(id, false);
-                    document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
-                    document.getElementById(`os-${id}`).innerHTML = `Chyba spojenia API`;
+                    const statusEl = document.getElementById(`status-${id}`);
+                    statusEl.innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span><br><span style="color:var(--warning-color);font-size:11px;">Skontrolujte REST API a porty</span>`;
+                    statusEl.title = data.message || 'Skontrolujte služby www/www-ssl, ich porty, firewall a prihlasovacie údaje.';
+                    document.getElementById(`os-${id}`).innerHTML = `REST API nedostupné`;
                     document.getElementById(`fw-${id}`).innerHTML = `N/A`;
-                    document.getElementById(`actions-${id}`).innerHTML = `<span style="color:var(--danger-color); font-size:13px;">Zariadenie nedostupné</span>`;
+                    document.getElementById(`actions-${id}`).innerHTML = `<span style="color:var(--danger-color); font-size:13px;">Skontrolujte www/www-ssl a prihlásenie</span>`;
                     document.getElementById(`actions-${id}`).style.opacity = '1';
                     // Sync cards
                     syncCard(`status-${id}`);
                     const cardOsEl2 = document.getElementById(`card-os-${id}`);
-                    if (cardOsEl2) cardOsEl2.innerHTML = `<span style="color:var(--danger-color);font-size:12px;">Chyba spojenia</span>`;
+                    if (cardOsEl2) cardOsEl2.innerHTML = `<span style="color:var(--danger-color);font-size:12px;">REST API nedostupné</span>`;
                     const cardFwEl2 = document.getElementById(`card-fw-${id}`);
                     if (cardFwEl2) cardFwEl2.innerHTML = `<span style="color:var(--danger-color);font-size:12px;">N/A</span>`;
                     const cardActEl2 = document.getElementById(`card-actions-${id}`);
-                    if (cardActEl2) { cardActEl2.innerHTML = `<span style="color:var(--danger-color);font-size:13px;">Zariadenie nedostupné</span>`; cardActEl2.style.opacity = '1'; }
+                    if (cardActEl2) { cardActEl2.innerHTML = `<span style="color:var(--danger-color);font-size:13px;">Skontrolujte www/www-ssl a prihlásenie</span>`; cardActEl2.style.opacity = '1'; }
                 }
             } catch (err) {
                 if (requestChannel !== selectedUpdateChannel) return;
                 // Don't overwrite cells if an update is actively running on this device
                 if (_deviceUpdateState[id]?.active) return;
                 setDeviceSelectable(id, false);
-                document.getElementById(`status-${id}`).innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span>`;
+                const statusEl = document.getElementById(`status-${id}`);
+                statusEl.innerHTML = `<span style="color:var(--danger-color)"><i class="fas fa-times-circle"></i> Offline/Chyba</span><br><span style="color:var(--warning-color);font-size:11px;">Skontrolujte REST API a porty</span>`;
+                statusEl.title = err.message;
                 document.getElementById(`os-${id}`).innerHTML = `N/A`;
                 document.getElementById(`fw-${id}`).innerHTML = `N/A`;
                 document.getElementById(`actions-${id}`).innerHTML = `<span style="color:var(--danger-color); font-size:13px;">Zariadenie nedostupné</span>`;
@@ -3902,7 +3922,7 @@
                 await fetchDeviceDetails(id);
                 reopenDeviceChannelDropdown(id);
             } catch (error) {
-                showToast('Chyba spojenia pri ukladaní kanála zariadenia.', 'error');
+                showToast(managerConnectionFailure('Kanál zariadenia sa nepodarilo uložiť.', error), 'error', 7000);
             } finally {
                 controls.forEach(control => { control.disabled = false; });
             }
@@ -4022,8 +4042,9 @@
                 }
                 // Pri úspechu SocketIO prevezme riadenie UI
             } catch (err) {
-                showToast('Chyba spojenia.', 'error');
-                endInlineUpdate(id, false, 'Chyba spojenia.');
+                const message = managerConnectionFailure('Aktualizáciu RouterOS sa nepodarilo spustiť.', err);
+                showToast(message, 'error', 7000);
+                endInlineUpdate(id, false, message);
             }
         }
 
@@ -4057,8 +4078,9 @@
                 }
                 // Pri úspechu SocketIO prevezme riadenie UI
             } catch (err) {
-                showToast('Chyba spojenia.', 'error');
-                endInlineUpdate(id, false, 'Chyba spojenia.');
+                const message = managerConnectionFailure('Aktualizáciu firmvéru sa nepodarilo spustiť.', err);
+                showToast(message, 'error', 7000);
+                endInlineUpdate(id, false, message);
             }
         }
 
@@ -4076,7 +4098,7 @@
                     alert('Chyba: ' + (json.message || 'Neznáma chyba'));
                 }
             } catch (err) {
-                alert('Chyba siete: ' + err.message);
+                alert(managerConnectionFailure('Požiadavku sa nepodarilo odoslať.', err));
             } finally {
                 btn.innerHTML = prevHtml;
                 btn.disabled = false;
@@ -4111,7 +4133,7 @@
                     showToast('Chyba TLS certifikátu: ' + (json.message || 'Neznáma chyba API'), 'error', 6000);
                 }
             } catch (err) {
-                showToast('Chyba siete pri obnove TLS certifikátu: ' + err.message, 'error', 6000);
+                showToast(managerConnectionFailure('Obnovu TLS certifikátu sa nepodarilo spustiť.', err), 'error', 7000);
             } finally {
                 btns.forEach(btn => { btn.style.minWidth = ''; btn.style.display = ''; btn.style.justifyContent = ''; btn.style.alignItems = ''; btn.innerHTML = prevHtml; btn.disabled = false; });
                 fetchDeviceDetails(id);
@@ -5046,7 +5068,7 @@
                     errEl.style.display = 'block';
                 }
             } catch (e) {
-                errEl.textContent = 'Chyba spojenia.';
+                errEl.textContent = managerConnectionFailure('Update sa nepodarilo naplánovať.', e);
                 errEl.style.display = 'block';
             } finally {
                 btn.disabled = false;
@@ -5103,7 +5125,7 @@
                         showToast(data.message || 'Chyba pri rušení.', 'warning');
                     }
                 } catch (e) {
-                    showToast('Chyba spojenia.', 'warning');
+                    showToast(managerConnectionFailure('Plán sa nepodarilo zrušiť.', e), 'warning', 7000);
                 }
             });
         }

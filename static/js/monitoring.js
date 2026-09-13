@@ -634,18 +634,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 return {};
             }
 
+            let data;
             try {
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.message || `HTTP ${res.status}: ${res.statusText}`);
-                }
-                return data;
+                data = await res.json();
             } catch (error) {
                 if (!res.ok) {
-                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                    throw new Error(
+                        `Server vrátil chybu ${res.status} bez čitateľnej odpovede. ` +
+                        'Obnovte stránku a skontrolujte spojenie s MikroTik Managerom.'
+                    );
                 }
                 throw error;
             }
+
+            if (!res.ok) {
+                throw new Error(
+                    data.message ||
+                    `Server vrátil chybu ${res.status}. Obnovte stránku a skúste operáciu znova.`
+                );
+            }
+
+            return data;
         },
 
         get: async function (endpoint) {
@@ -3222,7 +3231,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                let errorData = null;
+                try {
+                    errorData = await response.json();
+                } catch (_) {
+                    // The actionable fallback below is used for non-JSON responses.
+                }
+                throw new Error(
+                    errorData?.message ||
+                    `Server vrátil chybu ${response.status}. Skontrolujte spojenie s MikroTik Managerom a skúste obnoviť dáta.`
+                );
             }
 
             const data = await response.json();

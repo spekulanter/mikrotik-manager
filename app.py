@@ -27,7 +27,7 @@ from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 import paramiko
 import difflib
-from ftplib import FTP
+from ftplib import FTP, error_perm
 import http.client
 import urllib.parse
 from html import unescape
@@ -1318,6 +1318,55 @@ def probe_ssh_host_key(ip, timeout=10):
             transport.close()
         elif sock is not None:
             sock.close()
+
+
+def ssh_probe_failure_message(ip, error):
+    """Return an actionable, user-facing explanation for an SSH probe failure."""
+    detail = str(error).strip() or error.__class__.__name__
+    return (
+        f"Nepodarilo sa pripojiť k SSH službe na {ip}:22. "
+        "Skontrolujte, či je na MikroTiku povolená služba SSH, používa port 22 "
+        f"a spojenie neblokuje firewall. Detail: {detail}"
+    )
+
+
+def trust_initial_ssh_host_key(device_id, expected_ip, key):
+    """Pin the first SSH host key as part of an authenticated device creation."""
+    key_type, key_data, fingerprint = _ssh_host_key_details(key)
+    trusted_at = datetime.now(timezone.utc).isoformat()
+
+    with get_db_connection() as conn:
+        device = conn.execute(
+            'SELECT id, ip FROM devices WHERE id = ? AND deleted_at IS NULL',
+            (device_id,)
+        ).fetchone()
+        if not device or device['ip'] != expected_ip:
+            raise SSHHostKeyVerificationRequired(
+                'Zariadenie alebo jeho IP adresa sa počas SSH overovania zmenili.'
+            )
+
+        # This path is intentionally valid only for a newly created device. Never
+        # replace an existing pin here; later key/IP changes require manual approval.
+        existing = conn.execute(
+            'SELECT 1 FROM ssh_host_keys WHERE device_id = ?',
+            (device_id,)
+        ).fetchone()
+        if existing:
+            raise SSHHostKeyVerificationRequired(
+                'SSH identita zariadenia už bola zaznamenaná a vyžaduje štandardné overenie.'
+            )
+
+        conn.execute(
+            '''INSERT INTO ssh_host_keys (
+                   device_id, trusted_host, trusted_key_type, trusted_key_data,
+                   trusted_fingerprint, trusted_at
+               ) VALUES (?, ?, ?, ?, ?, ?)''',
+            (device_id, expected_ip, key_type, key_data, fingerprint, trusted_at)
+        )
+        conn.commit()
+
+    return fingerprint
+
 
 def compare_with_local_backup(ip, remote_content, detailed_logging=True):
     try:
@@ -3001,11 +3050,27 @@ def mk_api(device_id, method, endpoint, payload=None, timeout_val=20):
                         err_msg = err_json['detail']
                 except:
                     pass
+                if response.status_code in (401, 403):
+                    return None, {
+                        'status': 'error',
+                        'message': (
+                            f'RouterOS REST API odmietlo prihlásenie ({response.status_code}). '
+                            'Skontrolujte používateľské meno, heslo a oprávnenia účtu.'
+                        )
+                    }, response.status_code
                 return None, {'status': 'error', 'message': f'Chyba API ({response.status_code}): {err_msg}'}, response.status_code
         except Exception as e:
             if scheme == 'https':
                 continue  # HTTPS zlyhalo, skúsime HTTP
-            return None, {'status': 'error', 'message': f'Chyba spojenia: {str(e)}'}, 500
+            detail = str(e).strip() or e.__class__.__name__
+            return None, {
+                'status': 'error',
+                'message': (
+                    f'Nepodarilo sa pripojiť k RouterOS REST API na {ip}. '
+                    f'Skontrolujte dostupnosť zariadenia, služby www (port {http_port}) '
+                    f'a www-ssl (port {https_port}) a pravidlá firewallu. Detail: {detail}'
+                )
+            }, 500
     
     return None, {'status': 'error', 'message': 'Zariadenie nedostupné cez HTTPS ani HTTP.'}, 500
 
@@ -4346,7 +4411,41 @@ def handle_devices():
                     device_id = cursor.lastrowid
                     conn.commit()
                     add_log('info', f"Zariadenie {data['ip']} pridané.")
-                    return jsonify({'status': 'success', 'device_id': device_id})
+                    try:
+                        key = probe_ssh_host_key(data['ip'])
+                        fingerprint = trust_initial_ssh_host_key(device_id, data['ip'], key)
+                        add_log(
+                            'info',
+                            f"SSH fingerprint {fingerprint} bol automaticky potvrdený pri pridaní zariadenia.",
+                            data['ip']
+                        )
+                        socketio.emit('ssh_host_key_status', {
+                            'id': device_id,
+                            'ip': data['ip'],
+                            'status': 'trusted'
+                        })
+                        return jsonify({
+                            'status': 'success',
+                            'device_id': device_id,
+                            'ssh_auto_trusted': True,
+                            'ssh_host_key': get_ssh_host_key_state(device_id, data['ip']),
+                            'message': 'Zariadenie bolo pridané a jeho SSH identita automaticky overená.'
+                        })
+                    except (OSError, paramiko.SSHException) as e:
+                        error_message = str(e) or e.__class__.__name__
+                        user_message = ssh_probe_failure_message(data['ip'], e)
+                        add_log(
+                            'warning',
+                            f"Zariadenie bolo pridané, ale automatické overenie SSH fingerprintu zlyhalo: {error_message}",
+                            data['ip']
+                        )
+                        return jsonify({
+                            'status': 'success',
+                            'device_id': device_id,
+                            'ssh_auto_trusted': False,
+                            'ssh_host_key': {'status': 'unverified'},
+                            'message': f'Zariadenie bolo pridané, ale SSH identita nebola overená. {user_message}'
+                        })
             except sqlite3.IntegrityError: return jsonify({'status': 'error', 'message': 'Zariadenie s touto IP už existuje'}), 409
 
 
@@ -4385,7 +4484,7 @@ def probe_device_ssh_host_key(device_id):
         add_log('warning', f"Načítanie SSH fingerprintu zlyhalo: {error_message}", device['ip'])
         return jsonify({
             'status': 'error',
-            'message': f'Nepodarilo sa načítať SSH fingerprint: {error_message}'
+            'message': ssh_probe_failure_message(device['ip'], e)
         }), 400
 
 
@@ -4762,7 +4861,14 @@ def check_snmp(device_id):
     if result.get('status') == 'missing':
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
     if result.get('error'):
-        return jsonify({'status': 'error', 'message': result['error']}), 500
+        return jsonify({
+            'status': 'error',
+            'message': (
+                'SNMP kontrola zlyhala. Skontrolujte, či je na MikroTiku povolené SNMP, '
+                'či sedí community a či firewall povoľuje UDP port 161. '
+                f"Detail: {result['error']}"
+            )
+        }), 500
 
     device = result.get('device')
     if not device:
@@ -5168,9 +5274,19 @@ def test_ftp_settings():
     except Exception as e:
         error_message = str(e) or e.__class__.__name__
         add_log('warning', f"Test FTP spojenia zlyhal ({server}:{port}): {error_message}")
+        if isinstance(e, error_perm):
+            tip = 'Skontrolujte používateľské meno, heslo a oprávnenie k zadanému FTP adresáru.'
+        elif isinstance(e, socket.gaierror):
+            tip = 'Skontrolujte názov alebo IP adresu FTP servera a DNS.'
+        elif isinstance(e, (TimeoutError, socket.timeout)):
+            tip = 'Server neodpovedal včas. Skontrolujte jeho dostupnosť, FTP port a firewall.'
+        elif isinstance(e, ConnectionRefusedError):
+            tip = 'Server spojenie odmietol. Skontrolujte, či FTP služba beží a počúva na zadanom porte.'
+        else:
+            tip = 'Skontrolujte adresu servera, FTP port, prihlasovacie údaje, adresár a firewall.'
         return jsonify({
             'status': 'error',
-            'message': f'FTP spojenie zlyhalo: {error_message}'
+            'message': f'FTP spojenie zlyhalo. {tip} Detail: {error_message}'
         }), 400
 
 @app.route('/api/notifications/test', methods=['POST'])

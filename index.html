@@ -3902,15 +3902,9 @@
                         return {};
                     }
 
+                    let data;
                     try {
-                        const data = await res.json();
-
-                        // Ak server vráti chybu, ale JSON je validný
-                        if (!res.ok) {
-                            throw new Error(data.message || `HTTP ${res.status}: ${res.statusText}`);
-                        }
-
-                        return data;
+                        data = await res.json();
                     } catch (error) {
                         // Ak JSON parsing zlyhá
                         if (!res.ok) {
@@ -3918,6 +3912,14 @@
                         }
                         throw error;
                     }
+
+                    // Chybovú správu zo servera vyhodnocujeme až mimo JSON parsera,
+                    // aby ju catch blok neprepísal všeobecným textom "HTTP 400".
+                    if (!res.ok) {
+                        throw new Error(data.message || `HTTP ${res.status}: ${res.statusText}`);
+                    }
+
+                    return data;
                 },
 
                 get: async function (endpoint) {
@@ -5914,7 +5916,10 @@
                     }
                 } catch (error) {
                     console.error('Chyba pri API volaní pre SNMP refresh:', error);
-                    addLog('error', 'Chyba komunikácie so serverom pri SNMP refresh');
+                    addLog(
+                        'error',
+                        'SNMP refresh sa nepodarilo spustiť. Skontrolujte spojenie s MikroTik Managerom a skúste operáciu znova.'
+                    );
 
                     // Pri chybe vrátime tlačidlo do normálu
                     icon.classList.remove('fa-spin');
@@ -6264,11 +6269,23 @@
                         return;
                     }
                 } catch (err) {
-                    showToast('Chyba pri komunikácii so serverom', 'error');
+                    showToast(
+                        'Nepodarilo sa spojiť s MikroTik Managerom. Skontrolujte sieťové pripojenie, dostupnosť servera a potom skúste operáciu znova.',
+                        'error',
+                        7000
+                    );
                     return;
                 }
                 closeModal();
                 loadDevices();
+
+                if (!body.id && result.status === 'success') {
+                    showToast(
+                        result.message || 'Zariadenie bolo pridané.',
+                        result.ssh_auto_trusted ? 'success' : 'warning',
+                        result.ssh_auto_trusted ? 4000 : 7000
+                    );
+                }
 
                 // Ak je to nové zariadenie (bez ID), automaticky spusť SNMP check
                 if (!body.id && result.status === 'success' && result.device_id) {

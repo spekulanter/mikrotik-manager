@@ -1280,7 +1280,7 @@ def notify_pending_ssh_host_key(observation):
 
     change_text = 'zmenil sa' if observation.get('changed') else 'zatiaľ nie je potvrdený'
     sent = send_pushover_notification(
-        f"SSH kľúč zariadenia {observation['device_name']} "
+        f"🛡️ SSH kľúč zariadenia {observation['device_name']} "
         f"({observation['device_ip']}) {change_text}.\n"
         f"Fingerprint: {observation['fingerprint']}\n"
         "Záloha je zablokovaná, kým kľúč nepotvrdíte v aplikácii.",
@@ -2214,7 +2214,7 @@ def login():
             source_ip = request.remote_addr or 'unknown'
             add_log('warning', f"Neúspešné prihlásenie do aplikácie. Používateľ: {attempted_username}, IP: {source_ip}")
             send_pushover_notification(
-                f"Neúspešné prihlásenie do aplikácie. Používateľ: {attempted_username}, IP: {source_ip}",
+                f"🔐 Neúspešné prihlásenie do aplikácie. Používateľ: {attempted_username}, IP: {source_ip}",
                 title="MikroTik Manager - Security",
                 notification_key='notify_failed_login'
             )
@@ -2238,7 +2238,7 @@ def password_recovery():
         def notify_recovery_failure(reason):
             attempted_username = username if username else '(nezadané)'
             send_pushover_notification(
-                f"Neúspešná obnova hesla: {reason}. Používateľ: {attempted_username}, IP: {source_ip}",
+                f"🚨 Neúspešná obnova hesla: {reason}. Používateľ: {attempted_username}, IP: {source_ip}",
                 title="MikroTik Manager - Security",
                 notification_key='notify_password_recovery_failure',
                 log_message=False,
@@ -2268,7 +2268,7 @@ def password_recovery():
                     elif recovery_code:
                         sent = send_pushover_notification(
                             (
-                                f"Recovery kód pre reset hesla: {recovery_code}\n"
+                                f"🔑 Recovery kód pre reset hesla: {recovery_code}\n"
                                 f"Platnosť: {PASSWORD_RECOVERY_EXPIRY_MINUTES} minút.\n"
                                 "Ak ste o reset nežiadali, ignorujte túto správu."
                             ),
@@ -2338,7 +2338,7 @@ def password_recovery():
                             conn.commit()
 
                             send_pushover_notification(
-                                "Heslo bolo úspešne resetované cez recovery flow.",
+                                "✅ Heslo bolo úspešne resetované cez recovery flow.",
                                 title="MikroTik Manager - Security",
                                 log_message=False,
                                 ignore_quiet_hours=True
@@ -2381,7 +2381,7 @@ def login_2fa():
                 session.pop('2fa_user_id', None)
                 return redirect(request.args.get('next') or url_for('index'))
             else:
-                message = f"Neúspešné 2FA overenie (TOTP). Používateľ: {attempted_username}, IP: {source_ip}"
+                message = f"🛡️ Neúspešné 2FA overenie (TOTP). Používateľ: {attempted_username}, IP: {source_ip}"
                 add_log('warning', message)
                 send_pushover_notification(
                     message,
@@ -2409,7 +2409,7 @@ def login_2fa():
                         add_log('info', f"Používateľ '{user.username}' sa prihlásil pomocou záložného kódu.")
                         return redirect(request.args.get('next') or url_for('index'))
                     else:
-                        message = f"Neúspešné 2FA overenie (záložný kód). Používateľ: {attempted_username}, IP: {source_ip}"
+                        message = f"🛡️ Neúspešné 2FA overenie (záložný kód). Používateľ: {attempted_username}, IP: {source_ip}"
                         add_log('warning', message)
                         send_pushover_notification(
                             message,
@@ -4752,7 +4752,7 @@ def purge_device(device_id, manual=False):
         # 6. Pushover notifikácia — len pri automatickom purge po lehote
         if not manual:
             send_pushover_notification(
-                f"Zariadenie {device_name} ({device_ip}) bolo definitívne odstránené po {retention_days}-dňovej lehote",
+                f"🗑️ Zariadenie {device_name} ({device_ip}) bolo definitívne odstránené po {retention_days}-dňovej lehote",
                 title="MikroTik Manager - Zariadenie vymazané",
                 notification_key='notify_device_purged'
             )
@@ -6322,7 +6322,7 @@ def run_scheduled_update(schedule_id):
                     )
                     c.commit()
                 send_pushover_notification(
-                    f'Naplánovaný update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
+                    f'❌ Naplánovaný update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
                     title='MikroTik Update – Chyba',
                     notification_key='notify_backup_failure'
                 )
@@ -6428,7 +6428,7 @@ def run_scheduled_update(schedule_id):
                         c.commit()
                     _emit('done', msg=f'✅ Naplánovaná aktualizácia dokončená! {msg}')
                     send_pushover_notification(
-                        f'Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                        f'✅ Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
                         title='MikroTik Update – Hotovo',
                         notification_key='notify_backup_success'
                     )
@@ -6461,7 +6461,7 @@ def run_scheduled_update(schedule_id):
                     c.commit()
                 _emit('done', msg=f'✅ Naplánovaná aktualizácia dokončená! {msg}')
                 send_pushover_notification(
-                    f'Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                    f'✅ Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
                     title='MikroTik Update – Hotovo',
                     notification_key='notify_backup_success'
                 )
@@ -6527,7 +6527,7 @@ def run_scheduled_update(schedule_id):
                 c.commit()
             _emit('done', msg=f'✅ Naplánovaná aktualizácia dokončená! {msg}')
             send_pushover_notification(
-                f'Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                f'✅ Naplánovaný update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )
@@ -6602,7 +6602,7 @@ def run_device_update(device_id, update_channel='stable'):
                 add_log('error', f'Manuálny update [{device_name}]: {msg}', device_ip)
                 _emit('failed', msg=f'❌ {msg}')
                 send_pushover_notification(
-                    f'Manuálny update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
+                    f'❌ Manuálny update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
                     title='MikroTik Update – Chyba',
                     notification_key='notify_backup_failure'
                 )
@@ -6697,7 +6697,7 @@ def run_device_update(device_id, update_channel='stable'):
                     add_log('info', f'Manuálny update [{device_name}]: Dokončený. {msg}', device_ip)
                     _emit('done', msg=f'✅ Aktualizácia dokončená! {msg}')
                     send_pushover_notification(
-                        f'Manuálny update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                        f'✅ Manuálny update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
                         title='MikroTik Update – Hotovo',
                         notification_key='notify_backup_success'
                     )
@@ -6766,7 +6766,7 @@ def run_device_update(device_id, update_channel='stable'):
             add_log('info', f'Manuálny update [{device_name}]: Dokončený. {msg}', device_ip)
             _emit('done', msg=f'✅ Aktualizácia dokončená! {msg}')
             send_pushover_notification(
-                f'Manuálny update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                f'✅ Manuálny update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )
@@ -6835,7 +6835,7 @@ def run_device_update_os(device_id, update_channel='stable'):
                 add_log('error', f'RouterOS update [{device_name}]: {msg}', device_ip)
                 _emit('failed', msg=f'❌ {msg}')
                 send_pushover_notification(
-                    f'RouterOS update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
+                    f'❌ RouterOS update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
                     title='MikroTik Update – Chyba',
                     notification_key='notify_backup_failure'
                 )
@@ -6908,7 +6908,7 @@ def run_device_update_os(device_id, update_channel='stable'):
             add_log('info', f'RouterOS update [{device_name}]: Dokončený. {msg}', device_ip)
             _emit('done', msg=f'✅ RouterOS update dokončený! {msg}')
             send_pushover_notification(
-                f'RouterOS update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                f'✅ RouterOS update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )
@@ -6976,7 +6976,7 @@ def run_device_update_firmware(device_id):
                 add_log('error', f'Firmware update [{device_name}]: {msg}', device_ip)
                 _emit('failed', msg=f'❌ {msg}')
                 send_pushover_notification(
-                    f'Firmware update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
+                    f'❌ Firmware update zariadenia {device_name} ({device_ip}) ZLYHAL: {msg}',
                     title='MikroTik Update – Chyba',
                     notification_key='notify_backup_failure'
                 )
@@ -7025,7 +7025,7 @@ def run_device_update_firmware(device_id):
                     _step_done(s)
                 _emit('done', msg='✅ Firmware update dokončený! (VM/CHR – bez routerboardu)')
                 send_pushover_notification(
-                    f'Firmware update zariadenia {device_name} ({device_ip}) dokončený. VM/CHR – bez routerboardu.',
+                    f'✅ Firmware update zariadenia {device_name} ({device_ip}) dokončený. VM/CHR – bez routerboardu.',
                     title='MikroTik Update – Hotovo',
                     notification_key='notify_backup_success'
                 )
@@ -7065,7 +7065,7 @@ def run_device_update_firmware(device_id):
             add_log('info', f'Firmware update [{device_name}]: Dokončený. {msg}', device_ip)
             _emit('done', msg=f'✅ Firmware update dokončený! {msg}')
             send_pushover_notification(
-                f'Firmware update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
+                f'✅ Firmware update zariadenia {device_name} ({device_ip}) dokončený. {msg}',
                 title='MikroTik Update – Hotovo',
                 notification_key='notify_backup_success'
             )

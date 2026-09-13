@@ -5259,15 +5259,20 @@ def test_snmp_configuration():
 def detect_snmp_source_address():
     data = request.get_json(silent=True) or {}
     target = str(data.get('ip') or '').strip()
-    if not target:
-        return jsonify({'status': 'error', 'message': 'Najprv zadajte IP adresu zariadenia.'}), 400
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        sock.connect((target, 161))
+        # Bez zadaného zariadenia zistíme adresu primárneho rozhrania
+        # Managera cez systémovú routovaciu tabuľku. UDP connect neposiela dáta.
+        sock.connect((target, 161) if target else ('1.1.1.1', 53))
         source_ip = sock.getsockname()[0]
         return jsonify({'status': 'success', 'source_ip': source_ip, 'cidr': f'{source_ip}/32'})
     except (OSError, socket.gaierror):
-        return jsonify({'status': 'error', 'message': 'Zdrojovú IP voči zariadeniu sa nepodarilo zistiť.'}), 400
+        message = (
+            'Zdrojovú IP voči zariadeniu sa nepodarilo zistiť.'
+            if target else
+            'IP adresu MikroTik Managera sa nepodarilo automaticky zistiť.'
+        )
+        return jsonify({'status': 'error', 'message': message}), 400
     finally:
         sock.close()
 

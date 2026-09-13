@@ -1865,7 +1865,7 @@
             border-color: rgba(100, 116, 139, 0.55) !important;
             color: #94a3b8 !important;
         }
-        #deviceNameSourceHint.is-snmp-identity {
+        #deviceNameSourceHint {
             color: #38bdf8 !important;
         }
         .snmp-secret-strength {
@@ -1977,7 +1977,7 @@
             border-color: #b6c2d2 !important;
             color: #64748b !important;
         }
-        body.light-theme #deviceNameSourceHint.is-snmp-identity {
+        body.light-theme #deviceNameSourceHint {
             color: #0284c7 !important;
         }
         body.light-theme #deviceSnmpMonitoringCard .text-gray-400,
@@ -3263,14 +3263,16 @@
                                     <i class="fas fa-network-wired text-emerald-400"></i>IP Adresa
                                 </label>
                                 <input type="text" id="deviceIp"
-                                    class="device-input w-full p-3 rounded-lg" required>
+                                    class="device-input w-full p-3 rounded-lg"
+                                    placeholder="Zadajte IP adresu MikroTiku" required>
                             </div>
                             <div>
                                 <label for="deviceUsername" class="device-field-label">
                                     <i class="fas fa-user text-violet-400"></i>Používateľské meno
                                 </label>
                                 <input type="text" id="deviceUsername"
-                                    class="device-input w-full p-3 rounded-lg" required>
+                                    class="device-input w-full p-3 rounded-lg"
+                                    placeholder="Zadajte prihlasovacie meno do MikroTiku" required>
                             </div>
                             <div>
                                 <label for="devicePassword" class="device-field-label">
@@ -3344,20 +3346,28 @@
                             </select>
                         </div>
 
-                        <div>
-                            <label for="deviceName" class="device-field-label">
-                                <i class="fas fa-tag text-purple-400"></i>Názov zariadenia (voliteľné)
-                            </label>
-                            <input type="text" id="deviceName"
-                                class="device-input w-full p-3 rounded-lg"
-                                placeholder="Načíta sa z Identity MikroTiku" autocomplete="off">
-                            <p id="deviceNameSourceHint" class="text-xs text-gray-500 mt-1">Prázdne pole sa doplní z Identity cez SNMP. Ručne zadaný názov sa používa iba v MT Manageri.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label for="deviceName" class="device-field-label">
+                                    <i class="fas fa-tag text-purple-400"></i>Názov zariadenia (voliteľné)
+                                </label>
+                                <input type="text" id="deviceName"
+                                    class="device-input w-full p-3 rounded-lg"
+                                    placeholder="Načíta sa z Identity MikroTiku" autocomplete="off">
+                                <p id="deviceNameSourceHint" class="text-xs text-gray-500 mt-1">Prázdne pole sa doplní z Identity cez SNMP.</p>
+                            </div>
+                            <div>
+                                <label for="deviceSnmpLocation" class="device-field-label"><i class="fas fa-location-dot text-purple-400"></i>Location na MikroTiku (voliteľné)</label>
+                                <input id="deviceSnmpLocation" class="device-input w-full p-3 rounded-lg" maxlength="255"
+                                    placeholder="Napr. Ulica, budova alebo serverovňa" autocomplete="off">
+                                <p class="text-xs text-gray-500 mt-1">Pri provisioningu sa zapíše do <code>/snmp location</code>. Prázdne pole existujúcu hodnotu na MikroTiku nemení.</p>
+                            </div>
                         </div>
 
                         <div id="deviceSnmpV2Fields" class="hidden">
                             <label for="deviceSnmpCommunity" class="device-field-label"><i class="fas fa-key text-purple-400"></i>Community</label>
                             <div class="password-input-container">
-                                <input type="password" id="deviceSnmpCommunity" class="device-input w-full p-3 pr-10 rounded-lg" placeholder="public" autocomplete="new-password">
+                                <input type="password" id="deviceSnmpCommunity" class="device-input w-full p-3 pr-10 rounded-lg" placeholder="mikrotik-manager" autocomplete="new-password">
                                 <i id="deviceSnmpCommunityToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpCommunity" data-secret-field="snmp_community"></i>
                             </div>
                             <small id="deviceSnmpCommunityStored" class="hidden snmp-secret-strength mt-1">Community je uložená · klikni pre úpravu</small>
@@ -3431,16 +3441,10 @@
                         <div class="rounded-lg border border-gray-700/70 p-3">
                             <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="deviceSnmpRestrictSource" checked><span class="text-sm font-medium">Povoliť SNMP iba z IP adresy MikroTik Managera / Nastaveného subnetu</span></label>
                             <div id="deviceSnmpAddressFields" class="flex gap-2 mt-2">
-                                <input id="deviceSnmpAllowedAddress" class="device-input flex-1 p-2.5 rounded-lg" placeholder="192.0.2.10/32">
+                                <input id="deviceSnmpAllowedAddress" class="device-input flex-1 p-2.5 rounded-lg" placeholder="192.168.1.0/24">
                                 <button type="button" id="detectSnmpSourceBtn" class="btn bg-gray-700 hover:bg-gray-600 px-3 rounded-lg text-sm">Zistiť /32</button>
                             </div>
                             <p class="text-xs text-gray-500 mt-2">Ide o <code>/snmp community address</code>, nie o <code>/ip service available-from</code>.</p>
-                        </div>
-
-                        <div>
-                            <label for="deviceSnmpLocation" class="device-field-label"><i class="fas fa-location-dot text-purple-400"></i>Location na MikroTiku (voliteľné)</label>
-                            <input id="deviceSnmpLocation" class="device-input w-full p-3 rounded-lg" maxlength="255" placeholder="Napr. Ulica, budova alebo serverovňa" autocomplete="off">
-                            <p class="text-xs text-gray-500 mt-1">Pri provisioningu sa zapíše do <code>/snmp location</code>. Prázdne pole existujúcu hodnotu na MikroTiku nemení.</p>
                         </div>
 
                         <div id="deviceSnmpTestResult" class="hidden rounded-lg border p-3 text-sm"></div>
@@ -5616,7 +5620,7 @@
                 input.dataset.nameSource = isFromSnmp ? 'snmp' : 'local';
                 hint.textContent = isFromSnmp
                     ? 'Načítané zo SNMP Identity · môžete ho prepísať vlastným názvom.'
-                    : 'Prázdne pole sa doplní z Identity cez SNMP. Ručne zadaný názov sa používa iba v MT Manageri.';
+                    : 'Prázdne pole sa doplní z Identity cez SNMP.';
             };
             document.getElementById('deviceName').addEventListener('input', event => {
                 if (event.isTrusted) setDeviceNameIdentityState(false);
@@ -5885,21 +5889,45 @@
                 input.addEventListener('pointerdown', event => rememberMaskedSecretCaret(input, event.clientX));
                 input.addEventListener('focus', () => loadStoredDeviceSecret(input, toggle, false));
             });
-            document.getElementById('detectSnmpSourceBtn').addEventListener('click', async () => {
-                const response = await fetch('/api/snmp/detect-source', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ip: document.getElementById('deviceIp').value.trim()})
-                });
-                const result = await response.json();
-                if (!response.ok) return showToast(result.message, 'error');
-                document.getElementById('deviceSnmpAllowedAddress').value = result.cidr;
-                document.getElementById('deviceSnmpAllowedAddress').dispatchEvent(new Event('input', {bubbles: true}));
+            const detectSnmpSourceAddress = async ({silent = false, markChanged = true} = {}) => {
+                const deviceId = document.getElementById('deviceId').value;
+                const targetIp = document.getElementById('deviceIp').value.trim();
+                try {
+                    const response = await fetch('/api/snmp/detect-source', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ip: targetIp})
+                    });
+                    const result = await response.json();
+                    if (!response.ok) {
+                        if (!silent) showToast(result.message, 'error');
+                        return;
+                    }
+                    if (document.getElementById('deviceId').value !== deviceId ||
+                        document.getElementById('deviceIp').value.trim() !== targetIp) return;
+                    const addressInput = document.getElementById('deviceSnmpAllowedAddress');
+                    addressInput.value = result.cidr;
+                    addressInput.dataset.autoDetected = 'true';
+                    if (markChanged) {
+                        addressInput.dispatchEvent(new Event('input', {bubbles: true}));
+                    }
+                } catch (error) {
+                    if (!silent) {
+                        showToast('IP adresu MikroTik Managera sa nepodarilo zistiť.', 'error');
+                    }
+                }
+            };
+            document.getElementById('detectSnmpSourceBtn').addEventListener('click', () => {
+                detectSnmpSourceAddress();
+            });
+            document.getElementById('deviceSnmpAllowedAddress').addEventListener('input', event => {
+                if (event.isTrusted) delete event.currentTarget.dataset.autoDetected;
             });
             document.getElementById('deviceIp').addEventListener('blur', () => {
+                const addressInput = document.getElementById('deviceSnmpAllowedAddress');
                 if (document.getElementById('deviceSnmpRestrictSource').checked &&
-                    !document.getElementById('deviceSnmpAllowedAddress').value.trim() &&
+                    (!addressInput.value.trim() || addressInput.dataset.autoDetected === 'true') &&
                     document.getElementById('deviceIp').value.trim()) {
-                    document.getElementById('detectSnmpSourceBtn').click();
+                    detectSnmpSourceAddress({silent: true});
                 }
             });
             document.getElementById('testDeviceSnmpBtn').addEventListener('click', async () => {
@@ -6027,7 +6055,7 @@
                 document.getElementById('deviceUsername').value = device ? device.username : '';
                 document.getElementById('deviceSnmpVersion').value = device ? (device.snmp_version || '2c') : '3';
                 updateCustomSelectDisplay('deviceSnmpVersion');
-                document.getElementById('deviceSnmpCommunity').value = '';
+                document.getElementById('deviceSnmpCommunity').value = device ? '' : 'mikrotik-manager';
                 document.getElementById('deviceSnmpV3Username').value = device ? (device.snmp_v3_username || 'mikrotik-manager') : 'mikrotik-manager';
                 document.getElementById('deviceSnmpV3Security').value = device ? (device.snmp_v3_security_level || 'authPriv') : 'authPriv';
                 document.getElementById('deviceSnmpV3AuthProtocol').value = device ? (device.snmp_v3_auth_protocol || 'SHA1') : 'SHA1';
@@ -6037,6 +6065,7 @@
                 document.getElementById('deviceSnmpV3AuthPassword').value = '';
                 document.getElementById('deviceSnmpV3PrivPassword').value = '';
                 document.getElementById('deviceSnmpAllowedAddress').value = device ? (device.snmp_allowed_address || '') : '';
+                delete document.getElementById('deviceSnmpAllowedAddress').dataset.autoDetected;
                 document.getElementById('deviceSnmpRestrictSource').checked = device ? Boolean(device.snmp_allowed_address) : true;
                 document.getElementById('deviceSnmpLocation').value = device ? (device.snmp_location || '') : '';
                 document.getElementById('deviceSnmpCommunityStored').classList.toggle('hidden', !(device && device.snmp_community_configured));
@@ -6070,7 +6099,7 @@
                     passwordField.dataset.secretLength = '0';
                 }
 
-                setStoredSecretPlaceholder('deviceSnmpCommunity', Boolean(device && device.snmp_community_configured), device?.snmp_community_length, 'public');
+                setStoredSecretPlaceholder('deviceSnmpCommunity', Boolean(device && device.snmp_community_configured), device?.snmp_community_length, 'mikrotik-manager');
                 setStoredSecretPlaceholder('deviceSnmpV3AuthPassword', Boolean(device && device.snmp_v3_auth_password_configured), device?.snmp_v3_auth_password_length, 'min. 8 znakov');
                 setStoredSecretPlaceholder('deviceSnmpV3PrivPassword', Boolean(device && device.snmp_v3_priv_password_configured), device?.snmp_v3_priv_password_length, 'min. 8 znakov');
                 document.getElementById('deviceSnmpTestResult').classList.add('hidden');
@@ -6086,6 +6115,9 @@
                 deviceModal.classList.remove('hidden');
                 document.body.classList.add('modal-open');
                 history.pushState({ deviceModal: true }, '', '#device');
+                if (!device) {
+                    detectSnmpSourceAddress({silent: true, markChanged: false});
+                }
             };
 
             const openSettingsModal = async () => {
@@ -7319,7 +7351,7 @@
                     updateStoredSecretToggle('deviceSnmpV3AuthPassword', 'deviceSnmpAuthToggle', authStored);
                     updateStoredSecretToggle('deviceSnmpV3PrivPassword', 'deviceSnmpPrivToggle', privStored);
                     setStoredSecretPlaceholder('devicePassword', sshStored, sshLength, 'Zadajte heslo do MikroTiku');
-                    setStoredSecretPlaceholder('deviceSnmpCommunity', communityStored, communityLength, 'public');
+                    setStoredSecretPlaceholder('deviceSnmpCommunity', communityStored, communityLength, 'mikrotik-manager');
                     setStoredSecretPlaceholder('deviceSnmpV3AuthPassword', authStored, authLength, 'min. 8 znakov');
                     setStoredSecretPlaceholder('deviceSnmpV3PrivPassword', privStored, privLength, 'min. 8 znakov');
                     document.getElementById('deviceSnmpCommunityStored').classList.toggle('hidden', !communityStored);

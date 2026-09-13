@@ -578,6 +578,86 @@
             box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.3), 0 0 10px rgba(148, 163, 184, 0.14);
         }
 
+        /* Compact app-native dropdown used for the SNMP protocol version. */
+        .custom-select[data-select-id="deviceSnmpVersion"] {
+            width: auto;
+            min-width: 0;
+            flex: 0 0 auto;
+        }
+        .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-button {
+            width: auto;
+            gap: 0.45rem;
+            padding: 0.3rem 0.2rem 0.3rem 0.45rem;
+            border: 0;
+            border-radius: 0.35rem;
+            background: transparent;
+            color: #22d3ee;
+            font-size: 0.75rem;
+            font-weight: 700;
+            box-shadow: none;
+        }
+        .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-button:hover,
+        .custom-select[data-select-id="deviceSnmpVersion"].open .custom-select-button {
+            border-color: transparent;
+            color: #67e8f9;
+            box-shadow: none;
+        }
+        .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-arrow {
+            margin-left: 0.1rem;
+            font-size: 0.58rem;
+            color: currentColor;
+        }
+        .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-dropdown {
+            right: 0;
+            left: auto;
+            min-width: 14rem;
+            padding: 0.25rem;
+            border-radius: 0.5rem;
+            background: #182333;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+        }
+        .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-option {
+            padding: 0.4rem 0.5rem;
+            border-radius: 0.3rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+        .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-option:hover {
+            background: rgba(56, 189, 248, 0.08);
+            color: #bae6fd;
+            box-shadow: none;
+        }
+        .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-option.selected {
+            background: rgba(56, 189, 248, 0.14);
+            color: #e0f2fe;
+            box-shadow: none;
+        }
+        body.light-theme .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-button {
+            border: 0;
+            background: transparent;
+            color: #0284c7;
+            box-shadow: none;
+        }
+        body.light-theme .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-button:hover,
+        body.light-theme .custom-select[data-select-id="deviceSnmpVersion"].open .custom-select-button {
+            color: #0369a1;
+            box-shadow: none;
+        }
+        body.light-theme .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-dropdown {
+            background: #ffffff;
+        }
+        body.light-theme .custom-select[data-select-id="deviceSnmpVersion"] .custom-select-option.selected {
+            background: rgba(2, 132, 199, 0.12);
+            color: #075985;
+            box-shadow: none;
+        }
+        @media (max-width: 640px) {
+            .custom-select[data-select-id="deviceSnmpVersion"] {
+                width: auto;
+                min-width: 0;
+            }
+        }
+
         body.modal-open {
             overflow: hidden;
         }
@@ -3129,12 +3209,11 @@
                     <div id="deviceSnmpMonitoringCard" class="interval-card rounded-xl border p-4 space-y-4">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <div class="device-form-section-title"><i class="fas fa-shield-halved text-purple-400 text-xs"></i><span>SNMP monitoring</span></div>
-                                <p class="text-xs text-gray-400 mt-1">SNMPv3 chráni monitoring autentifikáciou a voliteľným šifrovaním.</p>
+                                <div class="device-form-section-title"><i class="fas fa-shield-halved text-purple-400 text-xs"></i><span>SNMP Nastavenie</span></div>
                             </div>
-                            <select id="deviceSnmpVersion" class="device-input p-2.5 rounded-lg font-semibold">
-                                <option value="3">SNMPv3 (odporúčané)</option>
-                                <option value="2c">SNMPv2c (kompatibilné)</option>
+                            <select id="deviceSnmpVersion" data-custom-select data-placeholder="Verzia SNMP">
+                                <option value="3" data-short-label="SNMPv3">SNMPv3 (odporúčané)</option>
+                                <option value="2c" data-short-label="SNMPv2c">SNMPv2c (kompatibilné)</option>
                             </select>
                         </div>
 
@@ -4920,7 +4999,9 @@
                 const { select, textSpan, dropdown, placeholder } = instance;
                 const value = select.value;
                 const selectedOption = Array.from(select.options).find(opt => opt.value === value);
-                textSpan.textContent = selectedOption ? selectedOption.textContent : placeholder;
+                textSpan.textContent = selectedOption
+                    ? (selectedOption.dataset.shortLabel || selectedOption.textContent)
+                    : placeholder;
                 dropdown.querySelectorAll('.custom-select-option').forEach(optionEl => {
                     const isSelected = optionEl.dataset.value === value;
                     optionEl.classList.toggle('selected', isSelected);
@@ -5790,6 +5871,7 @@
                 document.getElementById('deviceIp').value = device ? device.ip : '';
                 document.getElementById('deviceUsername').value = device ? device.username : '';
                 document.getElementById('deviceSnmpVersion').value = device ? (device.snmp_version || '2c') : '3';
+                updateCustomSelectDisplay('deviceSnmpVersion');
                 document.getElementById('deviceSnmpCommunity').value = '';
                 document.getElementById('deviceSnmpV3Username').value = device ? (device.snmp_v3_username || 'mikrotik-manager') : 'mikrotik-manager';
                 document.getElementById('deviceSnmpV3Security').value = device ? (device.snmp_v3_security_level || 'authPriv') : 'authPriv';

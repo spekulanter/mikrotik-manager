@@ -5635,9 +5635,7 @@
                 );
                 const restrict = document.getElementById('deviceSnmpRestrictSource').checked;
                 document.getElementById('deviceSnmpAddressFields').classList.toggle('hidden', !restrict);
-                document.getElementById('provisionDeviceSnmpBtn').classList.toggle(
-                    'hidden', !document.getElementById('deviceId').value
-                );
+                document.getElementById('provisionDeviceSnmpBtn').classList.remove('hidden');
             };
 
             const updateStoredSecretToggle = (inputId, toggleId, isStored) => {
@@ -5951,9 +5949,16 @@
                 finally { button.disabled = false; }
             });
             let pendingSnmpProvisionDeviceId = null;
+            let provisionAfterDeviceSave = false;
             document.getElementById('provisionDeviceSnmpBtn').addEventListener('click', () => {
                 const deviceId = document.getElementById('deviceId').value;
-                if (!deviceId || deviceSnmpFormDirty) return showToast('Najprv uložte všetky zmeny zariadenia.', 'warning');
+                if (!deviceId) {
+                    if (!deviceForm.reportValidity()) return;
+                    provisionAfterDeviceSave = true;
+                    deviceForm.requestSubmit();
+                    return;
+                }
+                if (deviceSnmpFormDirty) return showToast('Najprv uložte všetky zmeny zariadenia.', 'warning');
                 const config = collectSnmpPayload();
                 const isV3 = config.snmp_version === '3';
                 document.getElementById('snmpProvisionTitle').textContent = `Nastaviť SNMPv${isV3 ? '3' : '2c'} cez SSH`;
@@ -6033,8 +6038,11 @@
                 if (!document.getElementById('deviceModal').classList.contains('hidden')) {
                     deviceSnmpFormDirty = true;
                     const button = document.getElementById('provisionDeviceSnmpBtn');
-                    button.disabled = true;
-                    button.title = 'Najprv uložte zmeny zariadenia';
+                    const isNewDevice = !document.getElementById('deviceId').value;
+                    button.disabled = !isNewDevice;
+                    button.title = isNewDevice
+                        ? 'Zariadenie sa pred nastavením automaticky uloží'
+                        : 'Najprv uložte zmeny zariadenia';
                 }
             });
 
@@ -6062,15 +6070,15 @@
                 document.getElementById('deviceSnmpV3PrivProtocol').value = device ? (device.snmp_v3_priv_protocol || 'AES') : 'AES';
                 ['deviceSnmpV3Security', 'deviceSnmpV3AuthProtocol', 'deviceSnmpV3PrivProtocol']
                     .forEach(updateCustomSelectDisplay);
-                document.getElementById('deviceSnmpV3AuthPassword').value = '';
-                document.getElementById('deviceSnmpV3PrivPassword').value = '';
+                document.getElementById('deviceSnmpV3AuthPassword').value = device ? '' : generateSnmpPassword();
+                document.getElementById('deviceSnmpV3PrivPassword').value = device ? '' : generateSnmpPassword();
                 document.getElementById('deviceSnmpAllowedAddress').value = device ? (device.snmp_allowed_address || '') : '';
                 delete document.getElementById('deviceSnmpAllowedAddress').dataset.autoDetected;
                 document.getElementById('deviceSnmpRestrictSource').checked = device ? Boolean(device.snmp_allowed_address) : true;
                 document.getElementById('deviceSnmpLocation').value = device ? (device.snmp_location || '') : '';
                 document.getElementById('deviceSnmpCommunityStored').classList.toggle('hidden', !(device && device.snmp_community_configured));
-                setSnmpSecretStatus('deviceSnmpAuthStored', '', Boolean(device && device.snmp_v3_auth_password_configured));
-                setSnmpSecretStatus('deviceSnmpPrivStored', '', Boolean(device && device.snmp_v3_priv_password_configured));
+                setSnmpSecretStatus('deviceSnmpAuthStored', document.getElementById('deviceSnmpV3AuthPassword').value, Boolean(device && device.snmp_v3_auth_password_configured));
+                setSnmpSecretStatus('deviceSnmpPrivStored', document.getElementById('deviceSnmpV3PrivPassword').value, Boolean(device && device.snmp_v3_priv_password_configured));
                 updateStoredSecretToggle('deviceSnmpCommunity', 'deviceSnmpCommunityToggle', Boolean(device && device.snmp_community_configured));
                 updateStoredSecretToggle('deviceSnmpV3AuthPassword', 'deviceSnmpAuthToggle', Boolean(device && device.snmp_v3_auth_password_configured));
                 updateStoredSecretToggle('deviceSnmpV3PrivPassword', 'deviceSnmpPrivToggle', Boolean(device && device.snmp_v3_priv_password_configured));
@@ -6104,12 +6112,13 @@
                 setStoredSecretPlaceholder('deviceSnmpV3PrivPassword', Boolean(device && device.snmp_v3_priv_password_configured), device?.snmp_v3_priv_password_length, 'min. 8 znakov');
                 document.getElementById('deviceSnmpTestResult').classList.add('hidden');
                 const provisionButton = document.getElementById('provisionDeviceSnmpBtn');
-                provisionButton.classList.toggle('hidden', !device);
+                provisionButton.classList.remove('hidden');
                 provisionButton.disabled = false;
-                provisionButton.title = '';
+                provisionButton.title = device ? '' : 'Zariadenie sa pred nastavením automaticky uloží';
                 updateSnmpFields();
                 deviceSnmpFormDirty = false;
                 deviceSnmpSettingsChanged = false;
+                provisionAfterDeviceSave = false;
 
                 clearDeviceValidation();
                 deviceModal.classList.remove('hidden');
@@ -7233,6 +7242,8 @@
 
             deviceForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                const shouldProvisionAfterSave = provisionAfterDeviceSave;
+                provisionAfterDeviceSave = false;
                 cancelPendingDeviceSecretRequests();
                 const snmpPayload = collectSnmpPayload();
                 const pingIntervalInput = document.getElementById('devicePingInterval');
@@ -7298,7 +7309,7 @@
                     cert_www_ssl_port: certWwwSslPort || 0,
                     low_memory: document.getElementById('deviceLowMemory').checked,
                 };
-                const keepDeviceModalOpenForSnmp = Boolean(body.id) && deviceSnmpSettingsChanged;
+                const keepDeviceModalOpenForSnmp = shouldProvisionAfterSave || (Boolean(body.id) && deviceSnmpSettingsChanged);
                 let result;
                 try {
                     const res = await fetch(`${API_URL}/api/devices`, {
@@ -7326,6 +7337,9 @@
                 await loadDevices();
 
                 if (keepDeviceModalOpenForSnmp) {
+                    if (!body.id && result.device_id) {
+                        document.getElementById('deviceId').value = String(result.device_id);
+                    }
                     deviceSnmpFormDirty = false;
                     deviceSnmpSettingsChanged = false;
 
@@ -7364,6 +7378,9 @@
                     updateSnmpFields();
                     showSnmpTestResult(true, 'SNMP nastavenie bolo uložené. Teraz ho môžete preniesť na MikroTik tlačidlom „Nastaviť na MikroTiku“.');
                     showToast('Zariadenie bolo uložené; okno zostáva otvorené pre SNMP provisioning.', 'success');
+                    if (shouldProvisionAfterSave) {
+                        document.getElementById('provisionDeviceSnmpBtn').click();
+                    }
                 } else {
                     closeModal();
                 }

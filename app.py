@@ -1074,13 +1074,19 @@ def before_request_handler():
 
 SENSITIVE_LOG_PATTERNS = [
     re.compile(
-        r"(?i)\b(password|passwd|pwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|"
+        r"(?i)(\b(?:password|passwd|pwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|"
         r"snmp[_-]?community|ftp[_-]?password|totp|recovery[_-]?code|backup[_-]?code)\b"
-        r"(\s*[:=]\s*)"
-        r"([\"']?)[^\"'\s,;}]*(\3)"
+        r"[\"']?\s*[:=]\s*)([\"'])[^\r\n]*?\2"
+    ),
+    re.compile(
+        r"(?i)(\b(?:password|passwd|pwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|"
+        r"snmp[_-]?community|ftp[_-]?password|totp|recovery[_-]?code|backup[_-]?code)\b"
+        r"[\"']?\s*[:=]\s*)(?![\"'])[^\s,;}&]+"
     ),
     re.compile(r"(?i)(ftp|sftp|http|https)://([^:\s/@]+):([^@\s/]+)@"),
+    re.compile(r"(?i)(\bauthorization\s*:\s*(?:basic|bearer)\s+)[^\s,;]+"),
 ]
+
 
 def sanitize_log_message(message):
     """Mask likely secrets before writing to persistent logs or sockets."""
@@ -1089,11 +1095,29 @@ def sanitize_log_message(message):
 
     sanitized = str(message)
     for pattern in SENSITIVE_LOG_PATTERNS:
-        if pattern.groups >= 4:
-            sanitized = pattern.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}[REDACTED]{m.group(4)}", sanitized)
-        else:
+        if pattern.groups == 3:
             sanitized = pattern.sub(lambda m: f"{m.group(1)}://{m.group(2)}:[REDACTED]@", sanitized)
+        elif pattern.groups == 2:
+            sanitized = pattern.sub(lambda m: f"{m.group(1)}{m.group(2)}[REDACTED]{m.group(2)}", sanitized)
+        else:
+            sanitized = pattern.sub(lambda m: f"{m.group(1)}[REDACTED]", sanitized)
     return sanitized
+
+
+def safe_ftp_error(error):
+    """Return useful FTP diagnostics without logging server-controlled text."""
+    if isinstance(error, error_perm):
+        return "FTP server odmietol operáciu."
+    if isinstance(error, socket.gaierror):
+        return "FTP server sa nepodarilo nájsť cez DNS."
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return "FTP server neodpovedal v časovom limite."
+    if isinstance(error, ConnectionRefusedError):
+        return "FTP server odmietol spojenie."
+    if isinstance(error, OSError):
+        return "FTP sieťová operácia zlyhala."
+    return "FTP operácia zlyhala."
+
 
 def add_log(level, message, device_ip=None):
     level_map = {'INFO': logging.INFO, 'SUCCESS': logging.INFO, 'WARNING': logging.WARNING, 'ERROR': logging.ERROR, 'DEBUG': logging.DEBUG}
@@ -1694,9 +1718,9 @@ def cleanup_old_backups(device_ip, settings, detailed_logging=True):
                             if detailed_logging:
                                 add_log('info', f"FTP záloha zmazaná: {f_del}", device_ip)
                         except Exception as e_ftp_del:
-                            add_log('error', f"Nepodarilo sa zmazať FTP súbor {f_del}: {e_ftp_del}", device_ip)
-    except Exception as e:
-        add_log('error', f"Chyba pri čistení starých záloh pre {device_ip}: {e}", device_ip)
+                            add_log('error', f"Nepodarilo sa zmazať FTP súbor {f_del}: {safe_ftp_error(e_ftp_del)}", device_ip)
+    except Exception:
+        add_log('error', f"Chyba pri čistení starých záloh pre {device_ip}.", device_ip)
 
 
 def migrate_backups_for_ip_change(old_ip, new_ip, settings):
@@ -1763,7 +1787,7 @@ def migrate_backups_for_ip_change(old_ip, new_ip, settings):
                 ftp_files.add(new_filename)
                 result['ftp'] += 1
     except Exception as e:
-        result['errors'].append(f"FTP zálohy: {e}")
+        result['errors'].append(f"FTP zálohy: {safe_ftp_error(e)}")
 
     return result
 
@@ -2001,7 +2025,7 @@ def sync_missing_backups_to_ftp(device_ip, settings):
                 result['uploaded'] += 1
         result['success'] = True
     except Exception as e:
-        result['errors'].append(str(e))
+        result['errors'].append(safe_ftp_error(e))
     return result
 
 
@@ -2032,7 +2056,7 @@ def upload_to_ftp(local_path, detailed_logging=True, device_ip=None, log_success
                     ftp.storbinary(f'STOR {os.path.basename(local_path)}', f)
             return True, None
         except Exception as e:
-            return False, str(e)
+            return False, safe_ftp_error(e)
 
     with get_db_connection() as conn:
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings WHERE key LIKE \"ftp_%\"')}
@@ -2595,7 +2619,7 @@ def delete_backup(filename):
                             # Ignoruj chyby ak súbor neexistuje na FTP
                             pass
         except Exception as ftp_connection_e:
-            add_log('warning', f"Nepodarilo sa pripojiť na FTP server pre vymazanie súborov: {ftp_connection_e}")
+            add_log('warning', f"Nepodarilo sa pripojiť na FTP server pre vymazanie súborov: {safe_ftp_error(ftp_connection_e)}")
         
         # Vytvorenie zlúčených log správ
         if deleted_local:
@@ -4709,7 +4733,7 @@ def purge_device(device_id, manual=False):
                         except Exception:
                             pass
             except Exception as e:
-                add_log('warning', f"Purge: FTP mazanie zlyhalo pre {device_ip}: {e}", device_ip)
+                add_log('warning', f"Purge: FTP mazanie zlyhalo pre {device_ip}: {safe_ftp_error(e)}", device_ip)
                 # Best-effort — pokračujeme ďalej
 
             # 4. In-memory cleanup
@@ -5272,7 +5296,7 @@ def test_ftp_settings():
             'message': 'FTP spojenie je funkčné.'
         })
     except Exception as e:
-        error_message = str(e) or e.__class__.__name__
+        error_message = safe_ftp_error(e)
         add_log('warning', f"Test FTP spojenia zlyhal ({server}:{port}): {error_message}")
         if isinstance(e, error_perm):
             tip = 'Skontrolujte používateľské meno, heslo a oprávnenie k zadanému FTP adresáru.'

@@ -760,6 +760,7 @@
             .custom-select[data-select-id="deviceSnmpVersion"] {
                 width: auto;
                 min-width: 0;
+                top: -3px;
             }
 
             #deviceSnmpAddressFields {
@@ -1831,6 +1832,13 @@
             color: #cbd5e1;
         }
         .device-field-label i { font-size: 0.7rem; width: 13px; }
+        @media (min-width: 768px) {
+            .snmp-v3-secret-label {
+                min-height: 2.4rem;
+                align-items: flex-end;
+                line-height: 1.15;
+            }
+        }
 
         /* Inputs */
         .device-input {
@@ -3358,11 +3366,16 @@
                         <div id="deviceSnmpV3Fields" class="space-y-4">
                             <div class="snmp-v3-selectors-row grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div>
-                                    <label for="deviceSnmpV3Username" class="device-field-label">SNMP Používateľ</label>
-                                    <input id="deviceSnmpV3Username" class="device-input w-full p-3 rounded-lg" value="mikrotik-manager" autocomplete="off">
+                                    <label for="deviceSnmpV3Username" class="device-field-label"><i class="fas fa-key text-purple-400"></i>Community</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="deviceSnmpV3Username" class="device-input w-full p-3 pr-10 rounded-lg"
+                                            value="mikrotik-manager" placeholder="SNMP Community" autocomplete="off">
+                                        <i id="deviceSnmpV3UsernameToggle" class="fas fa-eye password-toggle"
+                                            data-target="deviceSnmpV3Username" title="Zobraziť alebo skryť Community"></i>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label for="deviceSnmpV3Security" class="device-field-label">Úroveň zabezpečenia</label>
+                                    <label for="deviceSnmpV3Security" class="device-field-label"><i class="fas fa-shield-halved text-sky-400"></i>Úroveň zabezpečenia</label>
                                     <select id="deviceSnmpV3Security" class="device-input w-full p-3 rounded-lg"
                                         data-custom-select data-custom-select-style="snmp" data-placeholder="Úroveň zabezpečenia">
                                         <option value="authPriv">authPriv · odporúčané</option>
@@ -3370,7 +3383,7 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label for="deviceSnmpV3AuthProtocol" class="device-field-label">Autentifikácia</label>
+                                    <label for="deviceSnmpV3AuthProtocol" class="device-field-label"><i class="fas fa-fingerprint text-emerald-400"></i>Autentifikácia</label>
                                     <select id="deviceSnmpV3AuthProtocol" class="device-input w-full p-3 rounded-lg"
                                         data-custom-select data-custom-select-style="snmp" data-placeholder="Autentifikácia">
                                         <option value="SHA1">SHA1 · odporúčané</option><option value="MD5">MD5</option>
@@ -3379,7 +3392,7 @@
                             </div>
                             <div class="snmp-v3-secrets-row grid grid-cols-1 md:grid-cols-5 gap-3">
                                 <div class="md:col-span-2">
-                                    <label for="deviceSnmpV3AuthPassword" class="device-field-label">Autentifikačné heslo</label>
+                                    <label for="deviceSnmpV3AuthPassword" class="device-field-label snmp-v3-secret-label"><i class="fas fa-key text-yellow-400"></i>Autentifikačné heslo</label>
                                     <div class="password-input-container">
                                         <input type="password" id="deviceSnmpV3AuthPassword" class="device-input w-full p-3 pr-10 rounded-lg" autocomplete="new-password">
                                         <i id="deviceSnmpAuthToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpV3AuthPassword" data-secret-field="snmp_v3_auth_password"></i>
@@ -3392,14 +3405,14 @@
                                 <div id="deviceSnmpPrivacyFields" class="md:col-span-3">
                                     <div class="flex gap-2 items-end">
                                         <div class="flex-1">
-                                            <label for="deviceSnmpV3PrivPassword" class="device-field-label">Šifrovacie heslo</label>
+                                            <label for="deviceSnmpV3PrivPassword" class="device-field-label snmp-v3-secret-label"><i class="fas fa-lock text-sky-400"></i>Šifrovacie heslo</label>
                                             <div class="password-input-container">
                                                 <input type="password" id="deviceSnmpV3PrivPassword" class="device-input w-full p-3 pr-10 rounded-lg" autocomplete="new-password">
                                                 <i id="deviceSnmpPrivToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpV3PrivPassword" data-secret-field="snmp_v3_priv_password"></i>
                                             </div>
                                         </div>
                                         <div class="w-32 shrink-0">
-                                            <label for="deviceSnmpV3PrivProtocol" class="device-field-label">Šifrovací protokol</label>
+                                            <label for="deviceSnmpV3PrivProtocol" class="device-field-label snmp-v3-secret-label"><i class="fas fa-shield text-indigo-400"></i>Šifrovací protokol</label>
                                             <select id="deviceSnmpV3PrivProtocol" class="device-input w-full p-3 rounded-lg"
                                                 data-custom-select data-custom-select-style="snmp" data-placeholder="Šifrovací protokol"><option value="AES">AES</option><option value="DES">DES</option></select>
                                         </div>
@@ -5653,6 +5666,7 @@
             const deviceSecretFieldPairs = [
                 ['devicePassword', 'devicePasswordToggle'],
                 ['deviceSnmpCommunity', 'deviceSnmpCommunityToggle'],
+                ['deviceSnmpV3Username', 'deviceSnmpV3UsernameToggle'],
                 ['deviceSnmpV3AuthPassword', 'deviceSnmpAuthToggle'],
                 ['deviceSnmpV3PrivPassword', 'deviceSnmpPrivToggle']
             ];

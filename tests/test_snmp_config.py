@@ -30,7 +30,7 @@ class SnmpConfigTests(unittest.TestCase):
             'snmp_version', 'snmp_v3_username', 'snmp_v3_security_level',
             'snmp_v3_auth_protocol', 'snmp_v3_auth_password',
             'snmp_v3_priv_protocol', 'snmp_v3_priv_password', 'snmp_allowed_address',
-            'snmp_location'
+            'snmp_location', 'name_source'
         ):
             self.assertIn(name, columns)
         self.assertEqual(columns['snmp_version']['dflt_value'], "'2c'")
@@ -119,7 +119,7 @@ class SnmpConfigTests(unittest.TestCase):
             session['_fresh'] = True
         with mock.patch.object(app, 'trigger_immediate_health_check'):
             response = client.post('/api/devices', json={
-                'id': 1, 'name': 'Router', 'ip': '192.0.2.1', 'username': 'admin',
+                'id': 1, 'name': 'Router', 'name_source': 'snmp', 'ip': '192.0.2.1', 'username': 'admin',
                 'password': '', 'snmp_version': '3', 'snmp_v3_username': 'manager',
                 'snmp_v3_security_level': 'authPriv', 'snmp_v3_auth_protocol': 'SHA1',
                 'snmp_v3_auth_password': 'auth-secret', 'snmp_v3_priv_protocol': 'AES',
@@ -142,6 +142,7 @@ class SnmpConfigTests(unittest.TestCase):
         self.assertTrue(devices[0]['snmp_v3_auth_password_configured'])
         self.assertTrue(devices[0]['snmp_v3_priv_password_configured'])
         self.assertEqual(devices[0]['snmp_location'], 'Serverovňa 1')
+        self.assertEqual(devices[0]['name_source'], 'snmp')
         reveal_headers = {'Origin': 'http://localhost'}
         reveal = client.post('/api/devices/1/secrets/reveal', json={'field': 'password'}, headers=reveal_headers)
         self.assertEqual(reveal.status_code, 200)
@@ -154,6 +155,23 @@ class SnmpConfigTests(unittest.TestCase):
             headers={'Origin': 'https://attacker.example'}
         )
         self.assertEqual(cross_origin.status_code, 403)
+
+        with mock.patch.object(app, 'trigger_immediate_health_check'):
+            blank_name = client.post('/api/devices', json={
+                'id': 1, 'name': '   ', 'ip': '192.0.2.1', 'username': 'admin',
+                'password': '', 'snmp_version': '3', 'snmp_v3_username': 'manager',
+                'snmp_v3_security_level': 'authPriv', 'snmp_v3_auth_protocol': 'SHA1',
+                'snmp_v3_auth_password': '', 'snmp_v3_priv_protocol': 'AES',
+                'snmp_v3_priv_password': '', 'snmp_allowed_address': '192.0.2.2/32',
+                'snmp_location': 'Serverovňa 1', 'snmp_interval_minutes': 0,
+                'ping_interval_seconds': 0, 'ping_retry_interval_seconds': 0,
+                'cert_www_port': 0, 'cert_www_ssl_port': 0, 'low_memory': False,
+            })
+        self.assertEqual(blank_name.status_code, 200, blank_name.get_data(as_text=True))
+        updated_devices = client.get('/api/devices').get_json()
+        updated_device = next(device for device in updated_devices if device['id'] == 1)
+        self.assertEqual(updated_device['name'], '192.0.2.1')
+        self.assertEqual(updated_device['name_source'], 'local')
 
     def test_provision_requires_conflict_confirmation_and_can_update_existing_account(self):
         with app.get_db_connection() as conn:

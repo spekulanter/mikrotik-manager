@@ -828,6 +828,7 @@ def init_database():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS devices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+                name_source TEXT NOT NULL DEFAULT 'local',
                 username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
                 snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
                 last_backup TIMESTAMP, last_snmp_data TEXT, snmp_interval_minutes INTEGER DEFAULT 0,
@@ -913,6 +914,7 @@ def init_database():
             ("snmp_v3_priv_password", "TEXT DEFAULT NULL"),
             ("snmp_allowed_address", "TEXT DEFAULT NULL"),
             ("snmp_location", "TEXT DEFAULT NULL"),
+            ("name_source", "TEXT NOT NULL DEFAULT 'local'"),
         )
         for column_name, column_definition in snmp_v3_columns:
             try:
@@ -4435,7 +4437,7 @@ def handle_devices():
             # Include all necessary fields including status and last_snmp_data
             devices = []
             for row in conn.execute('''
-                SELECT d.id, d.name, d.ip, d.username, d.low_memory,
+                SELECT d.id, d.name, d.name_source, d.ip, d.username, d.low_memory,
                        d.password, d.snmp_community,
                        d.snmp_version, d.snmp_v3_username, d.snmp_v3_security_level,
                        d.snmp_v3_auth_protocol, d.snmp_v3_auth_password,
@@ -4542,12 +4544,22 @@ def handle_devices():
                     snmp_secrets = encrypted_snmp_values(snmp_config)
                     
                     # Pri editácii zachováme pôvodné heslo ak nie je zadané nové
-                    device_name = data['name'].strip()
+                    # Názov je voliteľný: frontend sa ho pokúsi načítať zo SNMP
+                    # sysName (MikroTik Identity), IP je bezpečný posledný fallback.
+                    submitted_name = str(data.get('name') or '').strip()
+                    device_name = submitted_name or str(data.get('ip') or '').strip()
+                    requested_name_source = str(data.get('name_source') or '').strip()
+                    if not submitted_name:
+                        device_name_source = 'local'
+                    elif requested_name_source in {'local', 'snmp'}:
+                        device_name_source = requested_name_source
+                    else:
+                        device_name_source = old_device['name_source'] or 'local'
                     if data.get('password'):
                         # Ak je zadané nové heslo, aktualizujeme všetko vrátane hesla
                         encrypted_password = encrypt_password(data['password'])
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
-                                   (device_name, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
+                        conn.execute("UPDATE devices SET name=?, name_source=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
+                                   (device_name, device_name_source, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
                                     snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
                                     snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
                                     snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
@@ -4557,8 +4569,8 @@ def handle_devices():
                                     new_cert_www_port, new_cert_www_ssl_port, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
-                                   (device_name, data['ip'], data['username'], data.get('low_memory', False),
+                        conn.execute("UPDATE devices SET name=?, name_source=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
+                                   (device_name, device_name_source, data['ip'], data['username'], data.get('low_memory', False),
                                     snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
                                     snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
                                     snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
@@ -4635,8 +4647,12 @@ def handle_devices():
                     new_snmp_location = str(data.get('snmp_location') or '').strip()
                     if len(new_snmp_location) > 255:
                         return jsonify({'status': 'error', 'message': 'SNMP Location môže mať najviac 255 znakov.'}), 400
-                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_version, snmp_v3_username, snmp_v3_security_level, snmp_v3_auth_protocol, snmp_v3_auth_password, snmp_v3_priv_protocol, snmp_v3_priv_password, snmp_allowed_address, snmp_location, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                 (data['name'].strip(), data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
+                    device_name = str(data.get('name') or '').strip() or str(data.get('ip') or '').strip()
+                    device_name_source = 'snmp' if (
+                        str(data.get('name_source') or '').strip() == 'snmp' and str(data.get('name') or '').strip()
+                    ) else 'local'
+                    cursor.execute("INSERT INTO devices (name, name_source, ip, username, password, low_memory, snmp_community, snmp_version, snmp_v3_username, snmp_v3_security_level, snmp_v3_auth_protocol, snmp_v3_auth_password, snmp_v3_priv_protocol, snmp_v3_priv_password, snmp_allowed_address, snmp_location, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                 (device_name, device_name_source, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
                                   snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
                                   snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
                                   snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],

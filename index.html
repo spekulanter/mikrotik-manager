@@ -1653,6 +1653,14 @@
         .device-input.secret-value-loading {
             caret-color: transparent !important;
         }
+        .device-input.snmp-identity-value {
+            background: rgba(51, 65, 85, 0.55) !important;
+            border-color: rgba(100, 116, 139, 0.55) !important;
+            color: #94a3b8 !important;
+        }
+        #deviceNameSourceHint.is-snmp-identity {
+            color: #38bdf8 !important;
+        }
         .snmp-secret-strength {
             font-weight: 600;
         }
@@ -1756,6 +1764,14 @@
         body.light-theme .device-input::placeholder { color: #7ea8d0 !important; }
         body.light-theme .device-input.stored-secret-placeholder::placeholder {
             color: #334155 !important;
+        }
+        body.light-theme .device-input.snmp-identity-value {
+            background: #e8eef5 !important;
+            border-color: #b6c2d2 !important;
+            color: #64748b !important;
+        }
+        body.light-theme #deviceNameSourceHint.is-snmp-identity {
+            color: #0284c7 !important;
         }
         body.light-theme #deviceSnmpMonitoringCard .text-gray-400,
         body.light-theme #deviceSnmpMonitoringCard .text-gray-500 { color: #475569 !important; }
@@ -3036,14 +3052,6 @@
                                 <span>Základné údaje</span>
                             </div>
                             <div>
-                                <label for="deviceName" class="device-field-label">
-                                    <i class="fas fa-tag text-sky-400"></i>Názov zariadenia
-                                </label>
-                                <input type="text" id="deviceName"
-                                    class="device-input w-full p-3 rounded-lg"
-                                    required>
-                            </div>
-                            <div>
                                 <label for="deviceIp" class="device-field-label">
                                     <i class="fas fa-network-wired text-emerald-400"></i>IP Adresa
                                 </label>
@@ -3064,7 +3072,7 @@
                                 <div class="password-input-container">
                                     <input type="password" id="devicePassword"
                                         class="device-input w-full p-3 pr-10 rounded-lg"
-                                        placeholder="Zadajte heslo pre SSH pripojenie" autocomplete="off">
+                                        placeholder="Zadajte heslo do MikroTiku" autocomplete="off">
                                     <i id="devicePasswordToggle" class="fas fa-eye password-toggle"
                                         data-target="devicePassword" data-secret-field="password"></i>
                                 </div>
@@ -3128,6 +3136,16 @@
                                 <option value="3">SNMPv3 (odporúčané)</option>
                                 <option value="2c">SNMPv2c (kompatibilné)</option>
                             </select>
+                        </div>
+
+                        <div>
+                            <label for="deviceName" class="device-field-label">
+                                <i class="fas fa-tag text-purple-400"></i>Názov zariadenia (voliteľné)
+                            </label>
+                            <input type="text" id="deviceName"
+                                class="device-input w-full p-3 rounded-lg"
+                                placeholder="Načíta sa z Identity MikroTiku" autocomplete="off">
+                            <p id="deviceNameSourceHint" class="text-xs text-gray-500 mt-1">Prázdne pole sa doplní z Identity cez SNMP. Ručne zadaný názov sa používa iba v MT Manageri.</p>
                         </div>
 
                         <div id="deviceSnmpV2Fields" class="hidden">
@@ -5359,6 +5377,20 @@
             document.getElementById('deviceSnmpMonitoringCard').addEventListener('input', markDeviceSnmpSettingsChanged);
             document.getElementById('deviceSnmpMonitoringCard').addEventListener('change', markDeviceSnmpSettingsChanged);
 
+            const setDeviceNameIdentityState = isFromSnmp => {
+                const input = document.getElementById('deviceName');
+                const hint = document.getElementById('deviceNameSourceHint');
+                input.classList.toggle('snmp-identity-value', isFromSnmp);
+                hint.classList.toggle('is-snmp-identity', isFromSnmp);
+                input.dataset.nameSource = isFromSnmp ? 'snmp' : 'local';
+                hint.textContent = isFromSnmp
+                    ? 'Načítané zo SNMP Identity · môžete ho prepísať vlastným názvom.'
+                    : 'Prázdne pole sa doplní z Identity cez SNMP. Ručne zadaný názov sa používa iba v MT Manageri.';
+            };
+            document.getElementById('deviceName').addEventListener('input', event => {
+                if (event.isTrusted) setDeviceNameIdentityState(false);
+            });
+
             const updateSnmpFields = () => {
                 const isV3 = document.getElementById('deviceSnmpVersion').value === '3';
                 document.getElementById('deviceSnmpV2Fields').classList.toggle('hidden', isV3);
@@ -5641,6 +5673,13 @@
                 try {
                     const response = await fetch('/api/snmp/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(collectSnmpPayload())});
                     const result = await response.json();
+                    const identity = String(result.identity || '').trim();
+                    const deviceName = document.getElementById('deviceName');
+                    if (response.ok && identity && identity !== 'N/A' && !deviceName.value.trim()) {
+                        deviceName.value = identity;
+                        deviceName.dispatchEvent(new Event('input', {bubbles: true}));
+                        setDeviceNameIdentityState(true);
+                    }
                     showSnmpTestResult(response.ok, response.ok
                         ? `${result.message} ${result.identity || ''} · RouterOS ${result.routeros_version || 'N/A'} · ${result.response_ms} ms`
                         : result.message);
@@ -5747,6 +5786,7 @@
                 document.getElementById('deviceId').value = device ? device.id : '';
                 updateDeviceModalIdentity(device);
                 document.getElementById('deviceName').value = device ? device.name : '';
+                setDeviceNameIdentityState(Boolean(device && device.name_source === 'snmp'));
                 document.getElementById('deviceIp').value = device ? device.ip : '';
                 document.getElementById('deviceUsername').value = device ? device.username : '';
                 document.getElementById('deviceSnmpVersion').value = device ? (device.snmp_version || '2c') : '3';
@@ -5785,9 +5825,9 @@
                 // Dynamický placeholder text pre heslo
                 const passwordField = document.getElementById('devicePassword');
                 if (device) {
-                    setStoredSecretPlaceholder('devicePassword', Boolean(device.password_configured), device.password_length, 'Zadajte heslo pre SSH pripojenie');
+                    setStoredSecretPlaceholder('devicePassword', Boolean(device.password_configured), device.password_length, 'Zadajte heslo do MikroTiku');
                 } else {
-                    passwordField.placeholder = 'Zadajte heslo pre SSH pripojenie';
+                    passwordField.placeholder = 'Zadajte heslo do MikroTiku';
                     passwordField.dataset.secretLength = '0';
                 }
 
@@ -6948,9 +6988,34 @@
                     return;
                 }
 
+                const deviceNameInput = document.getElementById('deviceName');
+                let deviceName = deviceNameInput.value.trim();
+                if (!deviceName) {
+                    let nameLoadedFromSnmp = false;
+                    try {
+                        const identityResponse = await fetch('/api/snmp/test', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(snmpPayload)
+                        });
+                        const identityResult = await identityResponse.json();
+                        const identity = String(identityResult.identity || '').trim();
+                        if (identityResponse.ok && identity && identity !== 'N/A') {
+                            deviceName = identity;
+                            nameLoadedFromSnmp = true;
+                        }
+                    } catch (_) {
+                        // Nedostupné SNMP nesmie zablokovať uloženie zariadenia.
+                    }
+                    deviceName ||= document.getElementById('deviceIp').value.trim();
+                    deviceNameInput.value = deviceName;
+                    setDeviceNameIdentityState(nameLoadedFromSnmp);
+                }
+
                 const body = {
                     id: document.getElementById('deviceId').value,
-                    name: document.getElementById('deviceName').value.trim(),
+                    name: deviceName,
+                    name_source: deviceNameInput.dataset.nameSource === 'snmp' ? 'snmp' : 'local',
                     ip: document.getElementById('deviceIp').value,
                     username: document.getElementById('deviceUsername').value,
                     password: document.getElementById('devicePassword').value,
@@ -7014,7 +7079,7 @@
                     updateStoredSecretToggle('deviceSnmpCommunity', 'deviceSnmpCommunityToggle', communityStored);
                     updateStoredSecretToggle('deviceSnmpV3AuthPassword', 'deviceSnmpAuthToggle', authStored);
                     updateStoredSecretToggle('deviceSnmpV3PrivPassword', 'deviceSnmpPrivToggle', privStored);
-                    setStoredSecretPlaceholder('devicePassword', sshStored, sshLength, 'Zadajte heslo pre SSH pripojenie');
+                    setStoredSecretPlaceholder('devicePassword', sshStored, sshLength, 'Zadajte heslo do MikroTiku');
                     setStoredSecretPlaceholder('deviceSnmpCommunity', communityStored, communityLength, 'public');
                     setStoredSecretPlaceholder('deviceSnmpV3AuthPassword', authStored, authLength, 'min. 8 znakov');
                     setStoredSecretPlaceholder('deviceSnmpV3PrivPassword', privStored, privLength, 'min. 8 znakov');

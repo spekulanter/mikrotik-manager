@@ -239,7 +239,7 @@ class SnmpConfigTests(unittest.TestCase):
                    (id, name, ip, username, password, snmp_community, snmp_version,
                     snmp_v3_username, snmp_v3_security_level, snmp_v3_auth_protocol,
                     snmp_v3_auth_password, snmp_v3_priv_protocol, snmp_v3_priv_password)
-                   VALUES (2, 'Provision Router', '192.0.2.2', 'admin', ?, ?, '3',
+                   VALUES (2, '192.0.2.2', '192.0.2.2', 'admin', ?, ?, '3',
                            'manager', 'authPriv', 'SHA1', ?, 'AES', ?)''',
                 tuple(app.encrypt_password(value) for value in (
                     'ssh-password', 'public', 'auth-secret', 'privacy-secret'
@@ -258,10 +258,18 @@ class SnmpConfigTests(unittest.TestCase):
         with mock.patch.object(app, 'get_ssh_host_key_state', return_value={'status': 'trusted'}), \
              mock.patch.object(app, 'execute_routeros_ssh', side_effect=['MM_EXISTS', '']) as ssh, \
              mock.patch.object(app, 'get_snmp_data', return_value=valid_result):
-            success = client.post('/api/devices/2/snmp/provision', json={'overwrite': True})
+            success = client.post('/api/devices/2/snmp/provision', json={
+                'overwrite': True,
+                'update_identity': True,
+            })
         self.assertEqual(success.status_code, 200, success.get_data(as_text=True))
         self.assertFalse(success.get_json()['default_community_reused'])
+        self.assertTrue(success.get_json()['identity_updated'])
         self.assertEqual(ssh.call_count, 2)
+        with app.get_db_connection() as conn:
+            updated = conn.execute('SELECT name, name_source FROM devices WHERE id = 2').fetchone()
+        self.assertEqual(updated['name'], 'router-2')
+        self.assertEqual(updated['name_source'], 'snmp')
 
     def test_v3_provision_reuses_system_default_community(self):
         with app.get_db_connection() as conn:
@@ -283,9 +291,12 @@ class SnmpConfigTests(unittest.TestCase):
         with mock.patch.object(app, 'get_ssh_host_key_state', return_value={'status': 'trusted'}), \
              mock.patch.object(app, 'execute_routeros_ssh', side_effect=['MM_REUSE_DEFAULT', '']) as ssh, \
              mock.patch.object(app, 'get_snmp_data', return_value=valid_result):
-            response = client.post('/api/devices/2/snmp/provision', json={})
+            response = client.post('/api/devices/2/snmp/provision', json={'update_identity': True})
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertTrue(response.get_json()['default_community_reused'])
+        self.assertFalse(response.get_json()['identity_updated'])
+        with app.get_db_connection() as conn:
+            self.assertEqual(conn.execute('SELECT name FROM devices WHERE id = 2').fetchone()['name'], 'Provision Router')
         configure_command = ssh.call_args_list[1].args[1]
         self.assertIn('find where default=yes', configure_command)
         self.assertIn('name="manager"', configure_command)

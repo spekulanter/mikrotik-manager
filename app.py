@@ -5475,10 +5475,29 @@ def provision_device_snmp(device_id):
                 'message': f'Nastavenie bolo zapísané, ale následný {version_label} test zlyhal. ' + snmp_diagnostic_message(diagnostic_error)
             }), 502
 
+        identity = str(tested.get('identity') or '').strip()
+        identity_updated = False
+        if (
+            data.get('update_identity') is True
+            and identity
+            and identity != 'N/A'
+            and device.get('name_source') == 'local'
+            and device.get('name') == device.get('ip')
+        ):
+            with get_db_connection() as conn:
+                conn.execute(
+                    "UPDATE devices SET name = ?, name_source = 'snmp' WHERE id = ? AND deleted_at IS NULL",
+                    (identity, device_id),
+                )
+                conn.commit()
+            device['name'] = identity
+            identity_updated = True
+
         add_log('info', f'{version_label} provisioning pre {device["name"]} bol úspešne dokončený.', device['ip'])
         return jsonify({
             'status': 'success', 'message': f'{version_label} bolo nastavené a úspešne otestované.',
-            'identity': tested.get('identity'),
+            'identity': identity or None,
+            'identity_updated': identity_updated,
             'default_community_reused': reuse_default or consolidate_default,
             'duplicate_community_consolidated': consolidate_default,
         })

@@ -3517,7 +3517,7 @@
                         class="device-btn-cancel btn flex items-center gap-2 py-2.5 px-5 rounded-lg font-medium">
                         <i class="fas fa-xmark text-sm"></i>Zrušiť
                     </button>
-                    <button type="submit"
+                    <button type="submit" id="saveDeviceBtn"
                         class="device-btn-save btn flex items-center gap-2 py-2.5 px-6 rounded-lg font-bold">
                         <i class="fas fa-floppy-disk text-sm"></i>Uložiť zariadenie
                     </button>
@@ -6000,29 +6000,40 @@
             document.getElementById('snmpOverwriteModal').addEventListener('click', event => {
                 if (event.target.id === 'snmpOverwriteModal') closeSnmpOverwriteConfirmation(false);
             });
+            const provisionStoredSnmp = async (deviceId, {updateIdentity = false} = {}) => {
+                const sendProvision = async overwrite => {
+                    const response = await fetch(`/api/devices/${deviceId}/snmp/provision`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({overwrite, update_identity: updateIdentity})
+                    });
+                    const result = await response.json();
+                    if (response.status === 409 && result.error === 'snmp_account_exists' && !overwrite) {
+                        const confirmed = await requestSnmpOverwriteConfirmation(result.message, result.account);
+                        if (confirmed) return sendProvision(true);
+                        return {response: null, result, cancelled: true};
+                    }
+                    return {response, result, cancelled: false};
+                };
+                return sendProvision(false);
+            };
             document.getElementById('confirmSnmpProvisionBtn').addEventListener('click', async () => {
                 if (!pendingSnmpProvisionDeviceId) return;
                 const button = document.getElementById('confirmSnmpProvisionBtn');
                 const deviceId = pendingSnmpProvisionDeviceId;
                 button.disabled = true;
                 button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Nastavujem…';
-                const sendProvision = async overwrite => {
-                    const response = await fetch(`/api/devices/${deviceId}/snmp/provision`, {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({overwrite})
-                    });
-                    const result = await response.json();
-                    if (response.status === 409 && result.error === 'snmp_account_exists' && !overwrite) {
-                        const confirmed = await requestSnmpOverwriteConfirmation(result.message, result.account);
-                        if (confirmed) return sendProvision(true);
-                        document.getElementById('snmpProvisionModal').classList.add('hidden');
+                try {
+                    const outcome = await provisionStoredSnmp(deviceId);
+                    document.getElementById('snmpProvisionModal').classList.add('hidden');
+                    if (outcome.cancelled) {
                         showSnmpTestResult(false, 'Existujúci SNMP účet nebol zmenený.');
                     } else {
-                        document.getElementById('snmpProvisionModal').classList.add('hidden');
-                        showSnmpTestResult(response.ok, result.message + (result.warning ? ` ${result.warning}` : ''));
+                        showSnmpTestResult(
+                            outcome.response.ok,
+                            outcome.result.message + (outcome.result.warning ? ` ${outcome.result.warning}` : '')
+                        );
                     }
-                };
-                try { await sendProvision(false); }
+                }
                 catch (_) {
                     document.getElementById('snmpProvisionModal').classList.add('hidden');
                     showSnmpTestResult(false, 'Provisioning sa nepodarilo spustiť.');
@@ -6115,6 +6126,9 @@
                 provisionButton.classList.remove('hidden');
                 provisionButton.disabled = false;
                 provisionButton.title = device ? '' : 'Zariadenie sa pred nastavením automaticky uloží';
+                document.getElementById('saveDeviceBtn').innerHTML = device
+                    ? '<i class="fas fa-floppy-disk text-sm"></i>Uložiť zariadenie'
+                    : '<i class="fas fa-floppy-disk text-sm"></i>Uložiť a nastaviť zariadenie';
                 updateSnmpFields();
                 deviceSnmpFormDirty = false;
                 deviceSnmpSettingsChanged = false;
@@ -7245,6 +7259,18 @@
                 const shouldProvisionAfterSave = provisionAfterDeviceSave;
                 provisionAfterDeviceSave = false;
                 cancelPendingDeviceSecretRequests();
+                const isNewDevice = !document.getElementById('deviceId').value;
+                if (
+                    isNewDevice
+                    && document.getElementById('deviceSnmpRestrictSource').checked
+                    && !document.getElementById('deviceSnmpAllowedAddress').value.trim()
+                ) {
+                    await detectSnmpSourceAddress({silent: true, markChanged: false});
+                    if (!document.getElementById('deviceSnmpAllowedAddress').value.trim()) {
+                        showToast('IP adresu MikroTik Managera sa nepodarilo zistiť. Zadajte povolenú SNMP adresu ručne alebo vypnite obmedzenie zdroja.', 'error', 7000);
+                        return;
+                    }
+                }
                 const snmpPayload = collectSnmpPayload();
                 const pingIntervalInput = document.getElementById('devicePingInterval');
                 const retryIntervalInput = document.getElementById('devicePingRetryInterval');
@@ -7272,22 +7298,25 @@
 
                 const deviceNameInput = document.getElementById('deviceName');
                 let deviceName = deviceNameInput.value.trim();
+                const shouldLoadIdentityAfterProvision = isNewDevice && !deviceName;
                 if (!deviceName) {
                     let nameLoadedFromSnmp = false;
-                    try {
-                        const identityResponse = await fetch('/api/snmp/test', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify(snmpPayload)
-                        });
-                        const identityResult = await identityResponse.json();
-                        const identity = String(identityResult.identity || '').trim();
-                        if (identityResponse.ok && identity && identity !== 'N/A') {
-                            deviceName = identity;
-                            nameLoadedFromSnmp = true;
+                    if (!isNewDevice) {
+                        try {
+                            const identityResponse = await fetch('/api/snmp/test', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify(snmpPayload)
+                            });
+                            const identityResult = await identityResponse.json();
+                            const identity = String(identityResult.identity || '').trim();
+                            if (identityResponse.ok && identity && identity !== 'N/A') {
+                                deviceName = identity;
+                                nameLoadedFromSnmp = true;
+                            }
+                        } catch (_) {
+                            // Nedostupné SNMP nesmie zablokovať uloženie zariadenia.
                         }
-                    } catch (_) {
-                        // Nedostupné SNMP nesmie zablokovať uloženie zariadenia.
                     }
                     deviceName ||= document.getElementById('deviceIp').value.trim();
                     deviceNameInput.value = deviceName;
@@ -7309,7 +7338,7 @@
                     cert_www_ssl_port: certWwwSslPort || 0,
                     low_memory: document.getElementById('deviceLowMemory').checked,
                 };
-                const keepDeviceModalOpenForSnmp = shouldProvisionAfterSave || (Boolean(body.id) && deviceSnmpSettingsChanged);
+                const keepDeviceModalOpenForSnmp = isNewDevice || (Boolean(body.id) && deviceSnmpSettingsChanged);
                 let result;
                 try {
                     const res = await fetch(`${API_URL}/api/devices`, {
@@ -7339,6 +7368,8 @@
                 if (keepDeviceModalOpenForSnmp) {
                     if (!body.id && result.device_id) {
                         document.getElementById('deviceId').value = String(result.device_id);
+                        document.getElementById('saveDeviceBtn').innerHTML =
+                            '<i class="fas fa-floppy-disk text-sm"></i>Uložiť zariadenie';
                     }
                     deviceSnmpFormDirty = false;
                     deviceSnmpSettingsChanged = false;
@@ -7376,29 +7407,46 @@
                     provisionButton.disabled = false;
                     provisionButton.title = '';
                     updateSnmpFields();
-                    showSnmpTestResult(true, 'SNMP nastavenie bolo uložené. Teraz ho môžete preniesť na MikroTik tlačidlom „Nastaviť na MikroTiku“.');
-                    showToast('Zariadenie bolo uložené; okno zostáva otvorené pre SNMP provisioning.', 'success');
-                    if (shouldProvisionAfterSave) {
-                        document.getElementById('provisionDeviceSnmpBtn').click();
+                    if (isNewDevice) {
+                        showSnmpTestResult(true, 'Zariadenie je uložené. Nastavujem a testujem SNMP na MikroTiku…');
+                        try {
+                            const outcome = await provisionStoredSnmp(result.device_id, {
+                                updateIdentity: shouldLoadIdentityAfterProvision
+                            });
+                            if (outcome.cancelled) {
+                                showSnmpTestResult(false, 'Zariadenie bolo uložené, ale existujúci SNMP účet nebol zmenený.');
+                                showToast('Zariadenie je uložené; SNMP provisioning bol zrušený.', 'warning', 6000);
+                            } else {
+                                const message = outcome.result.message + (outcome.result.warning ? ` ${outcome.result.warning}` : '');
+                                showSnmpTestResult(outcome.response.ok, message);
+                                if (outcome.response.ok) {
+                                    if (outcome.result.identity_updated && outcome.result.identity) {
+                                        deviceNameInput.value = outcome.result.identity;
+                                        setDeviceNameIdentityState(true);
+                                    }
+                                    showToast(
+                                        `Zariadenie bolo uložené a SNMP úspešne nastavené${outcome.result.identity_updated ? ` ako „${outcome.result.identity}“` : ''}.`,
+                                        'success',
+                                        6000
+                                    );
+                                    if (!shouldProvisionAfterSave) closeModal();
+                                } else {
+                                    showToast('Zariadenie je uložené, ale SNMP sa nepodarilo kompletne nastaviť.', 'warning', 7000);
+                                }
+                            }
+                        } catch (_) {
+                            showSnmpTestResult(false, 'Zariadenie bolo uložené, ale SNMP provisioning sa nepodarilo spustiť.');
+                            showToast('Zariadenie je uložené, ale SNMP provisioning zlyhal.', 'warning', 7000);
+                        }
+                        await loadDevices();
+                    } else {
+                        showSnmpTestResult(true, 'SNMP nastavenie bolo uložené. Teraz ho môžete preniesť na MikroTik tlačidlom „Nastaviť na MikroTiku“.');
+                        showToast('Zariadenie bolo uložené; okno zostáva otvorené pre SNMP provisioning.', 'success');
                     }
                 } else {
                     closeModal();
                 }
 
-                if (!body.id && result.status === 'success') {
-                    showToast(
-                        result.message || 'Zariadenie bolo pridané.',
-                        result.ssh_auto_trusted ? 'success' : 'warning',
-                        result.ssh_auto_trusted ? 4000 : 7000
-                    );
-                }
-
-                // Ak je to nové zariadenie (bez ID), automaticky spusť SNMP check
-                if (!body.id && result.status === 'success' && result.device_id) {
-                    setTimeout(() => {
-                        api.get(`snmp/${result.device_id}`);
-                    }, 1000); // Krátke oneskorenie pre načítanie zariadenia
-                }
             });
 
             settingsForm.addEventListener('submit', async (e) => {

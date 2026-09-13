@@ -340,9 +340,9 @@ def add_iframe_headers(response):
         "default-src 'self' 'unsafe-inline' 'unsafe-eval'; "
         "frame-ancestors *; "
         "img-src 'self' data: https:; "
-        "style-src 'self' 'unsafe-inline' https:; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
-        "font-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "font-src 'self' data:; "
         "connect-src 'self' ws: wss: https: http:;"
     )
     

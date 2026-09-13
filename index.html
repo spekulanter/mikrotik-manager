@@ -1434,6 +1434,121 @@
             border-color: var(--border-color) !important;
         }
 
+        /* SSH identita zariadenia - samostatné farby, aby utility tmavej témy
+           nepresvitali do svetlého dialógu. */
+        .ssh-host-key-header {
+            background: rgba(15, 23, 42, 0.7);
+            border-color: #374151;
+        }
+
+        .ssh-host-key-footer {
+            border-color: #374151;
+        }
+
+        .ssh-host-key-message.ssh-state-trusted {
+            border-color: #047857;
+            background: rgba(6, 78, 59, 0.4);
+            color: #6ee7b7;
+        }
+
+        .ssh-host-key-message.ssh-state-unverified,
+        .ssh-host-key-message.ssh-state-pending {
+            border-color: #b45309;
+            background: rgba(69, 26, 3, 0.4);
+            color: #fde68a;
+        }
+
+        .ssh-host-key-message.ssh-state-changed {
+            border-color: #dc2626;
+            background: rgba(69, 10, 10, 0.4);
+            color: #fca5a5;
+        }
+
+        body.light-theme .ssh-host-key-header {
+            background: linear-gradient(135deg, #d6e5f7 0%, #e8f2fd 100%) !important;
+            border-color: #b8c9e6 !important;
+        }
+
+        body.light-theme .ssh-host-key-footer {
+            background: rgba(214, 229, 247, 0.45);
+            border-color: #b8c9e6 !important;
+        }
+
+        body.light-theme .ssh-host-key-label {
+            color: #52657d !important;
+        }
+
+        body.light-theme #sshTrustedFingerprint,
+        body.light-theme #sshPendingDetected,
+        body.light-theme .ssh-confirm-copy {
+            color: #27364a !important;
+        }
+
+        body.light-theme #sshPendingFingerprint,
+        body.light-theme #sshConfirmFingerprint {
+            color: #92400e !important;
+        }
+
+        body.light-theme .ssh-host-key-help {
+            color: #52657d !important;
+        }
+
+        body.light-theme .ssh-host-key-message.ssh-state-trusted {
+            border-color: #5bbf9a !important;
+            background: #d8f3e8 !important;
+            color: #116149 !important;
+        }
+
+        body.light-theme .ssh-host-key-message.ssh-state-unverified,
+        body.light-theme .ssh-host-key-message.ssh-state-pending {
+            border-color: #e0ad4f !important;
+            background: #fff3cf !important;
+            color: #754b08 !important;
+        }
+
+        body.light-theme .ssh-host-key-message.ssh-state-changed {
+            border-color: #e99595 !important;
+            background: #fde2e2 !important;
+            color: #991b1b !important;
+        }
+
+        body.light-theme .ssh-confirm-fingerprint-panel {
+            background: #f8fbff !important;
+            border-color: #e0ad4f !important;
+        }
+
+        body.light-theme .ssh-btn-secondary {
+            background: #c8d9ef !important;
+            border: 1px solid #93b8e0 !important;
+            color: #27364a !important;
+        }
+
+        body.light-theme .ssh-btn-secondary:hover {
+            background: #b8cce4 !important;
+            color: #172033 !important;
+        }
+
+        body.light-theme .ssh-btn-probe {
+            background: linear-gradient(135deg, #3ba8e8, #1f86d8) !important;
+            border: 1px solid transparent !important;
+            color: #ffffff !important;
+        }
+
+        body.light-theme .ssh-btn-probe:hover {
+            background: linear-gradient(135deg, #1f86d8, #186fb6) !important;
+        }
+
+        body.light-theme .ssh-btn-approve {
+            background: linear-gradient(135deg, #f5c451, #dfa62f) !important;
+            border: 1px solid #ce9220 !important;
+            color: #3f2b05 !important;
+        }
+
+        body.light-theme .ssh-btn-approve:hover {
+            background: linear-gradient(135deg, #e9b43b, #cb9020) !important;
+            color: #2f2004 !important;
+        }
+
         /* Intervaly sekcia v zariadení - svetlá téma (handled in redesign block below) */
 
         /* Požadované služby sekcia - svetlá téma */
@@ -3031,7 +3146,7 @@
 
     <div id="sshHostKeyModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-[60] p-4">
         <div class="card rounded-xl w-full max-w-2xl modal-content overflow-hidden">
-            <div class="px-6 py-5 border-b border-gray-700 bg-slate-900/70 flex items-center gap-3">
+            <div class="ssh-host-key-header px-6 py-5 border-b border-gray-700 bg-slate-900/70 flex items-center gap-3">
                 <i class="fas fa-shield-halved text-amber-400 text-xl"></i>
                 <div>
                     <h2 class="text-xl font-bold text-white">SSH identita zariadenia</h2>
@@ -3042,31 +3157,31 @@
                 <div id="sshHostKeyMessage" class="rounded-lg border p-4 text-sm"></div>
                 <div class="space-y-3">
                     <div>
-                        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Potvrdený fingerprint</div>
+                        <div class="ssh-host-key-label text-xs uppercase tracking-wide text-gray-500 mb-1">Potvrdený fingerprint</div>
                         <div id="sshTrustedFingerprint" class="font-mono text-sm break-all text-gray-300">—</div>
                     </div>
                     <div>
-                        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Nový fingerprint čakajúci na potvrdenie</div>
+                        <div class="ssh-host-key-label text-xs uppercase tracking-wide text-gray-500 mb-1">Nový fingerprint čakajúci na potvrdenie</div>
                         <div id="sshPendingFingerprint" class="font-mono text-sm break-all text-amber-300">—</div>
                     </div>
                     <div id="sshPendingDetectedWrap" class="hidden">
-                        <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Zistený</div>
+                        <div class="ssh-host-key-label text-xs uppercase tracking-wide text-gray-500 mb-1">Zistený</div>
                         <div id="sshPendingDetected" class="text-sm text-gray-300"></div>
                     </div>
                 </div>
-                <p class="text-xs text-gray-400">
+                <p class="ssh-host-key-help text-xs text-gray-400">
                     Nový fingerprint potvrďte iba vtedy, keď viete overiť, že patrí tomuto MikroTiku.
                 </p>
             </div>
-            <div class="px-6 py-4 border-t border-gray-700 flex flex-wrap justify-end gap-3">
+            <div class="ssh-host-key-footer px-6 py-4 border-t border-gray-700 flex flex-wrap justify-end gap-3">
                 <button id="closeSshHostKeyBtn" type="button"
-                    class="btn bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg">Zavrieť</button>
+                    class="ssh-btn-secondary btn bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg">Zavrieť</button>
                 <button id="probeSshHostKeyBtn" type="button"
-                    class="btn bg-sky-700 hover:bg-sky-600 text-white py-2 px-4 rounded-lg flex items-center gap-2">
+                    class="ssh-btn-probe btn bg-sky-700 hover:bg-sky-600 text-white py-2 px-4 rounded-lg flex items-center gap-2">
                     <i class="fas fa-satellite-dish"></i>Načítať fingerprint
                 </button>
                 <button id="approveSshHostKeyBtn" type="button"
-                    class="hidden btn bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
+                    class="ssh-btn-approve hidden btn bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
                     <i class="fas fa-check"></i>Potvrdiť nový kľúč
                 </button>
             </div>
@@ -3075,7 +3190,7 @@
 
     <div id="sshHostKeyConfirmModal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center hidden z-[70] p-4">
         <div class="card rounded-xl w-full max-w-lg modal-content overflow-hidden border border-amber-600/60">
-            <div class="px-6 py-5 border-b border-amber-700/50 bg-amber-950/40 flex items-center gap-3">
+            <div class="ssh-host-key-header px-6 py-5 border-b border-amber-700/50 bg-amber-950/40 flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
                     <i class="fas fa-shield-halved text-amber-400 text-lg"></i>
                 </div>
@@ -3085,19 +3200,19 @@
                 </div>
             </div>
             <div class="p-6 space-y-4">
-                <p class="text-sm text-gray-300">
+                <p class="ssh-confirm-copy text-sm text-gray-300">
                     Potvrďte iba kľúč, ktorý ste overili ako dôveryhodný. Od tejto chvíle ho aplikácia použije na kontrolu identity MikroTiku.
                 </p>
-                <div class="rounded-lg border border-amber-700/60 bg-slate-950/60 p-4">
-                    <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Fingerprint na potvrdenie</div>
+                <div class="ssh-confirm-fingerprint-panel rounded-lg border border-amber-700/60 bg-slate-950/60 p-4">
+                    <div class="ssh-host-key-label text-xs uppercase tracking-wide text-gray-500 mb-2">Fingerprint na potvrdenie</div>
                     <div id="sshConfirmFingerprint" class="font-mono text-sm break-all text-amber-300"></div>
                 </div>
             </div>
-            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
+            <div class="ssh-host-key-footer px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
                 <button id="cancelSshHostKeyApprovalBtn" type="button"
-                    class="btn bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg">Zrušiť</button>
+                    class="ssh-btn-secondary btn bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg">Zrušiť</button>
                 <button id="confirmSshHostKeyApprovalBtn" type="button"
-                    class="btn bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
+                    class="ssh-btn-approve btn bg-amber-600 hover:bg-amber-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2">
                     <i class="fas fa-check"></i>Áno, potvrdiť kľúč
                 </button>
             </div>
@@ -4146,13 +4261,13 @@
 
                 const message = document.getElementById('sshHostKeyMessage');
                 const messages = {
-                    trusted: ['SSH identita zariadenia je potvrdená.', 'border-emerald-700 bg-emerald-950/40 text-emerald-300'],
-                    unverified: ['SSH identita ešte nebola načítaná. Načítanie fingerprintu neodošle prihlasovacie heslo.', 'border-amber-700 bg-amber-950/40 text-amber-200'],
-                    pending: ['Nový SSH fingerprint čaká na vaše potvrdenie. Dovtedy sú SSH zálohy tohto zariadenia zablokované.', 'border-amber-600 bg-amber-950/40 text-amber-200'],
-                    changed: ['Pozor: SSH identita zariadenia sa zmenila. Potvrďte ju iba po overení zmeny na MikroTiku.', 'border-red-600 bg-red-950/40 text-red-300']
+                    trusted: 'SSH identita zariadenia je potvrdená.',
+                    unverified: 'SSH identita ešte nebola načítaná. Načítanie fingerprintu neodošle prihlasovacie heslo.',
+                    pending: 'Nový SSH fingerprint čaká na vaše potvrdenie. Dovtedy sú SSH zálohy tohto zariadenia zablokované.',
+                    changed: 'Pozor: SSH identita zariadenia sa zmenila. Potvrďte ju iba po overení zmeny na MikroTiku.'
                 }[status];
-                message.textContent = messages[0];
-                message.className = `rounded-lg border p-4 text-sm ${messages[1]}`;
+                message.textContent = messages;
+                message.className = `ssh-host-key-message ssh-state-${status} rounded-lg border p-4 text-sm`;
 
                 const approveButton = document.getElementById('approveSshHostKeyBtn');
                 approveButton.classList.toggle('hidden', !device.ssh_pending_fingerprint);

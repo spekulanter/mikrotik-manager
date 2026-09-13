@@ -3256,16 +3256,19 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                                <div class="md:col-span-2">
                                     <label for="deviceSnmpV3AuthPassword" class="device-field-label">Autentifikačné heslo</label>
                                     <div class="password-input-container">
                                         <input type="password" id="deviceSnmpV3AuthPassword" class="device-input w-full p-3 pr-10 rounded-lg" autocomplete="new-password">
                                         <i id="deviceSnmpAuthToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpV3AuthPassword" data-secret-field="snmp_v3_auth_password"></i>
                                     </div>
-                                    <div class="flex items-center justify-between mt-1 text-xs"><span id="deviceSnmpAuthStored" class="snmp-secret-strength"></span><span><button type="button" class="text-purple-300 hover:text-white" data-snmp-generate="deviceSnmpV3AuthPassword">Generovať</button> · <button type="button" class="text-purple-300 hover:text-white" data-snmp-copy="deviceSnmpV3AuthPassword">Kopírovať</button></span></div>
+                                    <div class="mt-1 text-xs">
+                                        <span><button type="button" class="text-purple-300 hover:text-white" data-snmp-generate="deviceSnmpV3AuthPassword">Generovať</button> · <button type="button" class="text-purple-300 hover:text-white" data-snmp-copy="deviceSnmpV3AuthPassword">Kopírovať</button></span>
+                                        <span id="deviceSnmpAuthStored" class="snmp-secret-strength ml-2"></span>
+                                    </div>
                                 </div>
-                                <div id="deviceSnmpPrivacyFields">
+                                <div id="deviceSnmpPrivacyFields" class="md:col-span-3">
                                     <div class="flex gap-2 items-end">
                                         <div class="flex-1">
                                             <label for="deviceSnmpV3PrivPassword" class="device-field-label">Šifrovacie heslo</label>
@@ -3274,9 +3277,18 @@
                                                 <i id="deviceSnmpPrivToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpV3PrivPassword" data-secret-field="snmp_v3_priv_password"></i>
                                             </div>
                                         </div>
-                                        <select id="deviceSnmpV3PrivProtocol" class="device-input p-3 rounded-lg"><option value="AES">AES</option><option value="DES">DES</option></select>
+                                        <div class="w-32 shrink-0">
+                                            <label for="deviceSnmpV3PrivProtocol" class="device-field-label">Šifrovací protokol</label>
+                                            <select id="deviceSnmpV3PrivProtocol" class="device-input w-full p-3 rounded-lg"><option value="AES">AES</option><option value="DES">DES</option></select>
+                                        </div>
                                     </div>
-                                    <div class="flex items-center justify-between mt-1 text-xs"><span id="deviceSnmpPrivStored" class="snmp-secret-strength"></span><span><button type="button" class="text-purple-300 hover:text-white" data-snmp-generate="deviceSnmpV3PrivPassword">Generovať</button> · <button type="button" class="text-purple-300 hover:text-white" data-snmp-copy="deviceSnmpV3PrivPassword">Kopírovať</button></span></div>
+                                    <div class="flex gap-2 mt-1 text-xs">
+                                        <div class="flex-1 min-w-0">
+                                            <span><button type="button" class="text-purple-300 hover:text-white" data-snmp-generate="deviceSnmpV3PrivPassword">Generovať</button> · <button type="button" class="text-purple-300 hover:text-white" data-snmp-copy="deviceSnmpV3PrivPassword">Kopírovať</button></span>
+                                            <span id="deviceSnmpPrivStored" class="snmp-secret-strength ml-2"></span>
+                                        </div>
+                                        <div class="w-32 shrink-0"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -5677,8 +5689,7 @@
                 const length = value.length;
                 status.classList.remove('is-too-short', 'is-valid', 'is-strong');
                 if (!length) {
-                    status.textContent = isStored ? 'Heslo je uložené · klikni pre úpravu' : '';
-                    if (isStored) status.classList.add('is-strong');
+                    status.textContent = '';
                     return;
                 }
                 if (length < 8) {

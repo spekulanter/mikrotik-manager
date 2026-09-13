@@ -1646,6 +1646,13 @@
             box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1) !important;
         }
         .device-input::placeholder { color: #475569 !important; }
+        .device-input.stored-secret-placeholder::placeholder {
+            color: #f8fafc !important;
+            opacity: 1;
+        }
+        .device-input.secret-value-loading {
+            caret-color: transparent !important;
+        }
 
         /* Low memory checkbox label */
         .device-lowmem-label {
@@ -1740,6 +1747,9 @@
             box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.12) !important;
         }
         body.light-theme .device-input::placeholder { color: #7ea8d0 !important; }
+        body.light-theme .device-input.stored-secret-placeholder::placeholder {
+            color: #334155 !important;
+        }
         body.light-theme .device-lowmem-label {
             background: rgba(186, 215, 242, 0.3);
             border-color: rgba(120, 170, 220, 0.5);
@@ -3006,19 +3016,12 @@
                                 <label for="devicePassword" class="device-field-label">
                                     <i class="fas fa-key text-yellow-400"></i>Heslo
                                 </label>
-                                <input type="password" id="devicePassword"
-                                    class="device-input w-full p-3 rounded-lg"
-                                    placeholder="Zadajte heslo pre SSH pripojenie" autocomplete="off">
-                            </div>
-                            <div>
-                                <label for="deviceSnmpCommunity" class="device-field-label">
-                                    <i class="fas fa-wifi text-purple-400"></i>SNMP Community
-                                </label>
                                 <div class="password-input-container">
-                                    <input type="password" id="deviceSnmpCommunity"
+                                    <input type="password" id="devicePassword"
                                         class="device-input w-full p-3 pr-10 rounded-lg"
-                                        placeholder="public" autocomplete="off">
-                                    <i class="fas fa-eye password-toggle" data-target="deviceSnmpCommunity"></i>
+                                        placeholder="Zadajte heslo pre SSH pripojenie" autocomplete="off">
+                                    <i id="devicePasswordToggle" class="fas fa-eye password-toggle"
+                                        data-target="devicePassword" data-secret-field="password"></i>
                                 </div>
                             </div>
                             <label for="deviceLowMemory" class="device-lowmem-label flex items-center gap-2.5 cursor-pointer select-none">
@@ -3070,6 +3073,99 @@
                         </div>
                     </div>
 
+                    <div id="deviceSnmpMonitoringCard" class="required-services-card rounded-xl border border-purple-800/50 bg-purple-950/20 p-4 space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <div class="device-form-section-title"><i class="fas fa-shield-halved text-purple-400 text-xs"></i><span>SNMP monitoring</span></div>
+                                <p class="text-xs text-gray-400 mt-1">SNMPv3 chráni monitoring autentifikáciou a voliteľným šifrovaním.</p>
+                            </div>
+                            <select id="deviceSnmpVersion" class="device-input p-2.5 rounded-lg font-semibold">
+                                <option value="3">SNMPv3 (odporúčané)</option>
+                                <option value="2c">SNMPv2c (kompatibilné)</option>
+                            </select>
+                        </div>
+
+                        <div id="deviceSnmpV2Fields" class="hidden">
+                            <label for="deviceSnmpCommunity" class="device-field-label"><i class="fas fa-key text-purple-400"></i>Community</label>
+                            <div class="password-input-container">
+                                <input type="password" id="deviceSnmpCommunity" class="device-input w-full p-3 pr-10 rounded-lg" placeholder="public" autocomplete="new-password">
+                                <i id="deviceSnmpCommunityToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpCommunity" data-secret-field="snmp_community"></i>
+                            </div>
+                            <small id="deviceSnmpCommunityStored" class="hidden text-emerald-400 mt-1">Community je bezpečne uložená; kliknutie do poľa ju načíta maskovanú a oko ju zobrazí.</small>
+                        </div>
+
+                        <div id="deviceSnmpV3Fields" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label for="deviceSnmpV3Username" class="device-field-label">Používateľ</label>
+                                    <input id="deviceSnmpV3Username" class="device-input w-full p-3 rounded-lg" value="mikrotik-manager" autocomplete="off">
+                                </div>
+                                <div>
+                                    <label for="deviceSnmpV3Security" class="device-field-label">Úroveň zabezpečenia</label>
+                                    <select id="deviceSnmpV3Security" class="device-input w-full p-3 rounded-lg">
+                                        <option value="authPriv">authPriv · odporúčané</option>
+                                        <option value="authNoPriv">authNoPriv</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="deviceSnmpV3AuthProtocol" class="device-field-label">Autentifikácia</label>
+                                    <select id="deviceSnmpV3AuthProtocol" class="device-input w-full p-3 rounded-lg">
+                                        <option value="SHA1">SHA1 · odporúčané</option><option value="MD5">MD5</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label for="deviceSnmpV3AuthPassword" class="device-field-label">Autentifikačné heslo</label>
+                                    <div class="password-input-container">
+                                        <input type="password" id="deviceSnmpV3AuthPassword" class="device-input w-full p-3 pr-10 rounded-lg" autocomplete="new-password">
+                                        <i id="deviceSnmpAuthToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpV3AuthPassword" data-secret-field="snmp_v3_auth_password"></i>
+                                    </div>
+                                    <div class="flex items-center justify-between mt-1 text-xs"><span id="deviceSnmpAuthStored" class="text-emerald-400"></span><span><button type="button" class="text-purple-300 hover:text-white" data-snmp-generate="deviceSnmpV3AuthPassword">Generovať</button> · <button type="button" class="text-purple-300 hover:text-white" data-snmp-copy="deviceSnmpV3AuthPassword">Kopírovať</button></span></div>
+                                </div>
+                                <div id="deviceSnmpPrivacyFields">
+                                    <div class="flex gap-2 items-end">
+                                        <div class="flex-1">
+                                            <label for="deviceSnmpV3PrivPassword" class="device-field-label">Šifrovacie heslo</label>
+                                            <div class="password-input-container">
+                                                <input type="password" id="deviceSnmpV3PrivPassword" class="device-input w-full p-3 pr-10 rounded-lg" autocomplete="new-password">
+                                                <i id="deviceSnmpPrivToggle" class="fas fa-eye password-toggle" data-target="deviceSnmpV3PrivPassword" data-secret-field="snmp_v3_priv_password"></i>
+                                            </div>
+                                        </div>
+                                        <select id="deviceSnmpV3PrivProtocol" class="device-input p-3 rounded-lg"><option value="AES">AES</option><option value="DES">DES</option></select>
+                                    </div>
+                                    <div class="flex items-center justify-between mt-1 text-xs"><span id="deviceSnmpPrivStored" class="text-emerald-400"></span><span><button type="button" class="text-purple-300 hover:text-white" data-snmp-generate="deviceSnmpV3PrivPassword">Generovať</button> · <button type="button" class="text-purple-300 hover:text-white" data-snmp-copy="deviceSnmpV3PrivPassword">Kopírovať</button></span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="rounded-lg border border-gray-700/70 p-3">
+                            <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="deviceSnmpRestrictSource" checked><span class="text-sm font-medium">Povoliť SNMP iba z IP adresy MikroTik Managera / Nastaveného subnetu</span></label>
+                            <div id="deviceSnmpAddressFields" class="flex gap-2 mt-2">
+                                <input id="deviceSnmpAllowedAddress" class="device-input flex-1 p-2.5 rounded-lg" placeholder="192.0.2.10/32">
+                                <button type="button" id="detectSnmpSourceBtn" class="btn bg-gray-700 hover:bg-gray-600 px-3 rounded-lg text-sm">Zistiť /32</button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Ide o <code>/snmp community address</code>, nie o <code>/ip service available-from</code>.</p>
+                        </div>
+
+                        <div>
+                            <label for="deviceSnmpLocation" class="device-field-label"><i class="fas fa-location-dot text-purple-400"></i>Location na MikroTiku (voliteľné)</label>
+                            <input id="deviceSnmpLocation" class="device-input w-full p-3 rounded-lg" maxlength="255" placeholder="Napr. Ulica, budova alebo serverovňa" autocomplete="off">
+                            <p class="text-xs text-gray-500 mt-1">Pri provisioningu sa zapíše do <code>/snmp location</code>. Prázdne pole existujúcu hodnotu na MikroTiku nemení.</p>
+                        </div>
+
+                        <div id="deviceSnmpTestResult" class="hidden rounded-lg border p-3 text-sm"></div>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" id="testDeviceSnmpBtn" class="btn bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg"><i class="fas fa-vial mr-2"></i>Otestovať SNMP</button>
+                            <button type="button" id="provisionDeviceSnmpBtn" class="hidden btn bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg"><i class="fas fa-terminal mr-2"></i>Nastaviť na MikroTiku</button>
+                        </div>
+                        <details class="text-xs text-gray-400">
+                            <summary class="cursor-pointer text-purple-300 font-semibold">Čo musí byť nastavené na MikroTiku?</summary>
+                            <div class="mt-2 space-y-2"><p>SNMP musí byť povolené, UDP/161 dostupné z manažéra a v <code>/snmp community</code> musí byť rovnaký používateľ, security level, protokoly a heslá.</p><button type="button" id="copySnmpGuideBtn" class="text-purple-300 hover:text-white">Kopírovať vzor príkazu</button><pre id="snmpGuideCommand" class="bg-slate-950/70 rounded p-3 overflow-x-auto">/snmp set enabled=yes
+/snmp community add name="mikrotik-manager" security=private authentication-protocol=SHA1 authentication-password="&lt;AUTH&gt;" encryption-protocol=AES encryption-password="&lt;PRIV&gt;" address=192.0.2.10/32 read-access=yes write-access=no</pre></div>
+                        </details>
+                    </div>
+
                     <!-- Požadované služby -->
                     <div class="required-services-card rounded-xl border border-sky-800/50 bg-sky-950/30 p-4">
                         <div class="flex items-center gap-2 mb-3">
@@ -3092,7 +3188,7 @@
                                 <i class="fas fa-shield-halved text-sky-400"></i>www-ssl
                             </span>
                             <span class="device-service-badge">
-                                <i class="fas fa-chart-bar text-purple-400"></i>snmp (v2c)
+                                <i class="fas fa-chart-bar text-purple-400"></i>snmp (v2c/v3)
                             </span>
                         </div>
                         <p class="text-xs text-gray-500 mt-2.5 italic">
@@ -3139,6 +3235,59 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="snmpProvisionModal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center hidden z-[70] p-4">
+        <div class="card rounded-xl w-full max-w-xl modal-content overflow-hidden border border-emerald-700/50">
+            <div class="device-modal-header px-6 py-5 flex items-center gap-3">
+                <i class="fas fa-shield-halved text-emerald-400 text-xl"></i>
+                <div><h2 id="snmpProvisionTitle" class="text-lg font-bold text-white">Nastaviť SNMP cez SSH</h2><p class="text-xs text-gray-400">Zmeny sa vykonajú až po potvrdení.</p></div>
+            </div>
+            <div class="p-6 space-y-4">
+                <pre id="snmpProvisionSummary" class="bg-slate-950/70 border border-gray-700 rounded-lg p-4 text-sm text-gray-300 whitespace-pre-wrap"></pre>
+                <p class="text-xs text-gray-400"><i class="fas fa-key mr-1 text-amber-400"></i>SSH účet potrebuje oprávnenia <code>read</code>, <code>write</code> a <code>sensitive</code>. Použije sa iba potvrdený SSH fingerprint.</p>
+                <div class="flex items-start gap-2 rounded-lg border border-sky-800/50 bg-sky-950/20 p-3">
+                    <i class="fas fa-circle-info mt-0.5 text-sky-400"></i>
+                    <span><span class="text-sm text-sky-300 font-medium">Použije sa existujúca predvolená SNMP community</span><span class="block text-xs text-gray-500 mt-1">Ak cieľový účet ešte neexistuje, systémový záznam <code>default=yes</code> sa premenuje a zabezpečí. Nový záznam sa vytvorí iba vtedy, keď predvolený záznam nie je dostupný.</span></span>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
+                <button type="button" id="cancelSnmpProvisionBtn" class="btn bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg">Zrušiť</button>
+                <button type="button" id="confirmSnmpProvisionBtn" class="btn bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded-lg font-semibold"><i class="fas fa-terminal mr-2"></i>Nastaviť a otestovať</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="snmpOverwriteModal" class="fixed inset-0 bg-black bg-opacity-85 flex items-center justify-center hidden z-[80] p-4">
+        <div class="card rounded-xl w-full max-w-md modal-content overflow-hidden border border-amber-600/60 shadow-2xl">
+            <div class="px-6 py-5 border-b border-amber-800/50 bg-amber-950/30 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-triangle-exclamation text-amber-400 text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">SNMP záznam už existuje</h2>
+                    <p class="text-xs text-gray-400">Vyžaduje sa potvrdenie aktualizácie</p>
+                </div>
+            </div>
+            <div class="p-6 space-y-4">
+                <p id="snmpOverwriteMessage" class="text-sm text-gray-300"></p>
+                <div class="rounded-lg border border-gray-700 bg-slate-950/60 p-4">
+                    <div class="text-xs uppercase tracking-wide text-gray-500 mb-1">Community / účet</div>
+                    <div id="snmpOverwriteAccount" class="font-mono text-amber-300 break-all"></div>
+                </div>
+                <p class="text-xs text-gray-400">
+                    Aktualizuje sa iba tento SNMP záznam. Ostatné community a účty zostanú nezmenené.
+                </p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
+                <button type="button" id="cancelSnmpOverwriteBtn"
+                    class="btn bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">Zrušiť</button>
+                <button type="button" id="confirmSnmpOverwriteBtn"
+                    class="btn bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-2 rounded-lg">
+                    <i class="fas fa-pen-to-square mr-2"></i>Aktualizovať
+                </button>
+            </div>
         </div>
     </div>
 
@@ -5161,7 +5310,368 @@
                 });
             };
 
+            let deviceSnmpFormDirty = false;
+            let deviceSnmpSettingsChanged = false;
+
+            const markDeviceSnmpSettingsChanged = () => {
+                deviceSnmpSettingsChanged = true;
+            };
+            document.getElementById('deviceSnmpMonitoringCard').addEventListener('input', markDeviceSnmpSettingsChanged);
+            document.getElementById('deviceSnmpMonitoringCard').addEventListener('change', markDeviceSnmpSettingsChanged);
+
+            const updateSnmpFields = () => {
+                const isV3 = document.getElementById('deviceSnmpVersion').value === '3';
+                document.getElementById('deviceSnmpV2Fields').classList.toggle('hidden', isV3);
+                document.getElementById('deviceSnmpV3Fields').classList.toggle('hidden', !isV3);
+                document.getElementById('deviceSnmpPrivacyFields').classList.toggle(
+                    'hidden', !isV3 || document.getElementById('deviceSnmpV3Security').value !== 'authPriv'
+                );
+                const restrict = document.getElementById('deviceSnmpRestrictSource').checked;
+                document.getElementById('deviceSnmpAddressFields').classList.toggle('hidden', !restrict);
+                document.getElementById('provisionDeviceSnmpBtn').classList.toggle(
+                    'hidden', !document.getElementById('deviceId').value
+                );
+            };
+
+            const updateStoredSecretToggle = (inputId, toggleId, isStored) => {
+                const input = document.getElementById(inputId);
+                const toggle = document.getElementById(toggleId);
+                input.dataset.secretStored = isStored ? 'true' : 'false';
+                input.classList.toggle('stored-secret-placeholder', isStored && !input.value);
+                toggle.classList.add('password-toggle');
+                toggle.classList.remove('fa-lock', 'fa-spinner', 'fa-spin', 'fa-eye', 'fa-eye-slash');
+                toggle.classList.add(input.type === 'text' && input.value ? 'fa-eye-slash' : 'fa-eye');
+                if (!input.value) {
+                    input.type = 'password';
+                }
+                toggle.title = isStored && !input.value
+                    ? 'Bezpečne načítať a zobraziť uloženú hodnotu'
+                    : 'Zobraziť alebo skryť zadanú hodnotu';
+            };
+
+            const setStoredSecretPlaceholder = (inputId, configured, length, emptyPlaceholder) => {
+                const input = document.getElementById(inputId);
+                const parsedLength = Number.parseInt(length, 10);
+                const secretLength = configured && parsedLength > 0 ? parsedLength : (configured ? 10 : 0);
+                input.dataset.secretLength = String(secretLength);
+                input.placeholder = configured ? '•'.repeat(secretLength) : emptyPlaceholder;
+            };
+
+            const deviceSecretFieldPairs = [
+                ['devicePassword', 'devicePasswordToggle'],
+                ['deviceSnmpCommunity', 'deviceSnmpCommunityToggle'],
+                ['deviceSnmpV3AuthPassword', 'deviceSnmpAuthToggle'],
+                ['deviceSnmpV3PrivPassword', 'deviceSnmpPrivToggle']
+            ];
+            const pendingDeviceSecretRequests = new Map();
+            let deviceSecretModalGeneration = 0;
+
+            const cancelPendingDeviceSecretRequests = () => {
+                deviceSecretFieldPairs.forEach(([inputId, toggleId]) => {
+                    const controller = pendingDeviceSecretRequests.get(inputId);
+                    if (!controller) return;
+                    controller.abort();
+                    const input = document.getElementById(inputId);
+                    input.classList.remove('secret-value-loading');
+                    delete input.dataset.secretLoading;
+                    updateStoredSecretToggle(inputId, toggleId, input.dataset.secretStored === 'true');
+                });
+                pendingDeviceSecretRequests.clear();
+            };
+
+            const clearLoadedDeviceSecrets = () => {
+                deviceSecretModalGeneration += 1;
+                cancelPendingDeviceSecretRequests();
+                deviceSecretFieldPairs.forEach(([inputId, toggleId]) => {
+                    const input = document.getElementById(inputId);
+                    const toggle = document.getElementById(toggleId);
+                    input.value = '';
+                    input.type = 'password';
+                    input.classList.remove('secret-value-loading');
+                    delete input.dataset.secretLoading;
+                    delete input.dataset.requestedCaret;
+                    toggle.classList.remove('fa-spinner', 'fa-spin', 'fa-eye-slash');
+                    toggle.classList.add('fa-eye', 'password-toggle');
+                });
+            };
+
+            const rememberMaskedSecretCaret = (input, clientX) => {
+                if (input.value || input.dataset.secretStored !== 'true') return;
+                const secretLength = Number.parseInt(input.dataset.secretLength, 10);
+                if (!secretLength) return;
+                const style = window.getComputedStyle(input);
+                const canvas = rememberMaskedSecretCaret.canvas ||
+                    (rememberMaskedSecretCaret.canvas = document.createElement('canvas'));
+                const context = canvas.getContext('2d');
+                context.font = style.font;
+                const glyphWidth = context.measureText('•').width;
+                const letterSpacing = Number.parseFloat(style.letterSpacing) || 0;
+                const step = Math.max(glyphWidth + letterSpacing, 1);
+                const textStart = input.getBoundingClientRect().left +
+                    (Number.parseFloat(style.paddingLeft) || 0) - input.scrollLeft;
+                const requestedCaret = Math.max(0, Math.min(
+                    secretLength,
+                    Math.round((clientX - textStart) / step)
+                ));
+                input.dataset.requestedCaret = String(requestedCaret);
+            };
+
+            const loadStoredDeviceSecret = async (passwordInput, toggleIcon, showPlaintext = false) => {
+                const secretField = toggleIcon?.getAttribute('data-secret-field');
+                if (!passwordInput || !toggleIcon || passwordInput.value ||
+                    passwordInput.dataset.secretStored !== 'true' || !secretField ||
+                    passwordInput.dataset.secretLoading === 'true') return false;
+                const deviceId = document.getElementById('deviceId').value;
+                if (!deviceId) return false;
+
+                const originalClasses = toggleIcon.className;
+                const requestGeneration = deviceSecretModalGeneration;
+                const controller = new AbortController();
+                pendingDeviceSecretRequests.get(passwordInput.id)?.abort();
+                pendingDeviceSecretRequests.set(passwordInput.id, controller);
+                passwordInput.dataset.secretLoading = 'true';
+                passwordInput.classList.add('secret-value-loading');
+                toggleIcon.className = 'fas fa-spinner fa-spin password-toggle';
+                try {
+                    const response = await fetch(`/api/devices/${deviceId}/secrets/reveal`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({field: secretField}),
+                        signal: controller.signal
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || 'Tajomstvo sa nepodarilo načítať.');
+                    if (controller.signal.aborted || requestGeneration !== deviceSecretModalGeneration ||
+                        document.getElementById('deviceId').value !== deviceId || passwordInput.value) {
+                        return false;
+                    }
+                    passwordInput.value = result.value;
+                    passwordInput.classList.remove('stored-secret-placeholder');
+                    passwordInput.type = showPlaintext ? 'text' : 'password';
+                    toggleIcon.className = `fas ${showPlaintext ? 'fa-eye-slash' : 'fa-eye'} password-toggle`;
+                    toggleIcon.title = showPlaintext ? 'Skryť hodnotu' : 'Zobraziť hodnotu';
+                    if (!showPlaintext) {
+                        requestAnimationFrame(() => {
+                            const end = passwordInput.value.length;
+                            const requestedCaret = Number.parseInt(passwordInput.dataset.requestedCaret, 10);
+                            const caret = Number.isInteger(requestedCaret)
+                                ? Math.max(0, Math.min(requestedCaret, end))
+                                : end;
+                            passwordInput.setSelectionRange(caret, caret);
+                            delete passwordInput.dataset.requestedCaret;
+                            passwordInput.classList.remove('secret-value-loading');
+                        });
+                    } else {
+                        passwordInput.classList.remove('secret-value-loading');
+                    }
+                    return true;
+                } catch (error) {
+                    if (error.name === 'AbortError') return false;
+                    toggleIcon.className = originalClasses;
+                    passwordInput.classList.remove('secret-value-loading');
+                    showToast(error.message || 'Tajomstvo sa nepodarilo načítať.', 'error');
+                    return false;
+                } finally {
+                    if (pendingDeviceSecretRequests.get(passwordInput.id) === controller) {
+                        pendingDeviceSecretRequests.delete(passwordInput.id);
+                        delete passwordInput.dataset.secretLoading;
+                    }
+                }
+            };
+
+            const collectSnmpPayload = () => ({
+                device_id: document.getElementById('deviceId').value || null,
+                ip: document.getElementById('deviceIp').value.trim(),
+                snmp_version: document.getElementById('deviceSnmpVersion').value,
+                snmp_community: document.getElementById('deviceSnmpCommunity').value,
+                snmp_v3_username: document.getElementById('deviceSnmpV3Username').value.trim(),
+                snmp_v3_security_level: document.getElementById('deviceSnmpV3Security').value,
+                snmp_v3_auth_protocol: document.getElementById('deviceSnmpV3AuthProtocol').value,
+                snmp_v3_auth_password: document.getElementById('deviceSnmpV3AuthPassword').value,
+                snmp_v3_priv_protocol: document.getElementById('deviceSnmpV3PrivProtocol').value,
+                snmp_v3_priv_password: document.getElementById('deviceSnmpV3PrivPassword').value,
+                snmp_location: document.getElementById('deviceSnmpLocation').value.trim(),
+                snmp_allowed_address: document.getElementById('deviceSnmpRestrictSource').checked
+                    ? document.getElementById('deviceSnmpAllowedAddress').value.trim() : '',
+            });
+
+            const showSnmpTestResult = (ok, message) => {
+                const box = document.getElementById('deviceSnmpTestResult');
+                box.className = `rounded-lg border p-3 text-sm ${ok ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300' : 'border-red-700 bg-red-950/40 text-red-300'}`;
+                box.textContent = message;
+            };
+
+            const generateSnmpPassword = () => {
+                const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%^*+=-_.';
+                const result = [];
+                while (result.length < 24) {
+                    const bytes = new Uint8Array(32);
+                    crypto.getRandomValues(bytes);
+                    bytes.forEach(value => {
+                        if (result.length < 24 && value < 256 - (256 % alphabet.length)) result.push(alphabet[value % alphabet.length]);
+                    });
+                }
+                return result.join('');
+            };
+
+            document.getElementById('deviceSnmpVersion').addEventListener('change', updateSnmpFields);
+            document.getElementById('deviceSnmpV3Security').addEventListener('change', updateSnmpFields);
+            document.getElementById('deviceSnmpRestrictSource').addEventListener('change', updateSnmpFields);
+            document.querySelectorAll('[data-snmp-generate]').forEach(button => button.addEventListener('click', () => {
+                const input = document.getElementById(button.dataset.snmpGenerate);
+                input.value = generateSnmpPassword();
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                showToast('Vygenerované silné 24-znakové heslo.', 'success');
+            }));
+            document.querySelectorAll('[data-snmp-copy]').forEach(button => button.addEventListener('click', async () => {
+                const value = document.getElementById(button.dataset.snmpCopy).value;
+                if (!value) return showToast('Pole neobsahuje nové heslo.', 'warning');
+                await navigator.clipboard.writeText(value);
+                showToast('Heslo bolo skopírované.', 'success');
+            }));
+            [['deviceSnmpV3AuthPassword', 'deviceSnmpAuthStored'], ['deviceSnmpV3PrivPassword', 'deviceSnmpPrivStored']].forEach(([inputId, statusId]) => {
+                document.getElementById(inputId).addEventListener('input', event => {
+                    const length = event.target.value.length;
+                    document.getElementById(statusId).textContent = length
+                        ? `${length} znakov · ${length >= 16 ? 'silné' : length >= 8 ? 'platné' : 'príliš krátke'}`
+                        : (event.target.dataset.secretStored === 'true' ? 'Heslo je bezpečne uložené; kliknutie do poľa ho načíta maskované' : '');
+                });
+            });
+            deviceSecretFieldPairs.forEach(([inputId, toggleId]) => {
+                const input = document.getElementById(inputId);
+                const toggle = document.getElementById(toggleId);
+                input.addEventListener('input', event => {
+                    pendingDeviceSecretRequests.get(inputId)?.abort();
+                    pendingDeviceSecretRequests.delete(inputId);
+                    updateStoredSecretToggle(inputId, toggleId, event.target.dataset.secretStored === 'true');
+                });
+                input.addEventListener('pointerdown', event => rememberMaskedSecretCaret(input, event.clientX));
+                input.addEventListener('focus', () => loadStoredDeviceSecret(input, toggle, false));
+            });
+            document.getElementById('copySnmpGuideBtn').addEventListener('click', async () => {
+                await navigator.clipboard.writeText(document.getElementById('snmpGuideCommand').textContent);
+                showToast('Vzor RouterOS príkazu bol skopírovaný.', 'success');
+            });
+            document.getElementById('detectSnmpSourceBtn').addEventListener('click', async () => {
+                const response = await fetch('/api/snmp/detect-source', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ip: document.getElementById('deviceIp').value.trim()})
+                });
+                const result = await response.json();
+                if (!response.ok) return showToast(result.message, 'error');
+                document.getElementById('deviceSnmpAllowedAddress').value = result.cidr;
+                document.getElementById('deviceSnmpAllowedAddress').dispatchEvent(new Event('input', {bubbles: true}));
+            });
+            document.getElementById('deviceIp').addEventListener('blur', () => {
+                if (document.getElementById('deviceSnmpRestrictSource').checked &&
+                    !document.getElementById('deviceSnmpAllowedAddress').value.trim() &&
+                    document.getElementById('deviceIp').value.trim()) {
+                    document.getElementById('detectSnmpSourceBtn').click();
+                }
+            });
+            document.getElementById('testDeviceSnmpBtn').addEventListener('click', async () => {
+                const button = document.getElementById('testDeviceSnmpBtn');
+                button.disabled = true;
+                showSnmpTestResult(true, 'Prebieha SNMP test…');
+                try {
+                    const response = await fetch('/api/snmp/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(collectSnmpPayload())});
+                    const result = await response.json();
+                    showSnmpTestResult(response.ok, response.ok
+                        ? `${result.message} ${result.identity || ''} · RouterOS ${result.routeros_version || 'N/A'} · ${result.response_ms} ms`
+                        : result.message);
+                } catch (_) { showSnmpTestResult(false, 'SNMP test sa nepodarilo spustiť.'); }
+                finally { button.disabled = false; }
+            });
+            let pendingSnmpProvisionDeviceId = null;
+            document.getElementById('provisionDeviceSnmpBtn').addEventListener('click', () => {
+                const deviceId = document.getElementById('deviceId').value;
+                if (!deviceId || deviceSnmpFormDirty) return showToast('Najprv uložte všetky zmeny zariadenia.', 'warning');
+                const config = collectSnmpPayload();
+                const isV3 = config.snmp_version === '3';
+                document.getElementById('snmpProvisionTitle').textContent = `Nastaviť SNMPv${isV3 ? '3' : '2c'} cez SSH`;
+                const summary = [
+                    `Zariadenie: ${document.getElementById('deviceName').value} (${config.ip})`,
+                    `${isV3 ? 'Účet' : 'Community'}: ${isV3 ? config.snmp_v3_username : (config.snmp_community || 'uložená hodnota')}`,
+                    `Povolený zdroj: ${config.snmp_allowed_address || 'bez obmedzenia (0.0.0.0/0)'}`,
+                    `Location: ${config.snmp_location || 'bez zmeny'}`,
+                    'Prístup: iba na čítanie'
+                ];
+                if (isV3) summary.splice(2, 0,
+                    `Zabezpečenie: ${config.snmp_v3_security_level}`,
+                    `Autentifikácia: ${config.snmp_v3_auth_protocol}`,
+                    `Šifrovanie: ${config.snmp_v3_security_level === 'authPriv' ? config.snmp_v3_priv_protocol : 'bez privacy'}`
+                );
+                document.getElementById('snmpProvisionSummary').textContent = summary.join('\n');
+                pendingSnmpProvisionDeviceId = deviceId;
+                document.getElementById('snmpProvisionModal').classList.remove('hidden');
+            });
+            document.getElementById('cancelSnmpProvisionBtn').addEventListener('click', () => {
+                pendingSnmpProvisionDeviceId = null;
+                document.getElementById('snmpProvisionModal').classList.add('hidden');
+            });
+            let snmpOverwriteResolver = null;
+            const requestSnmpOverwriteConfirmation = (message, account) => new Promise(resolve => {
+                document.getElementById('snmpOverwriteMessage').textContent = message;
+                document.getElementById('snmpOverwriteAccount').textContent = account;
+                document.getElementById('snmpOverwriteModal').classList.remove('hidden');
+                snmpOverwriteResolver = resolve;
+            });
+            const closeSnmpOverwriteConfirmation = confirmed => {
+                document.getElementById('snmpOverwriteModal').classList.add('hidden');
+                const resolve = snmpOverwriteResolver;
+                snmpOverwriteResolver = null;
+                if (resolve) resolve(confirmed);
+            };
+            document.getElementById('cancelSnmpOverwriteBtn').addEventListener('click', () => closeSnmpOverwriteConfirmation(false));
+            document.getElementById('confirmSnmpOverwriteBtn').addEventListener('click', () => closeSnmpOverwriteConfirmation(true));
+            document.getElementById('snmpOverwriteModal').addEventListener('click', event => {
+                if (event.target.id === 'snmpOverwriteModal') closeSnmpOverwriteConfirmation(false);
+            });
+            document.getElementById('confirmSnmpProvisionBtn').addEventListener('click', async () => {
+                if (!pendingSnmpProvisionDeviceId) return;
+                const button = document.getElementById('confirmSnmpProvisionBtn');
+                const deviceId = pendingSnmpProvisionDeviceId;
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Nastavujem…';
+                const sendProvision = async overwrite => {
+                    const response = await fetch(`/api/devices/${deviceId}/snmp/provision`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({overwrite})
+                    });
+                    const result = await response.json();
+                    if (response.status === 409 && result.error === 'snmp_account_exists' && !overwrite) {
+                        const confirmed = await requestSnmpOverwriteConfirmation(result.message, result.account);
+                        if (confirmed) return sendProvision(true);
+                        document.getElementById('snmpProvisionModal').classList.add('hidden');
+                        showSnmpTestResult(false, 'Existujúci SNMP účet nebol zmenený.');
+                    } else {
+                        document.getElementById('snmpProvisionModal').classList.add('hidden');
+                        showSnmpTestResult(response.ok, result.message + (result.warning ? ` ${result.warning}` : ''));
+                    }
+                };
+                try { await sendProvision(false); }
+                catch (_) {
+                    document.getElementById('snmpProvisionModal').classList.add('hidden');
+                    showSnmpTestResult(false, 'Provisioning sa nepodarilo spustiť.');
+                }
+                finally {
+                    button.disabled = false;
+                    button.innerHTML = '<i class="fas fa-terminal mr-2"></i>Nastaviť a otestovať';
+                    pendingSnmpProvisionDeviceId = null;
+                }
+            });
+
+            deviceForm.addEventListener('input', () => {
+                if (!document.getElementById('deviceModal').classList.contains('hidden')) {
+                    deviceSnmpFormDirty = true;
+                    const button = document.getElementById('provisionDeviceSnmpBtn');
+                    button.disabled = true;
+                    button.title = 'Najprv uložte zmeny zariadenia';
+                }
+            });
+
             const openDeviceModal = async (device = null) => {
+                clearLoadedDeviceSecrets();
                 try {
                     await refreshFrontendGlobalSettings();
                 } catch (error) {
@@ -5174,7 +5684,23 @@
                 document.getElementById('deviceName').value = device ? device.name : '';
                 document.getElementById('deviceIp').value = device ? device.ip : '';
                 document.getElementById('deviceUsername').value = device ? device.username : '';
-                document.getElementById('deviceSnmpCommunity').value = device ? (device.snmp_community || '') : '';
+                document.getElementById('deviceSnmpVersion').value = device ? (device.snmp_version || '2c') : '3';
+                document.getElementById('deviceSnmpCommunity').value = '';
+                document.getElementById('deviceSnmpV3Username').value = device ? (device.snmp_v3_username || 'mikrotik-manager') : 'mikrotik-manager';
+                document.getElementById('deviceSnmpV3Security').value = device ? (device.snmp_v3_security_level || 'authPriv') : 'authPriv';
+                document.getElementById('deviceSnmpV3AuthProtocol').value = device ? (device.snmp_v3_auth_protocol || 'SHA1') : 'SHA1';
+                document.getElementById('deviceSnmpV3PrivProtocol').value = device ? (device.snmp_v3_priv_protocol || 'AES') : 'AES';
+                document.getElementById('deviceSnmpV3AuthPassword').value = '';
+                document.getElementById('deviceSnmpV3PrivPassword').value = '';
+                document.getElementById('deviceSnmpAllowedAddress').value = device ? (device.snmp_allowed_address || '') : '';
+                document.getElementById('deviceSnmpRestrictSource').checked = device ? Boolean(device.snmp_allowed_address) : true;
+                document.getElementById('deviceSnmpLocation').value = device ? (device.snmp_location || '') : '';
+                document.getElementById('deviceSnmpCommunityStored').classList.toggle('hidden', !(device && device.snmp_community_configured));
+                document.getElementById('deviceSnmpAuthStored').textContent = device && device.snmp_v3_auth_password_configured ? 'Heslo je bezpečne uložené; kliknutie do poľa ho načíta maskované' : '';
+                document.getElementById('deviceSnmpPrivStored').textContent = device && device.snmp_v3_priv_password_configured ? 'Heslo je bezpečne uložené; kliknutie do poľa ho načíta maskované' : '';
+                updateStoredSecretToggle('deviceSnmpCommunity', 'deviceSnmpCommunityToggle', Boolean(device && device.snmp_community_configured));
+                updateStoredSecretToggle('deviceSnmpV3AuthPassword', 'deviceSnmpAuthToggle', Boolean(device && device.snmp_v3_auth_password_configured));
+                updateStoredSecretToggle('deviceSnmpV3PrivPassword', 'deviceSnmpPrivToggle', Boolean(device && device.snmp_v3_priv_password_configured));
                 document.getElementById('deviceSnmpInterval').value = device ? (device.snmp_interval_minutes || 0) : 0;
                 document.getElementById('devicePingInterval').value = device ? (device.ping_interval_seconds || 0) : 0;
                 document.getElementById('devicePingRetryInterval').value = device ? (device.ping_retry_interval_seconds || 0) : 0;
@@ -5189,24 +5715,28 @@
                 // Heslo sa nikdy neposiela späť na frontend, takže ho nevyplňujeme
                 document.getElementById('devicePassword').value = '';
                 document.getElementById('devicePassword').required = !device; // Heslo je povinné len pre nové zariadenia
+                updateStoredSecretToggle('devicePassword', 'devicePasswordToggle', Boolean(device && device.password_configured));
 
                 // Dynamický placeholder text pre heslo
                 const passwordField = document.getElementById('devicePassword');
                 if (device) {
-                    passwordField.placeholder = '●●●●●●●●';
+                    setStoredSecretPlaceholder('devicePassword', Boolean(device.password_configured), device.password_length, 'Zadajte heslo pre SSH pripojenie');
                 } else {
                     passwordField.placeholder = 'Zadajte heslo pre SSH pripojenie';
+                    passwordField.dataset.secretLength = '0';
                 }
 
-                // Dynamický placeholder text pre SNMP Community
-                const snmpCommunityField = document.getElementById('deviceSnmpCommunity');
-                if (device && device.snmp_community) {
-                    snmpCommunityField.value = device.snmp_community;
-                    snmpCommunityField.placeholder = '';
-                } else {
-                    snmpCommunityField.value = '';
-                    snmpCommunityField.placeholder = 'public';
-                }
+                setStoredSecretPlaceholder('deviceSnmpCommunity', Boolean(device && device.snmp_community_configured), device?.snmp_community_length, 'public');
+                setStoredSecretPlaceholder('deviceSnmpV3AuthPassword', Boolean(device && device.snmp_v3_auth_password_configured), device?.snmp_v3_auth_password_length, 'min. 8 znakov');
+                setStoredSecretPlaceholder('deviceSnmpV3PrivPassword', Boolean(device && device.snmp_v3_priv_password_configured), device?.snmp_v3_priv_password_length, 'min. 8 znakov');
+                document.getElementById('deviceSnmpTestResult').classList.add('hidden');
+                const provisionButton = document.getElementById('provisionDeviceSnmpBtn');
+                provisionButton.classList.toggle('hidden', !device);
+                provisionButton.disabled = false;
+                provisionButton.title = '';
+                updateSnmpFields();
+                deviceSnmpFormDirty = false;
+                deviceSnmpSettingsChanged = false;
 
                 clearDeviceValidation();
                 deviceModal.classList.remove('hidden');
@@ -5237,6 +5767,7 @@
             };
 
             const _closeDeviceModalDOM = () => {
+                clearLoadedDeviceSecrets();
                 deviceModal.classList.add('hidden');
                 document.body.classList.remove('modal-open');
             };
@@ -6326,7 +6857,8 @@
 
             deviceForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const snmpCommunityValue = document.getElementById('deviceSnmpCommunity').value.trim();
+                cancelPendingDeviceSecretRequests();
+                const snmpPayload = collectSnmpPayload();
                 const pingIntervalInput = document.getElementById('devicePingInterval');
                 const retryIntervalInput = document.getElementById('devicePingRetryInterval');
                 const pingInterval = isNaN(parseInt(pingIntervalInput.value, 10)) ? 0 : parseInt(pingIntervalInput.value, 10);
@@ -6357,7 +6889,7 @@
                     ip: document.getElementById('deviceIp').value,
                     username: document.getElementById('deviceUsername').value,
                     password: document.getElementById('devicePassword').value,
-                    snmp_community: snmpCommunityValue || 'public', // Ak je prázdne, použije sa "public"
+                    ...snmpPayload,
                     snmp_interval_minutes: parseInt(document.getElementById('deviceSnmpInterval').value) || 0,
                     ping_interval_seconds: pingInterval || 0,
                     ping_retry_interval_seconds: retryInterval || 0,
@@ -6365,6 +6897,7 @@
                     cert_www_ssl_port: certWwwSslPort || 0,
                     low_memory: document.getElementById('deviceLowMemory').checked,
                 };
+                const keepDeviceModalOpenForSnmp = Boolean(body.id) && deviceSnmpSettingsChanged;
                 let result;
                 try {
                     const res = await fetch(`${API_URL}/api/devices`, {
@@ -6389,8 +6922,50 @@
                     );
                     return;
                 }
-                closeModal();
-                loadDevices();
+                await loadDevices();
+
+                if (keepDeviceModalOpenForSnmp) {
+                    deviceSnmpFormDirty = false;
+                    deviceSnmpSettingsChanged = false;
+
+                    // Po uložení znovu schovaj tajomstvá. Provisioning používa
+                    // čerstvo uloženú konfiguráciu priamo zo servera.
+                    const sshStored = document.getElementById('devicePassword').dataset.secretStored === 'true' || Boolean(body.password);
+                    const communityStored = document.getElementById('deviceSnmpCommunity').dataset.secretStored === 'true' || Boolean(body.snmp_community);
+                    const authStored = document.getElementById('deviceSnmpV3AuthPassword').dataset.secretStored === 'true' || Boolean(body.snmp_v3_auth_password);
+                    const privStored = document.getElementById('deviceSnmpV3PrivPassword').dataset.secretStored === 'true' || Boolean(body.snmp_v3_priv_password);
+                    const storedLengthAfterSave = (inputId, submittedValue) => submittedValue
+                        ? submittedValue.length
+                        : Number.parseInt(document.getElementById(inputId).dataset.secretLength, 10) || 10;
+                    const sshLength = storedLengthAfterSave('devicePassword', body.password);
+                    const communityLength = storedLengthAfterSave('deviceSnmpCommunity', body.snmp_community);
+                    const authLength = storedLengthAfterSave('deviceSnmpV3AuthPassword', body.snmp_v3_auth_password);
+                    const privLength = storedLengthAfterSave('deviceSnmpV3PrivPassword', body.snmp_v3_priv_password);
+                    document.getElementById('devicePassword').value = '';
+                    document.getElementById('deviceSnmpCommunity').value = '';
+                    document.getElementById('deviceSnmpV3AuthPassword').value = '';
+                    document.getElementById('deviceSnmpV3PrivPassword').value = '';
+                    updateStoredSecretToggle('devicePassword', 'devicePasswordToggle', sshStored);
+                    updateStoredSecretToggle('deviceSnmpCommunity', 'deviceSnmpCommunityToggle', communityStored);
+                    updateStoredSecretToggle('deviceSnmpV3AuthPassword', 'deviceSnmpAuthToggle', authStored);
+                    updateStoredSecretToggle('deviceSnmpV3PrivPassword', 'deviceSnmpPrivToggle', privStored);
+                    setStoredSecretPlaceholder('devicePassword', sshStored, sshLength, 'Zadajte heslo pre SSH pripojenie');
+                    setStoredSecretPlaceholder('deviceSnmpCommunity', communityStored, communityLength, 'public');
+                    setStoredSecretPlaceholder('deviceSnmpV3AuthPassword', authStored, authLength, 'min. 8 znakov');
+                    setStoredSecretPlaceholder('deviceSnmpV3PrivPassword', privStored, privLength, 'min. 8 znakov');
+                    document.getElementById('deviceSnmpCommunityStored').classList.toggle('hidden', !communityStored);
+                    document.getElementById('deviceSnmpAuthStored').textContent = authStored ? 'Heslo je bezpečne uložené; kliknutie do poľa ho načíta maskované' : '';
+                    document.getElementById('deviceSnmpPrivStored').textContent = privStored ? 'Heslo je bezpečne uložené; kliknutie do poľa ho načíta maskované' : '';
+
+                    const provisionButton = document.getElementById('provisionDeviceSnmpBtn');
+                    provisionButton.disabled = false;
+                    provisionButton.title = '';
+                    updateSnmpFields();
+                    showSnmpTestResult(true, 'SNMP nastavenie bolo uložené. Teraz ho môžete preniesť na MikroTik tlačidlom „Nastaviť na MikroTiku“.');
+                    showToast('Zariadenie bolo uložené; okno zostáva otvorené pre SNMP provisioning.', 'success');
+                } else {
+                    closeModal();
+                }
 
                 if (!body.id && result.status === 'success') {
                     showToast(
@@ -6466,12 +7041,18 @@
             });
 
             // === Password Toggle Functionality ===
-            document.addEventListener('click', function (e) {
+            document.addEventListener('click', async function (e) {
                 const toggleIcon = e.target.closest('.password-toggle');
                 if (toggleIcon) {
                     const targetId = toggleIcon.getAttribute('data-target');
                     const passwordInput = document.getElementById(targetId);
                     if (!passwordInput) return;
+
+                    const secretField = toggleIcon.getAttribute('data-secret-field');
+                    if (!passwordInput.value && passwordInput.dataset.secretStored === 'true' && secretField) {
+                        await loadStoredDeviceSecret(passwordInput, toggleIcon, true);
+                        return;
+                    }
 
                     if (passwordInput.type === 'password') {
                         passwordInput.type = 'text';

@@ -50,6 +50,7 @@ from cryptography.fernet import Fernet
 import base64 as b64
 import requests
 import xml.etree.ElementTree as ET
+import ipaddress
 
 # --- Definície adresárov pred konfiguráciou aplikácie ---
 DATA_DIR = os.environ.get('DATA_DIR', '/var/lib/mikrotik-manager/data')
@@ -708,6 +709,9 @@ def get_device_with_decrypted_password(device_dict):
             device_dict['password'] = decrypt_password(device_dict['password'])
         if 'snmp_community' in device_dict and device_dict['snmp_community'] is not None:
             device_dict['snmp_community'] = decrypt_password(device_dict['snmp_community'])
+        for secret_field in ('snmp_v3_auth_password', 'snmp_v3_priv_password'):
+            if secret_field in device_dict and device_dict[secret_field] is not None:
+                device_dict[secret_field] = decrypt_password(device_dict[secret_field])
     return device_dict
 
 def prepare_devices_with_decrypted_passwords(devices):
@@ -718,6 +722,9 @@ def prepare_devices_with_decrypted_passwords(devices):
 snmp_refresh_tasks = {}
 sequential_snmp_refresh_running = False
 snmp_refresh_progress = {'current': 0, 'total': 0}
+# Gunicorn/Eventlet greenlets share one OS thread. PySNMP owns short-lived
+# asyncio loops, which must not overlap in that thread.
+snmp_asyncio_lock = threading.Lock()
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -827,7 +834,16 @@ def init_database():
                 last_snmp_check TIMESTAMP, ping_interval_seconds INTEGER DEFAULT 0,
                 ping_retry_interval_seconds INTEGER DEFAULT 0, monitoring_paused BOOLEAN DEFAULT 0,
                 cert_www_port INTEGER DEFAULT 0, cert_www_ssl_port INTEGER DEFAULT 0,
-                routeros_update_channel TEXT DEFAULT NULL
+                routeros_update_channel TEXT DEFAULT NULL,
+                snmp_version TEXT NOT NULL DEFAULT '2c',
+                snmp_v3_username TEXT DEFAULT NULL,
+                snmp_v3_security_level TEXT DEFAULT 'authPriv',
+                snmp_v3_auth_protocol TEXT DEFAULT 'SHA1',
+                snmp_v3_auth_password TEXT DEFAULT NULL,
+                snmp_v3_priv_protocol TEXT DEFAULT 'AES',
+                snmp_v3_priv_password TEXT DEFAULT NULL,
+                snmp_allowed_address TEXT DEFAULT NULL,
+                snmp_location TEXT DEFAULT NULL
             )
         ''')
         cursor.execute('''
@@ -887,6 +903,22 @@ def init_database():
             cursor.execute('ALTER TABLE devices ADD COLUMN routeros_update_channel TEXT DEFAULT NULL')
         except sqlite3.OperationalError:
             pass
+        snmp_v3_columns = (
+            ("snmp_version", "TEXT NOT NULL DEFAULT '2c'"),
+            ("snmp_v3_username", "TEXT DEFAULT NULL"),
+            ("snmp_v3_security_level", "TEXT DEFAULT 'authPriv'"),
+            ("snmp_v3_auth_protocol", "TEXT DEFAULT 'SHA1'"),
+            ("snmp_v3_auth_password", "TEXT DEFAULT NULL"),
+            ("snmp_v3_priv_protocol", "TEXT DEFAULT 'AES'"),
+            ("snmp_v3_priv_password", "TEXT DEFAULT NULL"),
+            ("snmp_allowed_address", "TEXT DEFAULT NULL"),
+            ("snmp_location", "TEXT DEFAULT NULL"),
+        )
+        for column_name, column_definition in snmp_v3_columns:
+            try:
+                cursor.execute(f'ALTER TABLE devices ADD COLUMN {column_name} {column_definition}')
+            except sqlite3.OperationalError:
+                pass
 
         # Pridanie memory stĺpcov do snmp_history tabuľky
         try:
@@ -1075,12 +1107,12 @@ def before_request_handler():
 SENSITIVE_LOG_PATTERNS = [
     re.compile(
         r"(?i)(\b(?:password|passwd|pwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|"
-        r"snmp[_-]?community|ftp[_-]?password|totp|recovery[_-]?code|backup[_-]?code)\b"
+        r"snmp[_-]?community|snmp[_-]?v3[_-]?(?:auth|priv)[_-]?password|ftp[_-]?password|totp|recovery[_-]?code|backup[_-]?code)\b"
         r"[\"']?\s*[:=]\s*)([\"'])[^\r\n]*?\2"
     ),
     re.compile(
         r"(?i)(\b(?:password|passwd|pwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|"
-        r"snmp[_-]?community|ftp[_-]?password|totp|recovery[_-]?code|backup[_-]?code)\b"
+        r"snmp[_-]?community|snmp[_-]?v3[_-]?(?:auth|priv)[_-]?password|ftp[_-]?password|totp|recovery[_-]?code|backup[_-]?code)\b"
         r"[\"']?\s*[:=]\s*)(?![\"'])[^\s,;}&]+"
     ),
     re.compile(r"(?i)(ftp|sftp|http|https)://([^:\s/@]+):([^@\s/]+)@"),
@@ -1791,7 +1823,126 @@ def migrate_backups_for_ip_change(old_ip, new_ip, settings):
 
     return result
 
-def get_snmp_data(ip, community='public'):
+SNMP_VERSIONS = {'2c', '3'}
+SNMP_V3_SECURITY_LEVELS = {'authNoPriv', 'authPriv'}
+SNMP_V3_AUTH_PROTOCOLS = {'SHA1', 'MD5'}
+SNMP_V3_PRIV_PROTOCOLS = {'AES', 'DES'}
+
+
+def validate_snmp_config(config, require_secrets=True):
+    """Normalize and validate a per-device SNMP configuration."""
+    config = dict(config or {})
+    version = str(config.get('snmp_version') or '2c')
+    normalized = {
+        'snmp_version': version,
+        'snmp_community': str(config.get('snmp_community') or ''),
+        'snmp_v3_username': str(config.get('snmp_v3_username') or '').strip(),
+        'snmp_v3_security_level': str(config.get('snmp_v3_security_level') or 'authPriv'),
+        'snmp_v3_auth_protocol': str(config.get('snmp_v3_auth_protocol') or 'SHA1').upper(),
+        'snmp_v3_auth_password': str(config.get('snmp_v3_auth_password') or ''),
+        'snmp_v3_priv_protocol': str(config.get('snmp_v3_priv_protocol') or 'AES').upper(),
+        'snmp_v3_priv_password': str(config.get('snmp_v3_priv_password') or ''),
+        'snmp_allowed_address': str(config.get('snmp_allowed_address') or '').strip(),
+    }
+    if version not in SNMP_VERSIONS:
+        return None, 'SNMP verzia musí byť 2c alebo 3.'
+    if normalized['snmp_allowed_address']:
+        try:
+            ipaddress.ip_network(normalized['snmp_allowed_address'], strict=False)
+        except ValueError:
+            return None, 'Povolená SNMP adresa musí byť platná IP sieť v CIDR formáte.'
+    if version == '2c':
+        if require_secrets and not normalized['snmp_community']:
+            return None, 'SNMPv2c community je povinná.'
+        return normalized, None
+    if not normalized['snmp_v3_username']:
+        return None, 'SNMPv3 používateľské meno je povinné.'
+    if normalized['snmp_v3_security_level'] not in SNMP_V3_SECURITY_LEVELS:
+        return None, 'Nepodporovaná bezpečnostná úroveň SNMPv3.'
+    if normalized['snmp_v3_auth_protocol'] not in SNMP_V3_AUTH_PROTOCOLS:
+        return None, 'SNMPv3 autentifikácia musí byť SHA1 alebo MD5.'
+    if require_secrets and len(normalized['snmp_v3_auth_password']) < 8:
+        return None, 'SNMPv3 autentifikačné heslo musí mať aspoň 8 znakov.'
+    if normalized['snmp_v3_security_level'] == 'authPriv':
+        if normalized['snmp_v3_priv_protocol'] not in SNMP_V3_PRIV_PROTOCOLS:
+            return None, 'SNMPv3 šifrovanie musí byť AES alebo DES.'
+        if require_secrets and len(normalized['snmp_v3_priv_password']) < 8:
+            return None, 'SNMPv3 šifrovacie heslo musí mať aspoň 8 znakov.'
+    return normalized, None
+
+
+def build_snmp_credentials(config):
+    """Create the PySNMP authentication object for SNMPv2c or SNMPv3."""
+    from pysnmp.hlapi.v3arch.asyncio import (
+        CommunityData, UsmUserData, USM_AUTH_HMAC96_MD5,
+        USM_AUTH_HMAC96_SHA, USM_PRIV_CBC56_DES, USM_PRIV_CFB128_AES,
+    )
+    normalized, error = validate_snmp_config(config, require_secrets=True)
+    if error:
+        raise ValueError(error)
+    if normalized['snmp_version'] == '2c':
+        return CommunityData(normalized['snmp_community'], mpModel=1)
+    auth_protocol = {
+        'MD5': USM_AUTH_HMAC96_MD5,
+        'SHA1': USM_AUTH_HMAC96_SHA,
+    }[normalized['snmp_v3_auth_protocol']]
+    if normalized['snmp_v3_security_level'] == 'authNoPriv':
+        return UsmUserData(
+            normalized['snmp_v3_username'],
+            authKey=normalized['snmp_v3_auth_password'],
+            authProtocol=auth_protocol,
+        )
+    priv_protocol = {
+        'DES': USM_PRIV_CBC56_DES,
+        'AES': USM_PRIV_CFB128_AES,
+    }[normalized['snmp_v3_priv_protocol']]
+    return UsmUserData(
+        normalized['snmp_v3_username'],
+        authKey=normalized['snmp_v3_auth_password'],
+        privKey=normalized['snmp_v3_priv_password'],
+        authProtocol=auth_protocol,
+        privProtocol=priv_protocol,
+    )
+
+
+def merge_device_snmp_config(data, existing=None, new_device=False):
+    """Merge submitted SNMP fields with stored secrets and return validated config."""
+    existing = get_device_with_decrypted_password(dict(existing)) if existing else {}
+    # API callers that predate SNMPv3 keep the historical v2c behavior. The
+    # current device form explicitly submits v3 for newly-created devices.
+    version_default = '2c' if new_device else (existing.get('snmp_version') or '2c')
+    merged = {}
+    for field, default in (
+        ('snmp_version', version_default),
+        ('snmp_community', 'public' if new_device else ''),
+        ('snmp_v3_username', 'mikrotik-manager'),
+        ('snmp_v3_security_level', 'authPriv'),
+        ('snmp_v3_auth_protocol', 'SHA1'),
+        ('snmp_v3_auth_password', ''),
+        ('snmp_v3_priv_protocol', 'AES'),
+        ('snmp_v3_priv_password', ''),
+        ('snmp_allowed_address', ''),
+    ):
+        submitted = data.get(field)
+        if field in {'snmp_community', 'snmp_v3_auth_password', 'snmp_v3_priv_password'}:
+            merged[field] = submitted if submitted not in (None, '') else existing.get(field, default)
+        else:
+            merged[field] = submitted if submitted is not None else existing.get(field, default)
+    return validate_snmp_config(merged, require_secrets=True)
+
+
+def encrypted_snmp_values(config):
+    return {
+        'snmp_community': encrypt_password(config['snmp_community']) if config['snmp_community'] else None,
+        'snmp_v3_auth_password': encrypt_password(config['snmp_v3_auth_password']) if config['snmp_v3_auth_password'] else None,
+        'snmp_v3_priv_password': encrypt_password(config['snmp_v3_priv_password']) if config['snmp_v3_priv_password'] else None,
+    }
+
+
+def get_snmp_data(ip, config=None, diagnostic=False):
+    if isinstance(config, str):
+        config = {'snmp_version': '2c', 'snmp_community': config}
+    config = config or {'snmp_version': '2c', 'snmp_community': 'public'}
     oids = {
         'identity': '1.3.6.1.2.1.1.5.0',
         'uptime': '1.3.6.1.2.1.1.3.0',
@@ -1811,7 +1962,7 @@ def get_snmp_data(ip, community='public'):
         import asyncio
         import socket
         from pysnmp.hlapi.v3arch.asyncio import (
-            CommunityData, ContextData, ObjectIdentity, ObjectType, SnmpEngine,
+            ContextData, ObjectIdentity, ObjectType, SnmpEngine,
             UdpTransportTarget, get_cmd, walk_cmd,
         )
         from datetime import timedelta
@@ -1819,6 +1970,7 @@ def get_snmp_data(ip, community='public'):
         HRPROCESSORLOAD_TABLE = '1.3.6.1.2.1.25.3.3.1.2'
         
         object_types = [ObjectType(ObjectIdentity(oid)) for oid in oids.values()]
+        credentials = build_snmp_credentials(config)
 
         class SyncDnsUdpTransportTarget(UdpTransportTarget):
             """Resolve synchronously because this function owns a short-lived event loop."""
@@ -1837,7 +1989,7 @@ def get_snmp_data(ip, community='public'):
                 )
                 return await get_cmd(
                     snmp_engine,
-                    CommunityData(community, mpModel=1),
+                    credentials,
                     transport,
                     ContextData(),
                     *object_types,
@@ -1854,7 +2006,7 @@ def get_snmp_data(ip, community='public'):
                 rows = []
                 async for response in walk_cmd(
                     snmp_engine,
-                    CommunityData(community, mpModel=1),
+                    credentials,
                     transport,
                     ContextData(),
                     ObjectType(ObjectIdentity(HRPROCESSORLOAD_TABLE)),
@@ -1864,12 +2016,20 @@ def get_snmp_data(ip, community='public'):
                 return rows
             finally:
                 snmp_engine.close_dispatcher()
+
+        def run_snmp_async(coroutine_factory):
+            # Create the coroutine only after acquiring the lock. Otherwise a
+            # rejected overlapping asyncio.run() would leak an un-awaited
+            # coroutine and produce an additional RuntimeWarning.
+            with snmp_asyncio_lock:
+                return asyncio.run(coroutine_factory())
         
         # Jeden hromadný SNMPv2c (mpModel=1) dopyt pre všetky hodnoty naraz
         # Odstránená umelá pauza, prenos letí v 1 balíku
-        errorIndication, errorStatus, errorIndex, varBinds = asyncio.run(snmp_get())
+        errorIndication, errorStatus, errorIndex, varBinds = run_snmp_async(snmp_get)
         
         if errorIndication or errorStatus:
+            diagnostic_error = str(errorIndication or errorStatus)
             # Handler pre offline zariadenie (alebo blokovaný SNMP)
             for name in oids.keys():
                 results[name] = 'N/A'
@@ -1908,7 +2068,7 @@ def get_snmp_data(ip, community='public'):
             try:
                 core_loads = []
                 core_count = 0
-                for (errInd, errStat, _, varBinds) in asyncio.run(snmp_walk_cpu_load()):
+                for (errInd, errStat, _, varBinds) in run_snmp_async(snmp_walk_cpu_load):
                     if errInd or errStat:
                         break
                     for oid, val in varBinds:
@@ -1976,11 +2136,15 @@ def get_snmp_data(ip, community='public'):
                 del results[key]
         if 'uptime_seconds' not in results:
             results['uptime_seconds'] = '0'
+        if diagnostic and 'diagnostic_error' in locals():
+            results['_error'] = diagnostic_error
         return results
     except Exception as e:
         add_log('error', f"SNMP query for IP {ip} failed: {e}", device_ip=ip)
         fallback = {k: 'N/A' for k in ['identity','uptime','version','board_name','cpu_load','temperature','cpu_count','memory_usage','used_memory','total_memory','free_memory']}
         fallback['uptime_seconds'] = '0'
+        if diagnostic:
+            fallback['_error'] = str(e)
         return fallback
 
 def sync_missing_backups_to_ftp(device_ip, settings):
@@ -4271,7 +4435,12 @@ def handle_devices():
             # Include all necessary fields including status and last_snmp_data
             devices = []
             for row in conn.execute('''
-                SELECT d.id, d.name, d.ip, d.username, d.low_memory, d.snmp_community,
+                SELECT d.id, d.name, d.ip, d.username, d.low_memory,
+                       d.password, d.snmp_community,
+                       d.snmp_version, d.snmp_v3_username, d.snmp_v3_security_level,
+                       d.snmp_v3_auth_protocol, d.snmp_v3_auth_password,
+                       d.snmp_v3_priv_protocol, d.snmp_v3_priv_password,
+                       d.snmp_allowed_address, d.snmp_location,
                        d.snmp_interval_minutes, d.ping_interval_seconds,
                        d.ping_retry_interval_seconds, d.cert_www_port,
                        d.cert_www_ssl_port, d.monitoring_paused, d.status,
@@ -4288,7 +4457,19 @@ def handle_devices():
                 WHERE d.deleted_at IS NULL
                 ORDER BY LOWER(d.name)
             ''').fetchall():
-                device = get_device_with_decrypted_password(dict(row))
+                device = dict(row)
+                for secret_field, api_prefix in (
+                    ('password', 'password'),
+                    ('snmp_community', 'snmp_community'),
+                    ('snmp_v3_auth_password', 'snmp_v3_auth_password'),
+                    ('snmp_v3_priv_password', 'snmp_v3_priv_password'),
+                ):
+                    encrypted_value = device.pop(secret_field, None)
+                    device[f'{api_prefix}_configured'] = bool(encrypted_value)
+                    try:
+                        device[f'{api_prefix}_length'] = len(decrypt_password_strict(encrypted_value)) if encrypted_value else 0
+                    except Exception:
+                        device[f'{api_prefix}_length'] = 0
                 trusted_for_current_ip = bool(device.get('ssh_trusted_fingerprint')) and (
                     device.get('ssh_trusted_host') == device['ip']
                 )
@@ -4335,7 +4516,7 @@ def handle_devices():
             try:
                 if data.get('id'):
                     # Získame staré nastavenia pre detekciu zmien intervalov
-                    old_device = conn.execute('SELECT ip, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
+                    old_device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
                     if not old_device:
                         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
                     old_ip = old_device['ip']
@@ -4348,23 +4529,41 @@ def handle_devices():
                     new_snmp_interval = data.get('snmp_interval_minutes', 0)
                     new_ping_interval = data.get('ping_interval_seconds', 0)
                     new_ping_retry_interval = data.get('ping_retry_interval_seconds', 0)
-                    encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
+                    new_snmp_location = str(data.get('snmp_location', old_device['snmp_location'] or '') or '').strip()
+                    if len(new_snmp_location) > 255:
+                        return jsonify({'status': 'error', 'message': 'SNMP Location môže mať najviac 255 znakov.'}), 400
+                    snmp_config, snmp_error = merge_device_snmp_config(data, old_device)
+                    if snmp_error:
+                        return jsonify({'status': 'error', 'message': snmp_error}), 400
+                    old_snmp_config, _ = validate_snmp_config(
+                        get_device_with_decrypted_password(dict(old_device)), require_secrets=True
+                    )
+                    snmp_config_changed = old_snmp_config != snmp_config
+                    snmp_secrets = encrypted_snmp_values(snmp_config)
                     
                     # Pri editácii zachováme pôvodné heslo ak nie je zadané nové
                     device_name = data['name'].strip()
                     if data.get('password'):
                         # Ak je zadané nové heslo, aktualizujeme všetko vrátane hesla
                         encrypted_password = encrypt_password(data['password'])
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
                                    (device_name, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
-                                    encrypted_snmp_community, new_snmp_interval,
+                                    snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
+                                    snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
+                                    snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
+                                    snmp_secrets['snmp_v3_priv_password'], snmp_config['snmp_allowed_address'] or None,
+                                    new_snmp_location or None, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval,
                                     new_cert_www_port, new_cert_www_ssl_port, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
-                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
+                        conn.execute("UPDATE devices SET name=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
                                    (device_name, data['ip'], data['username'], data.get('low_memory', False),
-                                    encrypted_snmp_community, new_snmp_interval,
+                                    snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
+                                    snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
+                                    snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
+                                    snmp_secrets['snmp_v3_priv_password'], snmp_config['snmp_allowed_address'] or None,
+                                    new_snmp_location or None, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval,
                                     new_cert_www_port, new_cert_www_ssl_port, data['id']))
                     if ip_changed:
@@ -4394,10 +4593,13 @@ def handle_devices():
                                 data['ip']
                             )
                     # Okamžitý health check ak sa zmenil SNMP interval zariadenia
-                    if old_snmp_interval != new_snmp_interval:
+                    if old_snmp_interval != new_snmp_interval or snmp_config_changed:
                         device_name = data.get('name', f'ID {data["id"]}')
-                        trigger_immediate_health_check(f"zmena SNMP intervalu zariadenia {device_name} ({old_snmp_interval}→{new_snmp_interval}min)")
-                        change_messages.append(f"SNMP interval {old_snmp_interval}→{new_snmp_interval} min (spustený health check)")
+                        trigger_immediate_health_check(f"zmena SNMP nastavenia zariadenia {device_name}")
+                        if old_snmp_interval != new_snmp_interval:
+                            change_messages.append(f"SNMP interval {old_snmp_interval}→{new_snmp_interval} min")
+                        if snmp_config_changed:
+                            change_messages.append(f"SNMP konfigurácia → v{snmp_config['snmp_version']}")
                     if old_ping_interval != new_ping_interval:
                         change_messages.append(f"Ping interval {old_ping_interval}→{new_ping_interval} s")
                     if old_ping_retry_interval != new_ping_retry_interval:
@@ -4426,10 +4628,21 @@ def handle_devices():
 
                     cursor = conn.cursor()
                     encrypted_password = encrypt_password(data['password'])
-                    encrypted_snmp_community = encrypt_password(data.get('snmp_community', 'public'))
-                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    snmp_config, snmp_error = merge_device_snmp_config(data, new_device=True)
+                    if snmp_error:
+                        return jsonify({'status': 'error', 'message': snmp_error}), 400
+                    snmp_secrets = encrypted_snmp_values(snmp_config)
+                    new_snmp_location = str(data.get('snmp_location') or '').strip()
+                    if len(new_snmp_location) > 255:
+                        return jsonify({'status': 'error', 'message': 'SNMP Location môže mať najviac 255 znakov.'}), 400
+                    cursor.execute("INSERT INTO devices (name, ip, username, password, low_memory, snmp_community, snmp_version, snmp_v3_username, snmp_v3_security_level, snmp_v3_auth_protocol, snmp_v3_auth_password, snmp_v3_priv_protocol, snmp_v3_priv_password, snmp_allowed_address, snmp_location, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                  (data['name'].strip(), data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
-                                  encrypted_snmp_community, data.get('snmp_interval_minutes', 0),
+                                  snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
+                                  snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
+                                  snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
+                                  snmp_secrets['snmp_v3_priv_password'], snmp_config['snmp_allowed_address'] or None,
+                                  new_snmp_location or None,
+                                  data.get('snmp_interval_minutes', 0),
                                   data.get('ping_interval_seconds', 0), data.get('ping_retry_interval_seconds', 0),
                                   new_cert_www_port, new_cert_www_ssl_port))
                     device_id = cursor.lastrowid
@@ -4471,6 +4684,48 @@ def handle_devices():
                             'message': f'Zariadenie bolo pridané, ale SSH identita nebola overená. {user_message}'
                         })
             except sqlite3.IntegrityError: return jsonify({'status': 'error', 'message': 'Zariadenie s touto IP už existuje'}), 409
+
+
+@app.route('/api/devices/<int:device_id>/secrets/reveal', methods=['POST'])
+@login_required
+def reveal_device_secret(device_id):
+    """Reveal one explicitly requested device secret without exposing it in list APIs."""
+    source_url = request.headers.get('Origin') or request.headers.get('Referer')
+    if not source_url:
+        return jsonify({'status': 'error', 'message': 'Požiadavka nemá overiteľný pôvod.'}), 403
+    parsed_source = urllib.parse.urlsplit(source_url)
+    if parsed_source.scheme.lower() != request.scheme.lower() or parsed_source.netloc.lower() != request.host.lower():
+        return jsonify({'status': 'error', 'message': 'Požiadavka z cudzieho pôvodu bola zablokovaná.'}), 403
+    data = request.get_json(silent=True) or {}
+    field = str(data.get('field') or '')
+    allowed_fields = {
+        'password': 'SSH heslo',
+        'snmp_community': 'SNMP community',
+        'snmp_v3_auth_password': 'SNMPv3 autentifikačné heslo',
+        'snmp_v3_priv_password': 'SNMPv3 šifrovacie heslo',
+    }
+    if field not in allowed_fields:
+        return jsonify({'status': 'error', 'message': 'Nepodporované tajomstvo.'}), 400
+    with get_db_connection() as conn:
+        row = conn.execute(
+            f'SELECT ip, {field} AS secret_value FROM devices WHERE id = ? AND deleted_at IS NULL',
+            (device_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+    if not row['secret_value']:
+        return jsonify({'status': 'error', 'message': 'Tajomstvo nie je nastavené.'}), 404
+    try:
+        value = decrypt_password_strict(row['secret_value'])
+    except Exception:
+        logger.error(f'Odhalenie uloženého tajomstva zariadenia {device_id} zlyhalo pri dešifrovaní.')
+        return jsonify({'status': 'error', 'message': 'Uložené tajomstvo sa nepodarilo dešifrovať.'}), 500
+    audit_username = getattr(current_user, 'username', 'prihlásený používateľ')
+    add_log('info', f"Používateľ '{audit_username}' zobrazil {allowed_fields[field]} zariadenia.", row['ip'])
+    response = jsonify({'status': 'success', 'value': value})
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, private'
+    response.headers['Pragma'] = 'no-cache'
+    return response
 
 
 @app.route('/api/devices/<int:device_id>/ssh-host-key/probe', methods=['POST'])
@@ -4889,7 +5144,7 @@ def check_snmp(device_id):
             'status': 'error',
             'message': (
                 'SNMP kontrola zlyhala. Skontrolujte, či je na MikroTiku povolené SNMP, '
-                'či sedí community a či firewall povoľuje UDP port 161. '
+                'či sedia poverenia a bezpečnostné protokoly a či firewall povoľuje UDP port 161. '
                 f"Detail: {result['error']}"
             )
         }), 500
@@ -4924,6 +5179,237 @@ def check_snmp(device_id):
     snmp_data = result.get('snmp_data') or {}
     return jsonify(snmp_data)
 
+
+def snmp_diagnostic_message(error_text):
+    text = str(error_text or '').lower()
+    if 'unknownuser' in text or 'unknown user' in text:
+        return 'MikroTik nepozná zadaného SNMPv3 používateľa.'
+    if 'wrongdigest' in text or 'authentication' in text:
+        return 'SNMPv3 autentifikácia zlyhala. Skontrolujte heslo a protokol SHA1/MD5.'
+    if 'decryption' in text or 'privacy' in text:
+        return 'SNMPv3 šifrovanie zlyhalo. Skontrolujte privacy heslo a protokol AES/DES.'
+    if 'timeout' in text or 'no snmp response' in text:
+        return 'SNMP neodpovedalo v časovom limite. Skontrolujte službu SNMP, UDP/161 a povolenú zdrojovú adresu.'
+    return 'SNMP test zlyhal. Skontrolujte verziu, poverenia, bezpečnostné protokoly a firewall UDP/161.'
+
+
+def load_snmp_test_config(data):
+    device_id = data.get('device_id')
+    existing = None
+    if device_id:
+        with get_db_connection() as conn:
+            existing = conn.execute(
+                'SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL',
+                (device_id,)
+            ).fetchone()
+        if not existing:
+            return None, None, 'Zariadenie nenájdené.'
+    config, error = merge_device_snmp_config(data, existing, new_device=not bool(existing))
+    ip = str(data.get('ip') or (existing['ip'] if existing else '')).strip()
+    if not ip:
+        return None, None, 'IP adresa zariadenia je povinná.'
+    return ip, config, error
+
+
+@app.route('/api/snmp/test', methods=['POST'])
+@login_required
+def test_snmp_configuration():
+    data = request.get_json(silent=True) or {}
+    ip, config, error = load_snmp_test_config(data)
+    if error:
+        return jsonify({'status': 'error', 'message': error}), 400
+    started = time.monotonic()
+    snmp_data = get_snmp_data(ip, config, diagnostic=True)
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    diagnostic_error = snmp_data.pop('_error', None)
+    if snmp_data.get('uptime') == 'N/A':
+        return jsonify({
+            'status': 'error',
+            'message': snmp_diagnostic_message(diagnostic_error),
+            'response_ms': elapsed_ms,
+        }), 400
+    return jsonify({
+        'status': 'success',
+        'message': 'SNMP spojenie je funkčné.',
+        'identity': snmp_data.get('identity'),
+        'routeros_version': snmp_data.get('version'),
+        'board_name': snmp_data.get('board_name'),
+        'response_ms': elapsed_ms,
+    })
+
+
+@app.route('/api/snmp/detect-source', methods=['POST'])
+@login_required
+def detect_snmp_source_address():
+    data = request.get_json(silent=True) or {}
+    target = str(data.get('ip') or '').strip()
+    if not target:
+        return jsonify({'status': 'error', 'message': 'Najprv zadajte IP adresu zariadenia.'}), 400
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect((target, 161))
+        source_ip = sock.getsockname()[0]
+        return jsonify({'status': 'success', 'source_ip': source_ip, 'cidr': f'{source_ip}/32'})
+    except (OSError, socket.gaierror):
+        return jsonify({'status': 'error', 'message': 'Zdrojovú IP voči zariadeniu sa nepodarilo zistiť.'}), 400
+    finally:
+        sock.close()
+
+
+def routeros_quote(value):
+    """Quote untrusted text as a RouterOS string literal."""
+    escaped = []
+    for char in str(value):
+        code = ord(char)
+        if char in {'\\', '"', '$'}:
+            escaped.append('\\' + char)
+        elif code < 32 or code == 127:
+            escaped.append(f'\\{code:02X}')
+        else:
+            escaped.append(char)
+    return '"' + ''.join(escaped) + '"'
+
+
+def execute_routeros_ssh(device, command, timeout=20):
+    client = paramiko.SSHClient()
+    try:
+        client.set_missing_host_key_policy(PinnedSSHHostKeyPolicy(device['id'], device['ip']))
+        client.connect(
+            device['ip'], username=device['username'], password=device['password'],
+            timeout=timeout, banner_timeout=timeout, auth_timeout=timeout,
+        )
+        _, stdout, stderr = client.exec_command(command, timeout=timeout)
+        output = stdout.read().decode('utf-8', errors='replace').strip()
+        error = stderr.read().decode('utf-8', errors='replace').strip()
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0 or error:
+            raise RuntimeError('RouterOS odmietol SNMP konfiguráciu.')
+        return output
+    finally:
+        client.close()
+
+
+@app.route('/api/devices/<int:device_id>/snmp/provision', methods=['POST'])
+@login_required
+def provision_device_snmp(device_id):
+    data = request.get_json(silent=True) or {}
+    with get_db_connection() as conn:
+        row = conn.execute(
+            'SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
+    device = get_device_with_decrypted_password(dict(row))
+    config, error = validate_snmp_config(device, require_secrets=True)
+    if error:
+        return jsonify({'status': 'error', 'message': error}), 400
+    if get_ssh_host_key_state(device_id, device['ip']).get('status') != 'trusted':
+        return jsonify({
+            'status': 'error',
+            'error': 'ssh_host_key_untrusted',
+            'message': 'SSH fingerprint zariadenia musí byť pred provisioningom potvrdený.'
+        }), 409
+
+    version_label = 'SNMPv3' if config['snmp_version'] == '3' else 'SNMPv2c'
+    account_name = config['snmp_v3_username'] if config['snmp_version'] == '3' else config['snmp_community']
+    username = routeros_quote(account_name)
+    check_command = (
+        f':local mmNamed [/snmp community find where name={username}]; '
+        ':local mmDefault [/snmp community find where default=yes]; '
+        ':if ([:len $mmNamed] > 0) do={'
+        f':if (([:len $mmDefault] = 1) && ([/snmp community get $mmDefault name] != {username})) '
+        'do={:put "MM_EXISTS_WITH_DEFAULT"} else={:put "MM_EXISTS"}'
+        '} else={:if ([:len $mmDefault] = 1) '
+        'do={:put "MM_REUSE_DEFAULT"} else={:put "MM_MISSING"}}'
+    )
+    try:
+        target_state = execute_routeros_ssh(device, check_command)
+        consolidate_default = 'MM_EXISTS_WITH_DEFAULT' in target_state
+        exists = consolidate_default or 'MM_EXISTS' in target_state
+        reuse_default = 'MM_REUSE_DEFAULT' in target_state
+        if not exists and not reuse_default and 'MM_MISSING' not in target_state:
+            raise RuntimeError('RouterOS nevrátil stav SNMP community.')
+        if exists and not data.get('overwrite'):
+            return jsonify({
+                'status': 'conflict', 'error': 'snmp_account_exists',
+                'message': (
+                    'SNMP community/účet s týmto menom už existuje vedľa systémového defaultu. '
+                    'Potvrdením sa duplicitný nesystémový záznam odstráni a jeho nastavenie sa prenesie na default.'
+                    if consolidate_default else
+                    'SNMP community/účet s týmto menom už na MikroTiku existuje. Potvrďte jeho aktualizáciu.'
+                ),
+                'account': account_name,
+            }), 409
+
+        address = routeros_quote(config['snmp_allowed_address'] or '0.0.0.0/0')
+        if config['snmp_version'] == '2c':
+            properties = (
+                f'name={username} address={address} read-access=yes write-access=no security=none'
+            )
+        else:
+            auth_password = routeros_quote(config['snmp_v3_auth_password'])
+            properties = (
+                f'name={username} address={address} read-access=yes write-access=no '
+                f'security={"private" if config["snmp_v3_security_level"] == "authPriv" else "authorized"} '
+                f'authentication-protocol={config["snmp_v3_auth_protocol"]} '
+                f'authentication-password={auth_password}'
+            )
+            if config['snmp_v3_security_level'] == 'authPriv':
+                properties += (
+                    f' encryption-protocol={config["snmp_v3_priv_protocol"]} '
+                    f'encryption-password={routeros_quote(config["snmp_v3_priv_password"])}'
+                )
+        snmp_service_properties = 'enabled=yes'
+        snmp_location = str(device.get('snmp_location') or '').strip()
+        if snmp_location:
+            snmp_service_properties += f' location={routeros_quote(snmp_location)}'
+        if consolidate_default:
+            configure_command = (
+                f':local mmTarget [/snmp community find where name={username}]; '
+                ':local mmDefault [/snmp community find where default=yes]; '
+                '/snmp community remove $mmTarget; '
+                f'/snmp community set $mmDefault {properties}; /snmp set {snmp_service_properties}'
+            )
+        elif exists:
+            properties_without_name = properties.split(' ', 1)[1]
+            configure_command = (
+                f':local mmIds [/snmp community find where name={username}]; '
+                f'/snmp community set $mmIds {properties_without_name}; /snmp set {snmp_service_properties}'
+            )
+        elif reuse_default:
+            configure_command = (
+                ':local mmIds [/snmp community find where default=yes]; '
+                f'/snmp community set $mmIds {properties}; /snmp set {snmp_service_properties}'
+            )
+        else:
+            configure_command = f'/snmp community add {properties}; /snmp set {snmp_service_properties}'
+        execute_routeros_ssh(device, configure_command)
+
+        tested = get_snmp_data(device['ip'], config, diagnostic=True)
+        diagnostic_error = tested.pop('_error', None)
+        if tested.get('uptime') == 'N/A':
+            add_log('warning', f'{version_label} provisioning pre {device["name"]} bol zapísaný, ale test zlyhal.', device['ip'])
+            return jsonify({
+                'status': 'error', 'configured': True,
+                'message': f'Nastavenie bolo zapísané, ale následný {version_label} test zlyhal. ' + snmp_diagnostic_message(diagnostic_error)
+            }), 502
+
+        add_log('info', f'{version_label} provisioning pre {device["name"]} bol úspešne dokončený.', device['ip'])
+        return jsonify({
+            'status': 'success', 'message': f'{version_label} bolo nastavené a úspešne otestované.',
+            'identity': tested.get('identity'),
+            'default_community_reused': reuse_default or consolidate_default,
+            'duplicate_community_consolidated': consolidate_default,
+        })
+    except SSHHostKeyVerificationRequired as exc:
+        return jsonify({'status': 'error', 'error': 'ssh_host_key_untrusted', 'message': str(exc)}), 409
+    except (OSError, paramiko.SSHException, RuntimeError):
+        add_log('error', f'{version_label} provisioning pre {device["name"]} cez SSH zlyhal.', device['ip'])
+        return jsonify({
+            'status': 'error',
+            'message': f'{version_label} sa nepodarilo nastaviť cez SSH. Skontrolujte fingerprint, SSH prístup a oprávnenia read/write/sensitive.'
+        }), 400
+
 @app.route('/api/snmp/refresh-all', methods=['POST'])
 @login_required
 def snmp_refresh_all_devices():
@@ -4936,8 +5422,8 @@ def snmp_refresh_all_devices():
     
     with get_db_connection() as conn:
         devices = [
-            get_device_with_decrypted_password(dict(row))
-            for row in conn.execute('SELECT id, ip, name, snmp_community FROM devices WHERE deleted_at IS NULL ORDER BY name').fetchall()
+            dict(row)
+            for row in conn.execute('SELECT id, ip, name FROM devices WHERE deleted_at IS NULL ORDER BY name').fetchall()
         ]
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     
@@ -4983,7 +5469,6 @@ def run_sequential_snmp_refresh(devices, delay_seconds):
             
             device_id = device['id']
             ip = device['ip']
-            snmp_community = device['snmp_community']
             
             # Aktualizujeme progress
             snmp_refresh_progress['current'] = i
@@ -5001,21 +5486,7 @@ def run_sequential_snmp_refresh(devices, delay_seconds):
             
             try:
                 # Spustíme SNMP refresh pre aktuálne zariadenie
-                snmp_data = get_snmp_data(ip, snmp_community)
-                status = 'online' if snmp_data.get('uptime') != 'N/A' else 'offline'
-                current_time = datetime.now()
-                
-                # Uložíme do databázy
-                with get_db_connection() as conn:
-                    conn.execute("UPDATE devices SET last_snmp_data = ?, status = ?, last_snmp_check = ? WHERE id = ? AND deleted_at IS NULL",
-                               (json.dumps(snmp_data), status, current_time.isoformat(), device_id))
-                    conn.commit()
-                
-                # Uloženie do SNMP histórie
-                save_snmp_history(device_id, snmp_data)
-                
-                # Odošleme update pre konkrétne zariadenie
-                socketio.emit('snmp_update', {'id': device_id, 'data': snmp_data, 'status': status})
+                perform_snmp_poll(device_id, reason="bulk")
                 
             except Exception as e:
                 add_log('error', f"Chyba pri SNMP refresh pre {device['name']} ({ip}): {str(e)}", ip)
@@ -5868,7 +6339,13 @@ def perform_snmp_poll(device_id, reason="scheduler"):
     try:
         with get_db_connection() as conn:
             device_row = conn.execute(
-                'SELECT id, name, ip, snmp_community, monitoring_paused, last_snmp_data, snmp_interval_minutes FROM devices WHERE id = ? AND deleted_at IS NULL',
+                '''SELECT id, name, ip, snmp_community, snmp_version,
+                          snmp_v3_username, snmp_v3_security_level,
+                          snmp_v3_auth_protocol, snmp_v3_auth_password,
+                          snmp_v3_priv_protocol, snmp_v3_priv_password,
+                          snmp_allowed_address, monitoring_paused,
+                          last_snmp_data, snmp_interval_minutes
+                   FROM devices WHERE id = ? AND deleted_at IS NULL''',
                 (device_id,)
             ).fetchone()
 
@@ -5891,7 +6368,7 @@ def perform_snmp_poll(device_id, reason="scheduler"):
                 debug_log('debug_snmp_data', f"Nepodarilo sa dekódovať predchádzajúce SNMP dáta ({device['name']}): {decode_error}")
                 previous_data = {}
 
-        snmp_data = get_snmp_data(device['ip'], device['snmp_community'])
+        snmp_data = get_snmp_data(device['ip'], device)
         has_valid_metrics = snmp_data.get('uptime') != 'N/A'
         status = 'online' if has_valid_metrics else 'offline'
         timestamp = datetime.now()

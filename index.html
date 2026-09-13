@@ -3239,7 +3239,7 @@
                         <div id="deviceSnmpV3Fields" class="space-y-4">
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div>
-                                    <label for="deviceSnmpV3Username" class="device-field-label">Používateľ</label>
+                                    <label for="deviceSnmpV3Username" class="device-field-label">SNMP Používateľ</label>
                                     <input id="deviceSnmpV3Username" class="device-input w-full p-3 rounded-lg" value="mikrotik-manager" autocomplete="off">
                                 </div>
                                 <div>
@@ -5732,7 +5732,12 @@
                     pendingDeviceSecretRequests.delete(inputId);
                     if (!event.target.value && event.target.dataset.secretStored === 'true') {
                         event.target.dataset.secretCleared = 'true';
-                        event.target.placeholder = '';
+                        const emptySecretPlaceholders = {
+                            devicePassword: 'Zadajte heslo do MikroTiku',
+                            deviceSnmpV3AuthPassword: 'min. 8 znakov',
+                            deviceSnmpV3PrivPassword: 'min. 8 znakov'
+                        };
+                        event.target.placeholder = emptySecretPlaceholders[inputId] || '';
                     } else if (event.target.value) {
                         delete event.target.dataset.secretCleared;
                     }

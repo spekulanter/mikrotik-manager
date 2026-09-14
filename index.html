@@ -4246,35 +4246,35 @@
 
     <div id="logsModal"
         class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-2 overflow-hidden">
-        <div class="card w-full h-full sm:h-auto max-w-full sm:max-w-6xl modal-content no-outer-scrollbar rounded-none sm:rounded-lg flex flex-col overflow-visible sm:overflow-hidden p-2 sm:p-8"
+        <div class="card w-full h-full sm:h-auto max-w-full sm:max-w-6xl modal-content no-outer-scrollbar rounded-none sm:rounded-xl flex flex-col overflow-visible sm:overflow-hidden p-2 sm:p-4 shadow-2xl"
             style="max-height: calc(100vh - 1rem);">
-            <div class="flex items-center justify-between flex-wrap gap-2 mb-3 sm:mb-6 px-2 sm:px-0">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-3 px-1 sm:px-0">
                 <h2 class="text-lg sm:text-2xl font-bold text-white">📋 Aktivita</h2>
                 <div class="modal-actions flex items-center gap-2 flex-wrap ml-auto">
                     <button id="logsModalRefreshBtn"
-                        class="btn bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2"
+                        class="btn bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 px-2.5 rounded text-xs flex items-center gap-1.5"
                         title="Obnoviť" aria-label="Obnoviť logy">
-                        <i class="fas fa-sync-alt text-xs sm:text-sm"></i><span class="hidden sm:inline">Obnoviť</span>
+                        <i class="fas fa-sync-alt text-xs"></i><span class="hidden sm:inline">Obnoviť</span>
                     </button>
                     <button id="logsModalExportBtn"
-                        class="btn bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2"
+                        class="btn bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 px-2.5 rounded text-xs flex items-center gap-1.5"
                         title="Stiahnuť" aria-label="Stiahnuť logy">
-                        <i class="fas fa-download text-xs sm:text-sm"></i><span class="hidden sm:inline">Stiahnuť</span>
+                        <i class="fas fa-download text-xs"></i><span class="hidden sm:inline">Stiahnuť</span>
                     </button>
                     <button id="logsModalFilterBtn"
-                        class="btn bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2"
+                        class="btn bg-purple-600 hover:bg-purple-700 text-white font-semibold py-1.5 px-2.5 rounded text-xs flex items-center gap-1.5"
                         title="Filtre" aria-label="Zobraziť filtre" aria-expanded="false">
-                        <i class="fas fa-filter text-xs sm:text-sm"></i><span class="hidden sm:inline">Filtre</span>
+                        <i class="fas fa-filter text-xs"></i><span class="hidden sm:inline">Filtre</span>
                     </button>
                     <button id="closeLogsModalBtn"
-                        class="btn bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-3 rounded text-sm flex items-center gap-2"
+                        class="btn bg-gray-600 hover:bg-gray-700 text-white font-semibold py-1.5 px-2.5 rounded text-xs flex items-center gap-1.5"
                         title="Zavrieť" aria-label="Zavrieť">
-                        <i class="fas fa-times text-xs sm:text-sm"></i>
+                        <i class="fas fa-times text-xs"></i>
                     </button>
                 </div>
             </div>
-            <div id="logsModalFilters" class="mb-4 hidden">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3 relative z-10">
+            <div id="logsModalFilters" class="mb-3 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2 relative z-10">
                     <select id="deviceFilterModal" class="p-2 rounded bg-gray-900 border border-gray-700 text-sm"
                         data-custom-select data-placeholder="Všetky zariadenia">
                         <option value="">Všetky zariadenia</option>
@@ -4302,7 +4302,7 @@
                 </div>
             </div>
             <div id="logsModalContent" class="bg-gray-900 border border-gray-700 rounded-lg overflow-y-auto flex-1"
-                style="height: 100%; max-height: calc(100vh - 5rem); padding: 0.5rem 0.25rem 0.5rem 0.5rem;">
+                style="height: 100%; max-height: calc(100vh - 5rem); padding: 0.375rem 0.25rem 0.375rem 0.375rem;">
                 <div id="logsModalList" class="space-y-1 text-sm"></div>
             </div>
         </div>

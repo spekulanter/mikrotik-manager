@@ -2272,6 +2272,22 @@
             display: none;
         }
 
+        /* Keep the account modal anchored while switching between differently
+           sized tabs. Hidden panes still define the shared panel height. */
+        .account-tab-panels {
+            display: grid;
+        }
+
+        .account-tab-panels > .tab-content {
+            grid-area: 1 / 1;
+        }
+
+        .account-tab-panels > .tab-content.hidden {
+            display: block;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
         body.light-theme .account-tab {
             color: #64748b !important;
         }
@@ -3983,8 +3999,8 @@
                     </button>
                 </div>
 
-                <!-- Fixed-height wrapper prevents modal resize on tab switch -->
-                <div style="min-height: 335px;">
+                <!-- All panes share one grid cell so tab switching cannot resize the modal. -->
+                <div class="account-tab-panels">
 
                     <!-- Username Tab -->
                     <div id="tabUsernameContent" class="tab-content">

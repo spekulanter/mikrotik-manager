@@ -906,6 +906,11 @@
             }
         }
 
+        /* Android app: activity is available from the title modal only. */
+        body.android-app #mobileLogs {
+            display: none !important;
+        }
+
         header h1 {
             margin-left: -2rem;
             text-align: center;
@@ -2967,7 +2972,7 @@
 </head>
 
 <body class="px-4 pt-2 pb-4 md:p-8">
-<script>(function(){if(localStorage.getItem('mikrotik-theme')==='light')document.body.classList.add('light-theme')})();</script>
+<script>(function(){if(localStorage.getItem('mikrotik-theme')==='light')document.body.classList.add('light-theme');if(typeof window.Android!=='undefined')document.body.classList.add('android-app')})();</script>
     <div id="app" class="w-full max-w-none mx-auto relative" style="max-width: 1600px;">
         <!-- Header with user info -->
         <div class="flex justify-between items-center mb-3 md:mb-6">

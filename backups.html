@@ -745,6 +745,218 @@
             box-shadow: 0 8px 18px rgba(239, 68, 68, 0.26);
         }
 
+        .btn-compare-header {
+            border: 1px solid rgba(56, 189, 248, 0.55);
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-compare-header { padding: 7px 14px; font-size: 13px; font-weight: 600; }
+        .btn-compare-header:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(14, 165, 233, 0.35); }
+        .btn-compare-header:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .compare-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            display: none;
+            padding: 16px;
+            background: rgba(2, 6, 23, 0.82);
+            backdrop-filter: blur(4px);
+        }
+
+        .compare-overlay.open { display: flex; }
+
+        .compare-panel {
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            background: #0b1120;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+        }
+
+        .compare-header {
+            padding: 14px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--card-bg);
+        }
+
+        .compare-title { min-width: 0; }
+        .compare-title h2 { margin: 0; color: #f8fafc; font-size: 1.15rem; }
+        .compare-title p { margin: 3px 0 0; color: #94a3b8; font-size: 12px; }
+        .compare-close {
+            width: 36px;
+            height: 36px;
+            flex: 0 0 auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: #111827;
+            color: #cbd5e1;
+            cursor: pointer;
+        }
+
+        .compare-controls {
+            padding: 12px 18px;
+            display: grid;
+            grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1fr) auto minmax(220px, 1fr) auto auto auto;
+            gap: 10px;
+            align-items: end;
+            border-bottom: 1px solid var(--border-color);
+            background: #111827;
+        }
+
+        .compare-field { min-width: 0; }
+        .compare-field label { display: block; margin-bottom: 5px; color: #94a3b8; font-size: 11px; font-weight: 600; }
+        .compare-field select {
+            width: 100%;
+            height: 38px;
+            padding: 0 9px;
+            border: 1px solid var(--border-color);
+            border-radius: 7px;
+            background: #0b1120;
+            color: #e2e8f0;
+            font-size: 12px;
+        }
+
+        .compare-swap,
+        .compare-run {
+            height: 38px;
+            border: 1px solid var(--border-color);
+            border-radius: 7px;
+            cursor: pointer;
+            color: #fff;
+        }
+        .compare-swap { width: 38px; background: #1e293b; }
+        .compare-run { padding: 0 15px; background: #0284c7; font-weight: 600; white-space: nowrap; }
+        .compare-run:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .compare-summary {
+            min-height: 46px;
+            padding: 8px 18px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 9px;
+            border-bottom: 1px solid var(--border-color);
+            background: #0f172a;
+        }
+
+        .diff-stat { padding: 4px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+        .diff-stat.added { color: #86efac; background: rgba(34, 197, 94, 0.15); }
+        .diff-stat.removed { color: #fca5a5; background: rgba(239, 68, 68, 0.15); }
+        .diff-stat.modified { color: #fde68a; background: rgba(245, 158, 11, 0.15); }
+        .diff-stat.total { color: #7dd3fc; background: rgba(14, 165, 233, 0.15); }
+        .diff-warning { color: #fde68a; font-size: 12px; }
+
+        .compare-column-heads {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            border-bottom: 1px solid var(--border-color);
+            background: #111827;
+        }
+        .compare-column-head {
+            min-width: 0;
+            padding: 8px 12px;
+            color: #cbd5e1;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 11px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .compare-column-head + .compare-column-head { border-left: 1px solid var(--border-color); }
+
+        .compare-results {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            background: #090e19;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .diff-hunk + .diff-hunk { border-top: 8px solid #1e293b; }
+        .diff-hunk-label { padding: 4px 10px; color: #7dd3fc; background: #172033; border-bottom: 1px solid #263248; }
+        .diff-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 900px; }
+        .diff-cell { min-width: 0; display: grid; grid-template-columns: 52px minmax(0, 1fr); }
+        .diff-cell + .diff-cell { border-left: 1px solid #263248; }
+        .diff-line-number { padding: 1px 8px; color: #64748b; text-align: right; user-select: none; background: rgba(15, 23, 42, 0.7); }
+        .diff-code { padding: 1px 9px; color: #cbd5e1; white-space: pre; min-height: 1.45em; }
+        .diff-cell.removed { background: rgba(127, 29, 29, 0.35); }
+        .diff-cell.removed .diff-code { color: #fecaca; }
+        .diff-cell.added { background: rgba(20, 83, 45, 0.4); }
+        .diff-cell.added .diff-code { color: #bbf7d0; }
+        .diff-cell.modified-left { background: rgba(127, 29, 29, 0.3); }
+        .diff-cell.modified-right { background: rgba(20, 83, 45, 0.35); }
+        .diff-cell.modified-left .diff-code { color: #fecaca; }
+        .diff-cell.modified-right .diff-code { color: #bbf7d0; }
+
+        .compare-state {
+            min-height: 100%;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #94a3b8;
+            text-align: center;
+        }
+        .compare-state.error { color: #fca5a5; }
+
+        .diff-unified-row { display: grid; grid-template-columns: 20px 45px minmax(0, 1fr); }
+        .diff-unified-sign { padding: 1px 4px; text-align: center; user-select: none; }
+        .diff-unified-row.added { color: #bbf7d0; background: rgba(20, 83, 45, 0.4); }
+        .diff-unified-row.removed { color: #fecaca; background: rgba(127, 29, 29, 0.35); }
+        .diff-unified-row.equal { color: #cbd5e1; }
+        .diff-unified-row.added .diff-code { color: #bbf7d0; }
+        .diff-unified-row.removed .diff-code { color: #fecaca; }
+
+        body.light-theme .compare-panel,
+        body.light-theme .compare-results { background: #f8fafc; }
+        body.light-theme .compare-header,
+        body.light-theme .compare-column-heads { background: #deeafa; }
+        body.light-theme .compare-title h2,
+        body.light-theme .compare-column-head,
+        body.light-theme .diff-code { color: #1e293b; }
+        body.light-theme .compare-controls,
+        body.light-theme .compare-summary { background: #eaf2fd; }
+        body.light-theme .compare-field select,
+        body.light-theme .compare-close { background: #f8fafc; color: #1e293b; }
+        body.light-theme .diff-hunk-label { background: #dbeafe; color: #0369a1; }
+        body.light-theme .diff-line-number { background: rgba(219, 234, 254, 0.6); color: #64748b; }
+        body.light-theme .diff-cell.removed .diff-code,
+        body.light-theme .diff-cell.modified-left .diff-code,
+        body.light-theme .diff-unified-row.removed .diff-code { color: #991b1b; }
+        body.light-theme .diff-cell.added .diff-code,
+        body.light-theme .diff-cell.modified-right .diff-code,
+        body.light-theme .diff-unified-row.added .diff-code { color: #166534; }
+
+        @media (max-width: 1100px) and (min-width: 769px) {
+            .compare-controls {
+                grid-template-columns: minmax(180px, 1fr) 38px minmax(180px, 1fr) auto auto auto;
+            }
+            .compare-controls .compare-device-field { grid-column: 1 / -1; }
+        }
+
         @media (max-width: 768px) {
             .controls-row {
                 flex-direction: column;
@@ -759,6 +971,25 @@
             .device-select { flex-basis: auto; min-width: 0; width: 100%; }
             .device-select-menu { width: 100%; max-height: min(360px, calc(100vh - 150px)); }
 
+            .compare-overlay { padding: 0; }
+            .compare-panel { border-radius: 0; border: 0; }
+            .compare-header { padding: 10px 12px; }
+            .compare-title h2 { font-size: 1rem; }
+            .compare-controls {
+                padding: 9px 10px;
+                grid-template-columns: 1fr 38px 1fr;
+            }
+            .compare-controls .compare-device-field { grid-column: 1 / -1; }
+            .compare-controls .compare-mode-field,
+            .compare-controls .compare-context-field { grid-column: span 1; }
+            .compare-controls .compare-run { grid-column: span 1; padding: 0 9px; }
+            .compare-summary { padding: 7px 10px; }
+            .compare-column-heads { display: none; }
+            .compare-results { font-size: 11px; }
+            .diff-hunk-label { position: sticky; top: 0; z-index: 1; }
+            .diff-unified-row { min-width: 720px; }
+            .header-buttons .btn-compare-header span { display: none; }
+            .header-buttons .btn-compare-header { width: 36px; padding: 0; }
             .sort-container {
                 justify-content: center;
             }
@@ -1011,6 +1242,10 @@
                 <span class="page-subtitle">Zoznam všetkých uložených záloh zariadení</span>
             </div>
             <div class="header-buttons">
+                <button type="button" class="btn-compare-header" id="openCompareButton" disabled
+                    title="Porovnať dva .rsc exporty">
+                    <i class="fas fa-code-compare"></i> <span>Porovnať konfigurácie</span>
+                </button>
                 <button onclick="window.location.href='/settings.html'" class="btn-back" title="Nastavenia">
                     <i class="fas fa-cog"></i> <span>Nastavenia</span>
                 </button>
@@ -1101,7 +1336,8 @@
                 </thead>
                 <tbody id="filesTableBody">
                     {% for file in files %}
-                    <tr data-filename="{{ file.name }}" data-device="{{ file.device_ip }}" data-size="{{ file.size }}"
+                    <tr data-filename="{{ file.name }}" data-device="{{ file.device_ip }}"
+                        data-device-name="{{ file.device_name }}" data-size="{{ file.size }}"
                         data-date="{{ file.modified.timestamp() }}">
                         <td>
                             {% if file.name.endswith('.backup') %}
@@ -1165,6 +1401,69 @@
         {% endif %}
     </div>
 
+    <div class="compare-overlay" id="compareOverlay" role="dialog" aria-modal="true"
+        aria-labelledby="compareTitle" aria-hidden="true">
+        <section class="compare-panel">
+            <header class="compare-header">
+                <div class="compare-title">
+                    <h2 id="compareTitle"><i class="fas fa-code-compare"></i> Porovnanie konfigurácií</h2>
+                    <p>Porovnávajú sa textové .rsc exporty rovnakého zariadenia.</p>
+                </div>
+                <button type="button" class="compare-close" id="closeCompareButton" aria-label="Zavrieť porovnanie">
+                    <i class="fas fa-times"></i>
+                </button>
+            </header>
+
+            <div class="compare-controls">
+                <div class="compare-field compare-device-field">
+                    <label for="compareDevice">Zariadenie</label>
+                    <select id="compareDevice"></select>
+                </div>
+                <div class="compare-field">
+                    <label for="compareLeft">Starší export</label>
+                    <select id="compareLeft"></select>
+                </div>
+                <button type="button" class="compare-swap" id="compareSwap" title="Vymeniť strany"
+                    aria-label="Vymeniť porovnávané exporty">
+                    <i class="fas fa-right-left"></i>
+                </button>
+                <div class="compare-field">
+                    <label for="compareRight">Novší export</label>
+                    <select id="compareRight"></select>
+                </div>
+                <div class="compare-field compare-mode-field">
+                    <label for="compareMode">Režim</label>
+                    <select id="compareMode">
+                        <option value="normalized">Normalizovaný</option>
+                        <option value="exact">Presný</option>
+                    </select>
+                </div>
+                <div class="compare-field compare-context-field">
+                    <label for="compareContext">Kontext</label>
+                    <select id="compareContext">
+                        <option value="3">3 riadky</option>
+                        <option value="10">10 riadkov</option>
+                        <option value="25">25 riadkov</option>
+                    </select>
+                </div>
+                <button type="button" class="compare-run" id="compareRun">
+                    <i class="fas fa-play"></i> Porovnať
+                </button>
+            </div>
+
+            <div class="compare-summary" id="compareSummary" aria-live="polite">
+                <span class="diff-warning">Vyberte dva exporty.</span>
+            </div>
+            <div class="compare-column-heads" id="compareColumnHeads">
+                <div class="compare-column-head" id="compareLeftHeading">—</div>
+                <div class="compare-column-head" id="compareRightHeading">—</div>
+            </div>
+            <div class="compare-results" id="compareResults" tabindex="0">
+                <div class="compare-state"><i class="fas fa-code-compare fa-2x"></i><span>Vyberte exporty na porovnanie.</span></div>
+            </div>
+        </section>
+    </div>
+
     <script>
         // Predvolené zoradenie: podľa dátumu (najnovšie hore)
         let currentSort = 'date';
@@ -1175,6 +1474,10 @@
         const itemsPerPage = 50;
         let allRows = [];
         let filteredRows = [];
+        let compareExportsByDevice = new Map();
+        let compareRequestController = null;
+        let lastCompareResult = null;
+        let compareIsMobile = window.matchMedia('(max-width: 768px)').matches;
 
         // Inicializácia témy
         function initTheme() {
@@ -1484,6 +1787,369 @@
             }
         }
 
+        function setCompareRunButtonLoading(isLoading) {
+            const button = document.getElementById('compareRun');
+            button.disabled = isLoading || document.getElementById('compareLeft').value === document.getElementById('compareRight').value;
+            button.replaceChildren();
+            const icon = document.createElement('i');
+            icon.className = isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-play';
+            button.append(icon, document.createTextNode(isLoading ? ' Načítavam…' : ' Porovnať'));
+        }
+
+        function setCompareState(message, type = 'info') {
+            const results = document.getElementById('compareResults');
+            results.replaceChildren();
+            const state = document.createElement('div');
+            state.className = `compare-state${type === 'error' ? ' error' : ''}`;
+            const icon = document.createElement('i');
+            icon.className = type === 'loading'
+                ? 'fas fa-spinner fa-spin fa-2x'
+                : type === 'error' ? 'fas fa-triangle-exclamation fa-2x' : 'fas fa-code-compare fa-2x';
+            const text = document.createElement('span');
+            text.textContent = message;
+            state.append(icon, text);
+            results.appendChild(state);
+        }
+
+        function formatCompareDate(timestamp) {
+            return new Date(timestamp * 1000).toLocaleString('sk-SK', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function populateCompareVersions(deviceIp, targetFilename = null) {
+            const group = compareExportsByDevice.get(deviceIp);
+            if (!group || group.exports.length < 2) return false;
+
+            const leftSelect = document.getElementById('compareLeft');
+            const rightSelect = document.getElementById('compareRight');
+            leftSelect.replaceChildren();
+            rightSelect.replaceChildren();
+
+            group.exports.forEach(exportItem => {
+                const label = `${formatCompareDate(exportItem.timestamp)} — ${exportItem.filename}`;
+                const leftOption = document.createElement('option');
+                leftOption.value = exportItem.filename;
+                leftOption.textContent = label;
+                leftOption.title = exportItem.filename;
+                const rightOption = leftOption.cloneNode(true);
+                leftSelect.appendChild(leftOption);
+                rightSelect.appendChild(rightOption);
+            });
+
+            if (targetFilename) {
+                const targetIndex = group.exports.findIndex(item => item.filename === targetFilename);
+                if (targetIndex >= 0 && targetIndex < group.exports.length - 1) {
+                    leftSelect.value = group.exports[targetIndex + 1].filename;
+                    rightSelect.value = group.exports[targetIndex].filename;
+                } else if (targetIndex > 0) {
+                    leftSelect.value = group.exports[targetIndex].filename;
+                    rightSelect.value = group.exports[targetIndex - 1].filename;
+                }
+            } else {
+                leftSelect.value = group.exports[1].filename;
+                rightSelect.value = group.exports[0].filename;
+            }
+            setCompareRunButtonLoading(false);
+            return true;
+        }
+
+        function openBackupCompare(targetFilename = null) {
+            let selectedDevice = currentDevice;
+            if (targetFilename) {
+                for (const [deviceIp, group] of compareExportsByDevice.entries()) {
+                    if (group.exports.some(item => item.filename === targetFilename)) {
+                        selectedDevice = deviceIp;
+                        break;
+                    }
+                }
+            }
+            if (!compareExportsByDevice.has(selectedDevice)) {
+                selectedDevice = compareExportsByDevice.keys().next().value;
+            }
+            if (!selectedDevice) {
+                showNotification('Na porovnanie sú potrebné aspoň dva .rsc exporty rovnakého zariadenia.', 'info');
+                return;
+            }
+
+            const deviceSelect = document.getElementById('compareDevice');
+            deviceSelect.value = selectedDevice;
+            populateCompareVersions(selectedDevice, targetFilename);
+
+            const overlay = document.getElementById('compareOverlay');
+            overlay.classList.add('open');
+            overlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('closeCompareButton').focus();
+            runBackupCompare();
+        }
+
+        function closeBackupCompare() {
+            if (compareRequestController) compareRequestController.abort();
+            compareRequestController = null;
+            const overlay = document.getElementById('compareOverlay');
+            overlay.classList.remove('open');
+            overlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        function createDiffStat(kind, label, value) {
+            const stat = document.createElement('span');
+            stat.className = `diff-stat ${kind}`;
+            stat.textContent = `${label}: ${value}`;
+            return stat;
+        }
+
+        function renderCompareSummary(data) {
+            const summary = document.getElementById('compareSummary');
+            summary.replaceChildren(
+                createDiffStat('added', 'Pridané', data.summary.added),
+                createDiffStat('removed', 'Odstránené', data.summary.removed),
+                createDiffStat('modified', 'Zmenené', data.summary.modified),
+                createDiffStat('total', 'Spolu', data.summary.total)
+            );
+            if (data.mode === 'normalized') {
+                const modeInfo = document.createElement('span');
+                modeInfo.className = 'diff-warning';
+                modeInfo.textContent = 'Čas exportu a známy blacklistový šum sú ignorované.';
+                summary.appendChild(modeInfo);
+            }
+            if (data.truncated) {
+                const warning = document.createElement('span');
+                warning.className = 'diff-warning';
+                warning.textContent = `Zobrazených je prvých ${data.returned_rows.toLocaleString('sk-SK')} diff riadkov.`;
+                summary.appendChild(warning);
+            }
+        }
+
+        function diffCell(record, className = '') {
+            const cell = document.createElement('div');
+            cell.className = `diff-cell${className ? ` ${className}` : ''}`;
+            const number = document.createElement('span');
+            number.className = 'diff-line-number';
+            number.textContent = record ? record.number : '';
+            const code = document.createElement('span');
+            code.className = 'diff-code';
+            code.textContent = record ? record.text : '';
+            cell.append(number, code);
+            return cell;
+        }
+
+        function appendSideBySideRow(container, row) {
+            const rowElement = document.createElement('div');
+            rowElement.className = 'diff-row';
+            let leftClass = '';
+            let rightClass = '';
+            if (row.kind === 'removed') leftClass = 'removed';
+            if (row.kind === 'added') rightClass = 'added';
+            if (row.kind === 'modified') {
+                leftClass = 'modified-left';
+                rightClass = 'modified-right';
+            }
+            rowElement.append(diffCell(row.left, leftClass), diffCell(row.right, rightClass));
+            container.appendChild(rowElement);
+        }
+
+        function appendUnifiedLine(container, record, kind, sign) {
+            if (!record) return;
+            const row = document.createElement('div');
+            row.className = `diff-unified-row ${kind}`;
+            const signElement = document.createElement('span');
+            signElement.className = 'diff-unified-sign';
+            signElement.textContent = sign;
+            const number = document.createElement('span');
+            number.className = 'diff-line-number';
+            number.textContent = record.number;
+            const code = document.createElement('span');
+            code.className = 'diff-code';
+            code.textContent = record.text;
+            row.append(signElement, number, code);
+            container.appendChild(row);
+        }
+
+        function appendUnifiedRow(container, row) {
+            if (row.kind === 'modified') {
+                appendUnifiedLine(container, row.left, 'removed', '−');
+                appendUnifiedLine(container, row.right, 'added', '+');
+            } else if (row.kind === 'removed') {
+                appendUnifiedLine(container, row.left, 'removed', '−');
+            } else if (row.kind === 'added') {
+                appendUnifiedLine(container, row.right, 'added', '+');
+            } else {
+                appendUnifiedLine(container, row.right || row.left, 'equal', ' ');
+            }
+        }
+
+        function hunkRange(rows, side) {
+            const numbered = rows.map(row => row[side]).filter(Boolean);
+            if (!numbered.length) return '0,0';
+            const start = numbered[0].number;
+            const end = numbered[numbered.length - 1].number;
+            return `${start},${end - start + 1}`;
+        }
+
+        function renderCompareResults(data) {
+            lastCompareResult = data;
+            const results = document.getElementById('compareResults');
+            results.replaceChildren();
+            results.scrollTop = 0;
+            results.scrollLeft = 0;
+            document.getElementById('compareLeftHeading').textContent = data.left.filename;
+            document.getElementById('compareRightHeading').textContent = data.right.filename;
+            renderCompareSummary(data);
+
+            if (data.summary.total === 0) {
+                setCompareState('Žiadne rozdiely. Vybrané konfigurácie sú v tomto režime rovnaké.');
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            data.hunks.forEach(hunk => {
+                const hunkElement = document.createElement('section');
+                hunkElement.className = 'diff-hunk';
+                const label = document.createElement('div');
+                label.className = 'diff-hunk-label';
+                label.textContent = `@@ -${hunkRange(hunk.rows, 'left')} +${hunkRange(hunk.rows, 'right')} @@`;
+                hunkElement.appendChild(label);
+                hunk.rows.forEach(row => {
+                    if (compareIsMobile) appendUnifiedRow(hunkElement, row);
+                    else appendSideBySideRow(hunkElement, row);
+                });
+                fragment.appendChild(hunkElement);
+            });
+            results.appendChild(fragment);
+        }
+
+        async function runBackupCompare() {
+            const left = document.getElementById('compareLeft').value;
+            const right = document.getElementById('compareRight').value;
+            if (!left || !right || left === right) {
+                setCompareRunButtonLoading(false);
+                setCompareState('Vyberte dva rozdielne exporty.', 'error');
+                return;
+            }
+
+            if (compareRequestController) compareRequestController.abort();
+            const requestController = new AbortController();
+            compareRequestController = requestController;
+            setCompareRunButtonLoading(true);
+            setCompareState('Porovnávam konfigurácie…', 'loading');
+            document.getElementById('compareSummary').replaceChildren();
+
+            const query = new URLSearchParams({
+                left,
+                right,
+                mode: document.getElementById('compareMode').value,
+                context: document.getElementById('compareContext').value
+            });
+
+            try {
+                const response = await fetch(`/api/backups/compare?${query.toString()}`, {
+                    signal: requestController.signal,
+                    cache: 'no-store'
+                });
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('Relácia vypršala alebo server vrátil neplatnú odpoveď.');
+                }
+                const result = await response.json();
+                if (!response.ok || result.status !== 'success') {
+                    throw new Error(result.message || 'Porovnanie exportov zlyhalo.');
+                }
+                renderCompareResults(result);
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    lastCompareResult = null;
+                    setCompareState(error.message || 'Porovnanie exportov zlyhalo.', 'error');
+                }
+            } finally {
+                if (compareRequestController === requestController) {
+                    compareRequestController = null;
+                    setCompareRunButtonLoading(false);
+                }
+            }
+        }
+
+        function initBackupCompare() {
+            compareExportsByDevice = new Map();
+            allRows.forEach(row => {
+                const filename = row.dataset.filename || '';
+                const deviceIp = row.dataset.device || '';
+                if (!filename.endsWith('.rsc') || !deviceIp) return;
+                if (!compareExportsByDevice.has(deviceIp)) {
+                    compareExportsByDevice.set(deviceIp, {
+                        name: row.dataset.deviceName || deviceIp,
+                        exports: []
+                    });
+                }
+                compareExportsByDevice.get(deviceIp).exports.push({
+                    filename,
+                    timestamp: Number(row.dataset.date)
+                });
+            });
+
+            for (const [deviceIp, group] of Array.from(compareExportsByDevice.entries())) {
+                group.exports.sort((a, b) => b.timestamp - a.timestamp);
+                if (group.exports.length < 2) compareExportsByDevice.delete(deviceIp);
+            }
+
+            const deviceSelect = document.getElementById('compareDevice');
+            deviceSelect.replaceChildren();
+            Array.from(compareExportsByDevice.entries())
+                .sort((a, b) => a[1].name.localeCompare(b[1].name, 'sk'))
+                .forEach(([deviceIp, group]) => {
+                    const option = document.createElement('option');
+                    option.value = deviceIp;
+                    option.textContent = `${group.name} (${deviceIp}) — ${group.exports.length} exportov`;
+                    deviceSelect.appendChild(option);
+                });
+
+            const openButton = document.getElementById('openCompareButton');
+            openButton.disabled = compareExportsByDevice.size === 0;
+            openButton.title = openButton.disabled
+                ? 'Na porovnanie sú potrebné dva .rsc exporty rovnakého zariadenia.'
+                : 'Porovnať dva .rsc exporty';
+            openButton.addEventListener('click', () => openBackupCompare());
+
+            document.getElementById('closeCompareButton').addEventListener('click', closeBackupCompare);
+            document.getElementById('compareRun').addEventListener('click', runBackupCompare);
+            document.getElementById('compareSwap').addEventListener('click', () => {
+                const leftSelect = document.getElementById('compareLeft');
+                const rightSelect = document.getElementById('compareRight');
+                const leftValue = leftSelect.value;
+                leftSelect.value = rightSelect.value;
+                rightSelect.value = leftValue;
+                runBackupCompare();
+            });
+            deviceSelect.addEventListener('change', () => {
+                populateCompareVersions(deviceSelect.value);
+                runBackupCompare();
+            });
+            document.getElementById('compareMode').addEventListener('change', runBackupCompare);
+            document.getElementById('compareContext').addEventListener('change', runBackupCompare);
+            document.getElementById('compareLeft').addEventListener('change', () => setCompareRunButtonLoading(false));
+            document.getElementById('compareRight').addEventListener('change', () => setCompareRunButtonLoading(false));
+            document.getElementById('compareOverlay').addEventListener('click', event => {
+                if (event.target.id === 'compareOverlay') closeBackupCompare();
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && document.getElementById('compareOverlay').classList.contains('open')) {
+                    closeBackupCompare();
+                }
+            });
+
+            const mediaQuery = window.matchMedia('(max-width: 768px)');
+            const handleCompareBreakpoint = event => {
+                compareIsMobile = event.matches;
+                if (lastCompareResult && document.getElementById('compareOverlay').classList.contains('open')) {
+                    renderCompareResults(lastCompareResult);
+                }
+            };
+            if (mediaQuery.addEventListener) mediaQuery.addEventListener('change', handleCompareBreakpoint);
+            else mediaQuery.addListener(handleCompareBreakpoint);
+        }
+
         // Inicializácia pri načítaní stránky
         document.addEventListener('DOMContentLoaded', function () {
             initTheme();
@@ -1491,6 +2157,7 @@
             if (!tbody) return;
 
             allRows = Array.from(tbody.getElementsByTagName('tr'));
+            initBackupCompare();
 
             const deviceSelect = document.getElementById('deviceSelect');
             const deviceButton = document.getElementById('deviceSelectButton');

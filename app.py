@@ -1437,6 +1437,67 @@ def trust_initial_ssh_host_key(device_id, expected_ip, key):
     return fingerprint
 
 
+BACKUP_COMPARE_MAX_BYTES = 16 * 1024 * 1024
+BACKUP_COMPARE_MAX_LINES = 200000
+BACKUP_COMPARE_MAX_ROWS = 10000
+BACKUP_COMPARE_CONTEXTS = {3, 10, 25}
+BACKUP_COMPARE_MODES = {'normalized', 'exact'}
+BACKUP_DIFF_IGNORE_KEYWORDS = (
+    'list=blacklist',
+    'comment=spamhaus,dshield,bruteforce',
+)
+ROUTEROS_EXPORT_TIMESTAMP_RE = re.compile(
+    r'^(#\s*)\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(\s+by\s+RouterOS\b.*)$'
+)
+
+
+def normalize_routeros_export(content, mode='normalized'):
+    """Return (source line number, comparable text) records for an export.
+
+    ``legacy`` intentionally preserves the historical backup-skip behaviour:
+    every comment line is ignored. The UI's ``normalized`` mode only masks the
+    volatile timestamp so a RouterOS version change in the same header remains
+    visible. Both normalized modes keep the existing blacklist noise filters.
+    """
+    if mode not in {'legacy', 'normalized', 'exact'}:
+        raise ValueError('Neplatný režim porovnania.')
+
+    records = []
+    skip_indented = False
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        stripped = raw_line.strip()
+
+        if mode == 'exact':
+            records.append((line_number, raw_line))
+            continue
+
+        if mode == 'legacy' and stripped.startswith('#'):
+            continue
+
+        if skip_indented:
+            if not stripped or raw_line[:1].isspace():
+                if not raw_line.rstrip().endswith('\\'):
+                    skip_indented = False
+                continue
+            skip_indented = False
+
+        if any(keyword in raw_line for keyword in BACKUP_DIFF_IGNORE_KEYWORDS):
+            skip_indented = raw_line.rstrip().endswith('\\')
+            continue
+
+        comparable_line = raw_line
+        if mode == 'normalized':
+            timestamp_match = ROUTEROS_EXPORT_TIMESTAMP_RE.match(raw_line)
+            if timestamp_match:
+                comparable_line = (
+                    f'{timestamp_match.group(1)}<timestamp ignored>'
+                    f'{timestamp_match.group(2)}'
+                )
+        records.append((line_number, comparable_line))
+
+    return records
+
+
 def compare_with_local_backup(ip, remote_content, detailed_logging=True):
     try:
         # Hľadáme najnovší .rsc súbor pre dané IP s presným patternom _ip_
@@ -1455,39 +1516,9 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
         with open(latest_backup_path, 'r', encoding='utf-8', errors='ignore') as f:
             local_content = f.read()
         
-        # Ignore pravidlá presne ako v legacy scripte (mikrotik_backup_compare_export_first.py)
-        ignore_keywords = ['list=blacklist', 'comment=spamhaus,dshield,bruteforce']
-
-        def normalized_lines(content):
-            """Vráti riadky bez šumových blacklist aktualizácií."""
-            lines = content.splitlines()
-            filtered = []
-            skip_indented = False
-
-            for raw_line in lines:
-                stripped = raw_line.strip()
-
-                # Ignorujeme všetky komentové riadky, napr. časové hlavičky.
-                if stripped.startswith('#'):
-                    continue
-
-                if skip_indented:
-                    if not stripped or raw_line[:1].isspace():
-                        if not raw_line.rstrip().endswith('\\'):
-                            skip_indented = False
-                        continue
-                    skip_indented = False
-
-                if any(keyword in raw_line for keyword in ignore_keywords):
-                    skip_indented = raw_line.rstrip().endswith('\\')
-                    continue
-
-                filtered.append(raw_line)
-
-            return filtered
-
-        local_lines = normalized_lines(local_content)
-        remote_lines = normalized_lines(remote_content)
+        # Zachovaj presne pôvodné pravidlá rozhodovania o novej zálohe.
+        local_lines = [line for _, line in normalize_routeros_export(local_content, mode='legacy')]
+        remote_lines = [line for _, line in normalize_routeros_export(remote_content, mode='legacy')]
         
         # Používame rovnakú diff logiku ako pôvodný script
         d = difflib.Differ()
@@ -2718,6 +2749,235 @@ def resolve_backup_file_path(filename):
     if os.path.commonpath([backup_root, candidate_path]) != backup_root:
         raise ValueError("Nepovolená cesta k súboru.")
     return candidate_path
+
+
+def backup_device_ip_from_filename(filename):
+    """Extract and validate the device IP from a timestamped .rsc filename."""
+    match = re.search(
+        r'_(\d{1,3}(?:\.\d{1,3}){3})_\d{8}-\d{4}\.rsc$',
+        filename,
+    )
+    if not match:
+        return None
+    try:
+        return str(ipaddress.ip_address(match.group(1)))
+    except ValueError:
+        return None
+
+
+def read_backup_export_for_compare(filename, mode):
+    """Read one bounded export and return its metadata and normalized records."""
+    safe_filename = validate_backup_filename(filename)
+    if not safe_filename.endswith('.rsc'):
+        raise ValueError('Porovnávať je možné iba textové .rsc exporty.')
+
+    path = resolve_backup_file_path(safe_filename)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(safe_filename)
+
+    stat_result = os.stat(path)
+    if stat_result.st_size > BACKUP_COMPARE_MAX_BYTES:
+        raise OverflowError(
+            f'Export {safe_filename} prekračuje limit 16 MiB.'
+        )
+
+    with open(path, 'rb') as export_file:
+        content_bytes = export_file.read(BACKUP_COMPARE_MAX_BYTES + 1)
+    if len(content_bytes) > BACKUP_COMPARE_MAX_BYTES:
+        raise OverflowError(
+            f'Export {safe_filename} prekračuje limit 16 MiB.'
+        )
+    content = content_bytes.decode('utf-8', errors='replace')
+
+    source_line_count = len(content.splitlines())
+    if source_line_count > BACKUP_COMPARE_MAX_LINES:
+        raise OverflowError(
+            f'Export {safe_filename} prekračuje limit 200 000 riadkov.'
+        )
+
+    return {
+        'filename': safe_filename,
+        'size': stat_result.st_size,
+        'modified': datetime.fromtimestamp(
+            stat_result.st_mtime, timezone.utc
+        ).isoformat(),
+        'line_count': source_line_count,
+        'records': normalize_routeros_export(content, mode=mode),
+    }
+
+
+def build_backup_diff(left_records, right_records, context_lines):
+    """Build bounded, aligned diff hunks and complete change statistics."""
+    left_text = [line for _, line in left_records]
+    right_text = [line for _, line in right_records]
+    matcher = difflib.SequenceMatcher(None, left_text, right_text)
+    opcodes = matcher.get_opcodes()
+
+    summary = {'added': 0, 'removed': 0, 'modified': 0, 'total': 0}
+    for tag, left_start, left_end, right_start, right_end in opcodes:
+        left_count = left_end - left_start
+        right_count = right_end - right_start
+        if tag == 'insert':
+            summary['added'] += right_count
+        elif tag == 'delete':
+            summary['removed'] += left_count
+        elif tag == 'replace':
+            paired = min(left_count, right_count)
+            summary['modified'] += paired
+            summary['removed'] += left_count - paired
+            summary['added'] += right_count - paired
+    summary['total'] = summary['added'] + summary['removed'] + summary['modified']
+
+    def line_payload(record):
+        if record is None:
+            return None
+        return {'number': record[0], 'text': record[1]}
+
+    hunks = []
+    returned_rows = 0
+    truncated = False
+    for group in matcher.get_grouped_opcodes(n=context_lines):
+        hunk_rows = []
+        for tag, left_start, left_end, right_start, right_end in group:
+            left_slice = left_records[left_start:left_end]
+            right_slice = right_records[right_start:right_end]
+
+            if tag == 'equal':
+                pairs = zip(left_slice, right_slice)
+                row_kind = 'equal'
+            elif tag == 'delete':
+                pairs = ((record, None) for record in left_slice)
+                row_kind = 'removed'
+            elif tag == 'insert':
+                pairs = ((None, record) for record in right_slice)
+                row_kind = 'added'
+            else:
+                pair_count = max(len(left_slice), len(right_slice))
+                pairs = (
+                    (
+                        left_slice[index] if index < len(left_slice) else None,
+                        right_slice[index] if index < len(right_slice) else None,
+                    )
+                    for index in range(pair_count)
+                )
+                row_kind = 'modified'
+
+            for left_record, right_record in pairs:
+                if returned_rows >= BACKUP_COMPARE_MAX_ROWS:
+                    truncated = True
+                    break
+                effective_kind = row_kind
+                if row_kind == 'modified':
+                    if left_record is None:
+                        effective_kind = 'added'
+                    elif right_record is None:
+                        effective_kind = 'removed'
+                hunk_rows.append({
+                    'kind': effective_kind,
+                    'left': line_payload(left_record),
+                    'right': line_payload(right_record),
+                })
+                returned_rows += 1
+            if truncated:
+                break
+
+        if hunk_rows:
+            hunks.append({'rows': hunk_rows})
+        if truncated:
+            break
+
+    return {
+        'summary': summary,
+        'hunks': hunks,
+        'returned_rows': returned_rows,
+        'truncated': truncated,
+    }
+
+
+def backup_compare_response(payload, status=200):
+    response = jsonify(payload)
+    response.headers['Cache-Control'] = 'no-store, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    return response, status
+
+
+@app.route('/api/backups/compare')
+@login_required
+def compare_backup_exports():
+    left_filename = request.args.get('left', '')
+    right_filename = request.args.get('right', '')
+    mode = request.args.get('mode', 'normalized')
+    context_value = request.args.get('context', '3')
+
+    if mode not in BACKUP_COMPARE_MODES:
+        return backup_compare_response({
+            'status': 'error', 'message': 'Neplatný režim porovnania.'
+        }, 400)
+    try:
+        context_lines = int(context_value)
+    except (TypeError, ValueError):
+        context_lines = None
+    if context_lines not in BACKUP_COMPARE_CONTEXTS:
+        return backup_compare_response({
+            'status': 'error', 'message': 'Kontext musí mať 3, 10 alebo 25 riadkov.'
+        }, 400)
+    if not left_filename or not right_filename or left_filename == right_filename:
+        return backup_compare_response({
+            'status': 'error', 'message': 'Vyberte dva rozdielne .rsc exporty.'
+        }, 400)
+
+    try:
+        left_ip = backup_device_ip_from_filename(left_filename)
+        right_ip = backup_device_ip_from_filename(right_filename)
+        if not left_ip or not right_ip:
+            raise ValueError('Názov exportu nemá podporovaný formát.')
+        if left_ip != right_ip:
+            raise ValueError('Porovnať je možné iba exporty rovnakého zariadenia.')
+
+        left_export = read_backup_export_for_compare(left_filename, mode)
+        right_export = read_backup_export_for_compare(right_filename, mode)
+        diff_result = build_backup_diff(
+            left_export.pop('records'),
+            right_export.pop('records'),
+            context_lines,
+        )
+        return backup_compare_response({
+            'status': 'success',
+            'mode': mode,
+            'context': context_lines,
+            'device_ip': left_ip,
+            'left': left_export,
+            'right': right_export,
+            **diff_result,
+        })
+    except ValueError as error:
+        return backup_compare_response({
+            'status': 'error', 'message': str(error)
+        }, 400)
+    except FileNotFoundError:
+        return backup_compare_response({
+            'status': 'error', 'message': 'Vybraný export nebol nájdený.'
+        }, 404)
+    except OverflowError as error:
+        return backup_compare_response({
+            'status': 'error', 'message': str(error)
+        }, 413)
+    except OSError as error:
+        logger.warning(
+            'Nepodarilo sa prečítať export pre diff: %s',
+            error.__class__.__name__,
+        )
+        return backup_compare_response({
+            'status': 'error', 'message': 'Export sa nepodarilo prečítať.'
+        }, 500)
+    except Exception as error:
+        logger.error(
+            'Chyba pri vytváraní diffu záloh: %s',
+            error.__class__.__name__,
+        )
+        return backup_compare_response({
+            'status': 'error', 'message': 'Porovnanie exportov zlyhalo.'
+        }, 500)
 
 @app.route('/download_backup/<path:filename>')
 @login_required

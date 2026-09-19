@@ -1625,7 +1625,8 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
             update_results()
             return
         device_display_name = str(device.get('name') or '').strip() or ip
-        safe_identity = re.sub(r'[^a-zA-Z0-9_-]', '_', device_display_name)
+        safe_identity = device_display_name.replace(' - ', '_')            # " - " → "_" (inak by vzniklo _-_)
+        safe_identity = re.sub(r'[^a-zA-Z0-9_-]', '_', safe_identity)     # ostatné znaky (pôvodná logika)
         _, stdout, _ = client.exec_command('/file print where type=directory')
         has_flash = 'flash' in stdout.read().decode()
         

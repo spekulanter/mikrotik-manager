@@ -1624,9 +1624,8 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
                 result_holder['status'] = 'skipped'
             update_results()
             return
-        _, stdout, _ = client.exec_command('/system identity print')
-        identity_match = re.search(r'name:\s*(.+)', stdout.read().decode().strip())
-        safe_identity = re.sub(r'[^a-zA-Z0-9_-]', '_', identity_match.group(1) if identity_match else ip)
+        device_display_name = str(device.get('name') or '').strip() or ip
+        safe_identity = re.sub(r'[^a-zA-Z0-9_-]', '_', device_display_name)
         _, stdout, _ = client.exec_command('/file print where type=directory')
         has_flash = 'flash' in stdout.read().decode()
         

@@ -5539,9 +5539,10 @@
                     }
                 }
 
-                // Auto-scroll for desktop (if not filtered and not suppressed)
+                // Auto-scroll log kontajnera na vrchol (nový log je prepend-nutý = vždy hore)
+                // Nepoužívame scrollIntoView - pohybovalo by celou stránkou
                 if (!desktopLogEntry.classList.contains('filtered') && !suppressAutoScroll) {
-                    desktopLogEntry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    logsContainer.scrollTop = 0;
                 }
 
                 // Note: syncLogsModalContent() removed - modal now manages its own content independently
@@ -5600,9 +5601,10 @@
                 // Aplikujeme filtre na nové logy
                 applyLogFilters();
 
-                // Automatické skrolovanie k najnovšiemu logu (len ak je log viditeľný a nie je potlačené)
+                // Automatické skrolovanie log kontajnera na vrchol (nový log je prepend-nutý = vždy hore)
+                // Nepoužívame scrollIntoView - pohybovalo by celou stránkou
                 if (!desktopLogEntry.classList.contains('filtered') && !suppressAutoScroll) {
-                    desktopLogEntry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    logsContainer.scrollTop = 0;
                 }
 
                 syncLogsModalContent();

@@ -1009,6 +1009,57 @@
                 display: none;
             }
 
+            .action-buttons-container .site-filter-wrap {
+                width: 100%;
+            }
+
+            .action-buttons-container #siteFilterTrigger {
+                width: 100%;
+                min-width: 0;
+                justify-content: center;
+            }
+
+            #siteFilterTriggerLabel {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* Pri zúženom okne držíme rovnaké poradie ako v mobilnej appke. */
+            .action-buttons-container #addDeviceBtn {
+                order: -4;
+            }
+
+            .action-buttons-container #backupAllBtn {
+                order: -3;
+            }
+
+            .action-buttons-container .site-filter-wrap {
+                order: -2;
+            }
+
+            .action-buttons-container #manageSitesBtn {
+                order: -1;
+            }
+
+        }
+
+        /* V mobilnej appke držíme poradie: Pridať, Zálohovať všetky, dropdown, Lokality, ... */
+        body.android-app .action-buttons-container #addDeviceBtn {
+            order: -4;
+        }
+
+        body.android-app .action-buttons-container #backupAllBtn {
+            order: -3;
+        }
+
+        body.android-app .action-buttons-container .site-filter-wrap {
+            order: -2;
+        }
+
+        body.android-app .action-buttons-container #manageSitesBtn {
+            order: -1;
         }
 
         /* Pre trochu väčšie mobilné zariadenia (do 768px) */
@@ -1032,6 +1083,122 @@
                 display: flex !important;
                 flex-wrap: wrap;
                 gap: 0.75rem;
+            }
+        }
+
+        .site-filter-wrap {
+            position: relative;
+        }
+
+        /* Dropdown lokalít musí zostať nad hlavičkami tabuľky zariadení. */
+        #dashboardActionsCard {
+            position: relative;
+            z-index: 20;
+        }
+
+        #siteFilterTrigger {
+            width: 100%;
+            height: 36px;
+            padding: 0 0.7rem;
+            font-weight: 600;
+            color: #ffffff !important;
+            background: #0284c7 !important;
+            border-color: transparent !important;
+            box-shadow: 0 1px 2px rgba(2, 132, 199, 0.22);
+        }
+
+        #siteFilterTrigger:hover {
+            background: #0369a1 !important;
+        }
+
+        #siteFilterTrigger:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(186, 230, 253, 0.45) !important;
+        }
+
+        #siteFilterMenu {
+            position: absolute;
+            top: calc(100% + 0.45rem);
+            left: 0;
+            z-index: 70;
+            width: max-content;
+            min-width: 10rem;
+            max-width: min(24rem, calc(100vw - 2rem));
+            max-height: 18rem;
+            overflow-y: auto;
+            padding: 0.35rem;
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            border-radius: 0.6rem;
+            background: #172235;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
+        }
+
+        .site-filter-option {
+            display: block;
+            width: max-content;
+            min-width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+            padding: 0.55rem 0.7rem;
+            border-radius: 0.4rem;
+            color: #e2e8f0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-align: left;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .site-filter-option:hover,
+        .site-filter-option[aria-selected="true"] {
+            background: rgba(14, 165, 233, 0.22);
+            color: #ffffff;
+        }
+
+        body.light-theme #siteFilterMenu {
+            border-color: #93c5fd;
+            background: #ffffff;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+        }
+
+        body.light-theme .site-filter-option { color: #1e3a5f; }
+        body.light-theme .site-filter-option:hover,
+        body.light-theme .site-filter-option[aria-selected="true"] {
+            background: #dbeafe;
+            color: #075985;
+        }
+
+        body.light-theme #siteFilterTrigger {
+            background: linear-gradient(135deg, #55bdf7, #2296e8) !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(34, 150, 232, 0.12);
+        }
+
+        body.light-theme #siteFilterTrigger:hover {
+            background: linear-gradient(135deg, #2296e8, #197fc9) !important;
+            box-shadow: 0 6px 12px rgba(25, 127, 201, 0.16);
+        }
+
+        /* Na širokých desktopoch držíme celý panel akcií v jednom riadku. */
+        @media (min-width: 1700px) {
+            .action-buttons-container {
+                flex-wrap: nowrap;
+                gap: 0.25rem;
+            }
+
+            .action-buttons-container button {
+                padding-left: 0.4375rem;
+                padding-right: 0.4375rem;
+            }
+
+            .action-buttons-container .site-filter-wrap {
+                flex: 0 0 100px;
+                width: 100px;
+            }
+
+            .action-buttons-container #siteFilterTrigger {
+                width: 100%;
+                min-width: 0;
             }
         }
 
@@ -1316,6 +1483,19 @@
         body.light-theme .hover\:bg-teal-700:hover {
             background: linear-gradient(135deg, #17ab9d, #0f857a) !important;
             box-shadow: 0 6px 12px rgba(15, 133, 122, 0.16);
+        }
+
+        body.light-theme .bg-cyan-700 {
+            background: linear-gradient(135deg, #3ed0e2, #0ba8c2) !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(11, 168, 194, 0.12);
+            border: none !important;
+        }
+
+        body.light-theme .bg-cyan-700:hover,
+        body.light-theme .hover\:bg-cyan-800:hover {
+            background: linear-gradient(135deg, #0ba8c2, #0a91a9) !important;
+            box-shadow: 0 6px 12px rgba(10, 145, 169, 0.16);
         }
 
         /* Ďalšie svetlé varianty pre tlačidlá v kartách zariadení */
@@ -2726,8 +2906,8 @@
         .debug-panel-controls {
             display: flex;
             gap: 8px;
-            align-items: center;
-        }
+                align-items: center;
+            }
 
         .debug-panel-btn {
             background: transparent;
@@ -2989,7 +3169,7 @@
 
 <body class="px-4 pt-2 pb-4 md:p-8">
 <script>(function(){if(localStorage.getItem('mikrotik-theme')==='light')document.body.classList.add('light-theme');if(typeof window.Android!=='undefined')document.body.classList.add('android-app')})();</script>
-    <div id="app" class="w-full max-w-none mx-auto relative" style="max-width: 1600px;">
+    <div id="app" class="w-full max-w-none mx-auto relative" style="max-width: 1700px;">
         <!-- Header with user info -->
         <div class="flex justify-between items-center mb-3 md:mb-6">
             <div class="flex items-center gap-4">
@@ -3019,11 +3199,29 @@
         <div class="main-content-wrapper">
             <div class="left-content">
                 <!-- Action buttons -->
-                <div class="card p-4 rounded-lg mb-6">
+                <div id="dashboardActionsCard" class="card p-4 rounded-lg mb-6">
                     <div class="flex flex-wrap gap-3 items-center justify-start action-buttons-container">
                         <button id="addDeviceBtn"
                             class="btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
                             <i class="fas fa-plus"></i> Pridať zariadenie
+                        </button>
+                        <div class="site-filter-wrap">
+                            <span class="sr-only">Filtrovať podľa lokality</span>
+                            <button id="siteFilterTrigger" type="button"
+                                class="btn rounded-lg flex items-center justify-between gap-2 text-sm"
+                                aria-haspopup="listbox" aria-expanded="false" aria-controls="siteFilterMenu">
+                                <span id="siteFilterTriggerLabel">Všetky</span>
+                                <i class="fas fa-chevron-down text-xs" aria-hidden="true"></i>
+                            </button>
+                            <select id="siteFilter" class="sr-only" tabindex="-1" aria-hidden="true">
+                                <option value="all">Všetky</option>
+                                <option value="none">Bez lokality</option>
+                            </select>
+                            <div id="siteFilterMenu" class="hidden" role="listbox" aria-label="Filtrovať podľa lokality"></div>
+                        </div>
+                        <button id="manageSitesBtn"
+                            class="btn bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                            <i class="fas fa-location-dot"></i> Lokality
                         </button>
                         <button id="backupAllBtn"
                             class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
@@ -3248,6 +3446,35 @@
         </div>
     </div>
 
+    <!-- Sites management modal -->
+    <div id="sitesModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50 p-4">
+        <div class="modal-content card rounded-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="device-modal-header px-6 py-5 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="device-modal-icon-wrap w-10 h-10 rounded-lg flex items-center justify-center"><i class="fas fa-location-dot text-white"></i></span>
+                    <div><h2 class="text-xl font-bold text-white">Lokality</h2><p class="text-xs text-sky-300/70">Organizácia zariadení podľa fyzického umiestnenia</p></div>
+                </div>
+                <button id="closeSitesModalBtn" type="button" class="text-gray-400 hover:text-white p-2" aria-label="Zavrieť"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-6">
+                <form id="siteForm" class="interval-card rounded-xl border p-4 space-y-4">
+                    <input type="hidden" id="siteId">
+                    <div class="device-form-section-title"><i class="fas fa-pen text-cyan-400"></i><span id="siteFormTitle">Nová lokalita</span></div>
+                    <div><label for="siteName" class="device-field-label">Názov</label><input id="siteName" class="device-input w-full p-3 rounded-lg" maxlength="100" required placeholder="Napr. Bratislava – centrála"></div>
+                    <div><label for="siteDescription" class="device-field-label">Opis alebo adresa</label><textarea id="siteDescription" class="device-input w-full p-3 rounded-lg min-h-24 resize-y" maxlength="500" placeholder="Voliteľná adresa alebo poznámka"></textarea></div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="btn bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-2 rounded-lg"><i class="fas fa-floppy-disk mr-2"></i>Uložiť</button>
+                        <button id="cancelSiteEditBtn" type="button" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg hidden">Zrušiť úpravu</button>
+                    </div>
+                </form>
+                <div>
+                    <div class="device-form-section-title mb-3"><i class="fas fa-list text-cyan-400"></i><span>Vytvorené lokality</span></div>
+                    <div id="sitesList" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modals -->
     <div id="deviceModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
         <div class="card rounded-xl w-full max-w-4xl modal-content device-modal-content overflow-hidden">
@@ -3284,6 +3511,14 @@
                                 <input type="text" id="deviceIp"
                                     class="device-input w-full p-3 rounded-lg"
                                     placeholder="Zadajte IP adresu MikroTiku" required>
+                            </div>
+                            <div>
+                                <label for="deviceSite" class="device-field-label">
+                                    <i class="fas fa-location-dot text-cyan-400"></i>Lokalita
+                                </label>
+                                <select id="deviceSite" class="device-input w-full p-3 rounded-lg">
+                                    <option value="">Bez lokality</option>
+                                </select>
                             </div>
                             <div>
                                 <label for="deviceUsername" class="device-field-label">
@@ -4537,6 +4772,226 @@
                     setTimeout(() => toast.remove(), 320);
                 }, duration);
             }
+
+            window.sitesData = [];
+            let currentSiteFilter = localStorage.getItem('mikrotik-site-filter') || 'all';
+
+            const resetSiteForm = () => {
+                document.getElementById('siteForm').reset();
+                document.getElementById('siteId').value = '';
+                document.getElementById('siteFormTitle').textContent = 'Nová lokalita';
+                document.getElementById('cancelSiteEditBtn').classList.add('hidden');
+            };
+
+            const siteFilterTrigger = document.getElementById('siteFilterTrigger');
+            const siteFilterTriggerLabel = document.getElementById('siteFilterTriggerLabel');
+            const siteFilterMenu = document.getElementById('siteFilterMenu');
+            const siteFilterWrap = document.querySelector('.site-filter-wrap');
+
+            const closeSiteFilterMenu = () => {
+                siteFilterMenu.classList.add('hidden');
+                siteFilterTrigger.setAttribute('aria-expanded', 'false');
+            };
+
+            const syncSiteFilterTrigger = () => {
+                const filter = document.getElementById('siteFilter');
+                const selectedOption = filter.options[filter.selectedIndex];
+                const selectedLabel = selectedOption?.textContent || 'Všetky';
+                siteFilterTriggerLabel.textContent = selectedLabel;
+                siteFilterTrigger.title = selectedLabel;
+                siteFilterTrigger.setAttribute('aria-label', `Filtrovať podľa lokality: ${selectedLabel}`);
+
+                siteFilterMenu.replaceChildren();
+                [...filter.options].forEach(option => {
+                    const menuOption = document.createElement('button');
+                    menuOption.type = 'button';
+                    menuOption.className = 'site-filter-option';
+                    menuOption.role = 'option';
+                    menuOption.textContent = option.textContent;
+                    menuOption.title = option.textContent;
+                    menuOption.setAttribute('aria-selected', String(option.value === filter.value));
+                    menuOption.addEventListener('click', () => {
+                        filter.value = option.value;
+                        filter.dispatchEvent(new Event('change', { bubbles: true }));
+                        closeSiteFilterMenu();
+                        siteFilterTrigger.focus();
+                    });
+                    siteFilterMenu.appendChild(menuOption);
+                });
+            };
+
+            siteFilterTrigger.addEventListener('click', event => {
+                event.stopPropagation();
+                const isOpen = !siteFilterMenu.classList.contains('hidden');
+                if (isOpen) {
+                    closeSiteFilterMenu();
+                } else {
+                    syncSiteFilterTrigger();
+                    siteFilterMenu.classList.remove('hidden');
+                    siteFilterTrigger.setAttribute('aria-expanded', 'true');
+                }
+            });
+            document.addEventListener('click', event => {
+                if (!siteFilterWrap.contains(event.target)) closeSiteFilterMenu();
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape') closeSiteFilterMenu();
+            });
+
+            const populateSiteControls = () => {
+                const filter = document.getElementById('siteFilter');
+                const deviceSelect = document.getElementById('deviceSite');
+                const selectedDeviceSite = deviceSelect.value;
+                filter.replaceChildren();
+                deviceSelect.replaceChildren();
+
+                const addOption = (select, value, label) => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = label;
+                    select.appendChild(option);
+                };
+                addOption(filter, 'all', 'Všetky');
+                addOption(filter, 'none', 'Bez lokality');
+                addOption(deviceSelect, '', 'Bez lokality');
+                window.sitesData.forEach(site => {
+                    addOption(filter, String(site.id), site.name);
+                    addOption(deviceSelect, String(site.id), site.name);
+                });
+
+                if ([...filter.options].some(option => option.value === currentSiteFilter)) {
+                    filter.value = currentSiteFilter;
+                } else {
+                    currentSiteFilter = 'all';
+                    filter.value = 'all';
+                    localStorage.setItem('mikrotik-site-filter', 'all');
+                }
+                if ([...deviceSelect.options].some(option => option.value === selectedDeviceSite)) {
+                    deviceSelect.value = selectedDeviceSite;
+                }
+                syncSiteFilterTrigger();
+            };
+
+            const renderSitesList = () => {
+                const list = document.getElementById('sitesList');
+                list.replaceChildren();
+                if (!window.sitesData.length) {
+                    const empty = document.createElement('p');
+                    empty.className = 'text-sm text-gray-400 p-4 text-center border border-dashed border-gray-600 rounded-lg';
+                    empty.textContent = 'Zatiaľ nie je vytvorená žiadna lokalita.';
+                    list.appendChild(empty);
+                    return;
+                }
+                window.sitesData.forEach(site => {
+                    const row = document.createElement('div');
+                    row.className = 'interval-card rounded-lg border p-3 flex items-start justify-between gap-3';
+                    const content = document.createElement('div');
+                    content.className = 'min-w-0';
+                    const title = document.createElement('div');
+                    title.className = 'font-semibold text-white flex items-center gap-2';
+                    const icon = document.createElement('i');
+                    icon.className = 'fas fa-location-dot text-cyan-400';
+                    const name = document.createElement('span');
+                    name.textContent = site.name;
+                    const count = document.createElement('span');
+                    count.className = 'text-xs text-gray-400 font-normal';
+                    count.textContent = `(${site.device_count || 0})`;
+                    title.append(icon, name, count);
+                    content.appendChild(title);
+                    if (site.description) {
+                        const description = document.createElement('p');
+                        description.className = 'text-xs text-gray-400 mt-1 break-words';
+                        description.textContent = site.description;
+                        content.appendChild(description);
+                    }
+                    const actions = document.createElement('div');
+                    actions.className = 'flex gap-1 flex-shrink-0';
+                    const edit = document.createElement('button');
+                    edit.type = 'button';
+                    edit.className = 'btn bg-amber-600 hover:bg-amber-700 text-white rounded p-2';
+                    edit.title = 'Upraviť lokalitu';
+                    edit.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+                    edit.addEventListener('click', () => {
+                        document.getElementById('siteId').value = site.id;
+                        document.getElementById('siteName').value = site.name;
+                        document.getElementById('siteDescription').value = site.description || '';
+                        document.getElementById('siteFormTitle').textContent = 'Upraviť lokalitu';
+                        document.getElementById('cancelSiteEditBtn').classList.remove('hidden');
+                        document.getElementById('siteName').focus();
+                    });
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.className = 'btn bg-red-600 hover:bg-red-700 text-white rounded p-2';
+                    remove.title = 'Zmazať lokalitu';
+                    remove.innerHTML = '<i class="fas fa-trash"></i>';
+                    remove.addEventListener('click', async () => {
+                        const confirmed = await showConfirmation(`Zmazať lokalitu? ${site.device_count || 0} aktívnych zariadení sa presunie do skupiny Bez lokality.`);
+                        if (!confirmed) return;
+                        try {
+                            const result = await api.delete(`sites/${site.id}`);
+                            showToast(`Lokalita zmazaná. Bez lokality: ${result.unassigned_device_count || 0} zariadení.`, 'success');
+                            resetSiteForm();
+                            await loadSites();
+                            await loadDevices();
+                        } catch (error) {
+                            showToast(error.message, 'error');
+                        }
+                    });
+                    actions.append(edit, remove);
+                    row.append(content, actions);
+                    list.appendChild(row);
+                });
+            };
+
+            const loadSites = async () => {
+                window.sitesData = await api.get('sites');
+                populateSiteControls();
+                renderSitesList();
+            };
+
+            document.getElementById('manageSitesBtn').addEventListener('click', async () => {
+                await loadSites();
+                document.getElementById('sitesModal').classList.remove('hidden');
+                document.body.classList.add('modal-open');
+            });
+            const closeSitesModal = () => {
+                document.getElementById('sitesModal').classList.add('hidden');
+                document.body.classList.remove('modal-open');
+                resetSiteForm();
+            };
+            document.getElementById('closeSitesModalBtn').addEventListener('click', closeSitesModal);
+            document.getElementById('sitesModal').addEventListener('click', event => {
+                if (event.target.id === 'sitesModal') closeSitesModal();
+            });
+            document.getElementById('cancelSiteEditBtn').addEventListener('click', resetSiteForm);
+            document.getElementById('siteFilter').addEventListener('change', event => {
+                currentSiteFilter = event.target.value;
+                localStorage.setItem('mikrotik-site-filter', currentSiteFilter);
+                syncSiteFilterTrigger();
+                renderDevices();
+            });
+            document.getElementById('siteForm').addEventListener('submit', async event => {
+                event.preventDefault();
+                const siteId = document.getElementById('siteId').value;
+                const body = {
+                    name: document.getElementById('siteName').value.trim(),
+                    description: document.getElementById('siteDescription').value.trim()
+                };
+                try {
+                    const response = await fetch(siteId ? `/api/sites/${siteId}` : '/api/sites', {
+                        method: siteId ? 'PUT' : 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(body)
+                    });
+                    await api._handleResponse(response);
+                    showToast(siteId ? 'Lokalita bola upravená.' : 'Lokalita bola vytvorená.', 'success');
+                    resetSiteForm();
+                    await loadSites();
+                    await loadDevices();
+                } catch (error) {
+                    showToast(error.message, 'error');
+                }
+            });
 
             const loadUserStatus = async () => {
                 try {
@@ -6150,6 +6605,7 @@
                 document.getElementById('deviceName').value = device ? device.name : '';
                 setDeviceNameIdentityState(Boolean(device && device.name_source === 'snmp'));
                 document.getElementById('deviceIp').value = device ? device.ip : '';
+                document.getElementById('deviceSite').value = device && device.site_id ? String(device.site_id) : '';
                 document.getElementById('deviceUsername').value = device ? device.username : '';
                 document.getElementById('deviceSnmpVersion').value = device ? (device.snmp_version || '2c') : '3';
                 updateCustomSelectDisplay('deviceSnmpVersion');
@@ -6331,7 +6787,13 @@
                     return total;
                 };
 
-                const sortedDevices = [...window.allDevicesData].sort((a, b) => {
+                const visibleDevices = window.allDevicesData.filter(device => {
+                    if (currentSiteFilter === 'all') return true;
+                    if (currentSiteFilter === 'none') return !device.site_id;
+                    return String(device.site_id || '') === currentSiteFilter;
+                });
+
+                const sortedDevices = [...visibleDevices].sort((a, b) => {
                     // Deleted devices always sort to the end
                     if (a.deleted_at && !b.deleted_at) return 1;
                     if (!a.deleted_at && b.deleted_at) return -1;
@@ -6388,10 +6850,57 @@
                     return 0;
                 });
 
-                sortedDevices.forEach(device => {
-                    devicesGrid.appendChild(createDeviceCard(device));
-                    if (devicesTableBody) devicesTableBody.appendChild(createDeviceRow(device));
-                });
+                sortedDevices.forEach(device => devicesGrid.appendChild(createDeviceCard(device)));
+
+                if (devicesTableBody) {
+                    const grouped = new Map();
+                    sortedDevices.forEach(device => {
+                        const key = device.site_id ? String(device.site_id) : 'none';
+                        if (!grouped.has(key)) {
+                            const site = window.sitesData.find(item => String(item.id) === key);
+                            grouped.set(key, {
+                                key,
+                                name: site?.name || device.site_name || 'Bez lokality',
+                                description: site?.description || '',
+                                devices: []
+                            });
+                        }
+                        grouped.get(key).devices.push(device);
+                    });
+                    const groups = [...grouped.values()].sort((a, b) => {
+                        if (a.key === 'none') return 1;
+                        if (b.key === 'none') return -1;
+                        return a.name.localeCompare(b.name, 'sk', {sensitivity: 'base'});
+                    });
+                    groups.forEach(group => {
+                        const row = document.createElement('tr');
+                        row.className = 'bg-slate-900/80 border-y border-cyan-900/50';
+                        const cell = document.createElement('td');
+                        cell.colSpan = 11;
+                        cell.className = 'px-4 py-2 text-left';
+                        const wrap = document.createElement('div');
+                        wrap.className = 'flex items-center gap-2 min-w-0';
+                        const icon = document.createElement('i');
+                        icon.className = `fas ${group.key === 'none' ? 'fa-location-crosshairs text-gray-500' : 'fa-location-dot text-cyan-400'}`;
+                        const name = document.createElement('span');
+                        name.className = 'font-semibold text-gray-200';
+                        name.textContent = group.name;
+                        const count = document.createElement('span');
+                        count.className = 'text-xs text-gray-500';
+                        count.textContent = `(${group.devices.length})`;
+                        wrap.append(icon, name, count);
+                        if (group.description) {
+                            const description = document.createElement('span');
+                            description.className = 'text-xs text-gray-500 truncate';
+                            description.textContent = `— ${group.description}`;
+                            wrap.appendChild(description);
+                        }
+                        cell.appendChild(wrap);
+                        row.appendChild(cell);
+                        devicesTableBody.appendChild(row);
+                        group.devices.forEach(device => devicesTableBody.appendChild(createDeviceRow(device)));
+                    });
+                }
             };
 
             const initTableSort = () => {
@@ -7406,6 +7915,7 @@
                     id: document.getElementById('deviceId').value,
                     name: deviceName,
                     name_source: deviceNameInput.dataset.nameSource === 'snmp' ? 'snmp' : 'local',
+                    site_id: document.getElementById('deviceSite').value || null,
                     ip: document.getElementById('deviceIp').value,
                     username: document.getElementById('deviceUsername').value,
                     password: document.getElementById('devicePassword').value,
@@ -8001,6 +8511,7 @@
 
                     // Načítavame postupne, nie všetko naraz
                     await loadUserStatus();
+                    await loadSites();
                     populateNotificationTypes();
                     setupLogFilters();
                     initializeCustomSelects();

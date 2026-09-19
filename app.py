@@ -826,9 +826,17 @@ def init_database():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT COLLATE NOCASE NOT NULL UNIQUE,
+                description TEXT DEFAULT NULL
+            )
+        ''')
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS devices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
                 name_source TEXT NOT NULL DEFAULT 'local',
+                site_id INTEGER DEFAULT NULL,
                 username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
                 snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
                 last_backup TIMESTAMP, last_snmp_data TEXT, snmp_interval_minutes INTEGER DEFAULT 0,
@@ -902,6 +910,10 @@ def init_database():
             pass
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN routeros_update_channel TEXT DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN site_id INTEGER DEFAULT NULL')
         except sqlite3.OperationalError:
             pass
         snmp_v3_columns = (
@@ -1035,6 +1047,7 @@ def init_database():
             'CREATE INDEX IF NOT EXISTS idx_logs_device_ip ON logs (device_ip)',
             'CREATE INDEX IF NOT EXISTS idx_update_schedule_device_id ON update_schedule (device_id)',
             'CREATE INDEX IF NOT EXISTS idx_devices_deleted_purge ON devices (purge_after) WHERE deleted_at IS NOT NULL',
+            'CREATE INDEX IF NOT EXISTS idx_devices_site_id ON devices (site_id)',
         ):
             cursor.execute(index_sql)
         conn.commit()
@@ -3590,10 +3603,70 @@ _running_scheduled_updates = {}
 # bulk_group_id -> {device_ids, remaining_ids, current_device_id}
 _manual_bulk_groups = {}
 
+# A device may participate in only one active update flow. Reservations close
+# the short race between accepting an API request and the worker registering
+# itself in the running-state dictionaries.
+_update_state_lock = threading.RLock()
+_reserved_update_devices = {}  # device_id -> owner token
+_active_scheduled_bulk_groups = set()
+
 # One-time suppression set: device_ids that completed an update via manager.
 # Suppresses the first SNMP reboot/version-change detection after the update.
 # Consumed (cleared) once SNMP processes the post-update cycle.
 _recent_updates: set = set()
+
+
+def _reserve_update_devices(device_ids, owner):
+    normalized = list(dict.fromkeys(int(device_id) for device_id in device_ids))
+    with _update_state_lock:
+        busy = [
+            device_id for device_id in normalized
+            if device_id in _reserved_update_devices
+            or device_id in _running_manual_updates
+            or device_id in _running_scheduled_updates
+        ]
+        if busy:
+            return False, busy
+        for device_id in normalized:
+            _reserved_update_devices[device_id] = owner
+    return True, []
+
+
+def _release_update_devices(device_ids, owner=None):
+    with _update_state_lock:
+        for device_id in device_ids:
+            if owner is None or _reserved_update_devices.get(device_id) == owner:
+                _reserved_update_devices.pop(device_id, None)
+
+
+def _partition_devices_by_site(conn, device_ids):
+    """Return selected active devices grouped by site while preserving input order."""
+    ordered_ids = list(dict.fromkeys(int(device_id) for device_id in device_ids))
+    if not ordered_ids:
+        return []
+    placeholders = ','.join('?' for _ in ordered_ids)
+    rows = conn.execute(f'''
+        SELECT d.id, d.name, d.site_id, d.routeros_update_channel,
+               COALESCE(s.name, 'Bez lokality') AS site_name
+        FROM devices d
+        LEFT JOIN sites s ON s.id = d.site_id
+        WHERE d.id IN ({placeholders}) AND d.deleted_at IS NULL
+    ''', ordered_ids).fetchall()
+    by_id = {row['id']: dict(row) for row in rows}
+    groups = {}
+    for device_id in ordered_ids:
+        device = by_id.get(device_id)
+        if not device:
+            continue
+        key = device['site_id']
+        if key not in groups:
+            groups[key] = {
+                'site_id': key,
+                'site_name': device['site_name'],
+                'devices': []
+            }
+        groups[key]['devices'].append(device)
+    return list(groups.values())
 
 
 def _do_renew_certificate(ip, username, password, days, http_port=None):
@@ -3887,9 +3960,11 @@ def api_updater_schedules():
             SELECT us.id, us.device_id, us.scheduled_time, us.status,
                    us.created_at, us.started_at, us.completed_at, us.result_message,
                    us.bulk_group_id, us.update_channel,
-                   d.name AS device_name, d.ip AS device_ip
+                   d.name AS device_name, d.ip AS device_ip, d.site_id,
+                   COALESCE(s.name, 'Bez lokality') AS site_name
             FROM update_schedule us
             JOIN devices d ON d.id = us.device_id AND d.deleted_at IS NULL
+            LEFT JOIN sites s ON s.id = d.site_id
             ORDER BY us.scheduled_time DESC
         ''').fetchall()
         result = [dict(r) for r in rows]
@@ -3955,9 +4030,12 @@ def api_updater_schedule_create(device_id):
 @app.route('/api/updater/schedule/bulk', methods=['POST'])
 @login_required
 def api_updater_schedule_bulk():
-    """Vytvorí naplánované updaty pre viac zariadení naraz (sekvenčné spúšťanie)."""
+    """Vytvorí paralelné site fronty, sekvenčné v rámci každej lokality."""
     data = request.get_json(silent=True) or {}
-    device_ids = data.get('device_ids', [])
+    try:
+        device_ids = list(dict.fromkeys(int(value) for value in data.get('device_ids', [])))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Neplatné ID zariadení.'}), 400
     scheduled_time_str = data.get('scheduled_time', '')
     requested_channel = normalize_routeros_channel(data.get('channel', 'stable'))
     if not requested_channel:
@@ -3972,26 +4050,36 @@ def api_updater_schedule_bulk():
         return jsonify({'status': 'error', 'message': 'Čas musí byť v budúcnosti.'}), 400
 
     import uuid
-    bulk_group_id = str(uuid.uuid4())
     created_ids = []
+    response_groups = []
     with get_db_connection() as conn:
-        devices = {row['id']: dict(row) for row in conn.execute(
-            f"SELECT id, name, routeros_update_channel FROM devices WHERE id IN ({','.join('?' * len(device_ids))}) AND deleted_at IS NULL",
-            device_ids
-        ).fetchall()}
-        for seq, dev_id in enumerate(device_ids):
-            if dev_id not in devices:
-                continue
-            update_channel = normalize_routeros_channel(devices[dev_id]['routeros_update_channel']) or requested_channel
-            cursor = conn.execute(
-                'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence, update_channel) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                (dev_id, scheduled_time, 'pending', datetime.now(), bulk_group_id, seq, update_channel)
-            )
-            created_ids.append(cursor.lastrowid)
+        site_groups = _partition_devices_by_site(conn, device_ids)
+        if sum(len(group['devices']) for group in site_groups) != len(device_ids):
+            return jsonify({'status': 'error', 'message': 'Niektoré zariadenia neexistujú alebo sú v koši.'}), 400
+        for site_group in site_groups:
+            bulk_group_id = str(uuid.uuid4())
+            group_ids = []
+            for seq, device in enumerate(site_group['devices']):
+                update_channel = normalize_routeros_channel(device['routeros_update_channel']) or requested_channel
+                cursor = conn.execute(
+                    'INSERT INTO update_schedule (device_id, scheduled_time, status, created_at, bulk_group_id, bulk_sequence, update_channel) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    (device['id'], scheduled_time, 'pending', datetime.now(), bulk_group_id, seq, update_channel)
+                )
+                created_ids.append(cursor.lastrowid)
+                group_ids.append(cursor.lastrowid)
+            response_groups.append({
+                'bulk_group_id': bulk_group_id,
+                'site_id': site_group['site_id'],
+                'site_name': site_group['site_name'],
+                'schedule_ids': group_ids,
+                'device_ids': [device['id'] for device in site_group['devices']]
+            })
         conn.commit()
-    names = ', '.join(devices[d]['name'] for d in device_ids if d in devices)
-    add_log('info', f"Hromadný naplánovaný update ({len(created_ids)} zariadení, rešpektované individuálne kanály): {names}")
-    return jsonify({'status': 'success', 'ids': created_ids, 'bulk_group_id': bulk_group_id})
+    add_log('info', f"Naplánovaný update: {len(created_ids)} zariadení v {len(response_groups)} paralelných site frontách.")
+    response = {'status': 'success', 'ids': created_ids, 'groups': response_groups}
+    if len(response_groups) == 1:
+        response['bulk_group_id'] = response_groups[0]['bulk_group_id']
+    return jsonify(response)
 
 @app.route('/api/updater/schedule/<int:schedule_id>', methods=['DELETE'])
 @login_required
@@ -4287,13 +4375,15 @@ def api_updater_run_update(device_id):
     if not requested_channel:
         return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
     channel, _ = get_device_update_channel(device_id, requested_channel)
-    if device_id in _running_manual_updates:
-        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
         device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
-    threading.Thread(target=run_device_update, args=(device_id, channel), daemon=True).start()
+    owner = f'manual:{device_id}:{secrets.token_hex(8)}'
+    reserved, _ = _reserve_update_devices([device_id], owner)
+    if not reserved:
+        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
+    threading.Thread(target=run_device_update, args=(device_id, channel, owner), daemon=True).start()
     return jsonify({'status': 'success', 'message': 'Aktualizácia spustená.'})
 
 
@@ -4306,13 +4396,15 @@ def api_updater_run_update_os(device_id):
     if not requested_channel:
         return jsonify({'status': 'error', 'message': 'Neplatný RouterOS kanál.'}), 400
     channel, _ = get_device_update_channel(device_id, requested_channel)
-    if device_id in _running_manual_updates:
-        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
         device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
-    threading.Thread(target=run_device_update_os, args=(device_id, channel), daemon=True).start()
+    owner = f'manual-os:{device_id}:{secrets.token_hex(8)}'
+    reserved, _ = _reserve_update_devices([device_id], owner)
+    if not reserved:
+        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
+    threading.Thread(target=run_device_update_os, args=(device_id, channel, owner), daemon=True).start()
     return jsonify({'status': 'success', 'message': 'Aktualizácia RouterOS spustená.'})
 
 
@@ -4320,13 +4412,15 @@ def api_updater_run_update_os(device_id):
 @login_required
 def api_updater_run_update_firmware(device_id):
     """Spustí manuálny Firmware-only update (kroky 1–5) ako server-side daemon thread."""
-    if device_id in _running_manual_updates:
-        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
     with get_db_connection() as conn:
         device = conn.execute('SELECT id, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
     if not device:
         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené.'}), 404
-    threading.Thread(target=run_device_update_firmware, args=(device_id,), daemon=True).start()
+    owner = f'manual-fw:{device_id}:{secrets.token_hex(8)}'
+    reserved, _ = _reserve_update_devices([device_id], owner)
+    if not reserved:
+        return jsonify({'status': 'error', 'message': 'Aktualizácia pre toto zariadenie už prebieha.'}), 409
+    threading.Thread(target=run_device_update_firmware, args=(device_id, owner), daemon=True).start()
     return jsonify({'status': 'success', 'message': 'Aktualizácia Firmware spustená.'})
 
 
@@ -4372,7 +4466,7 @@ def api_updater_running_scheduled_updates():
 @app.route('/api/updater/run-bulk-update', methods=['POST'])
 @login_required
 def api_updater_run_bulk_update():
-    """Spustí sekvenčnú hromadnú manuálnu aktualizáciu viacerých zariadení (server-side, F5-odolné)."""
+    """Spustí jednu sekvenčnú frontu na lokalitu; lokality bežia paralelne."""
     import uuid
     data = request.json or {}
     channel = normalize_routeros_channel(data.get('channel', 'stable'))
@@ -4384,19 +4478,56 @@ def api_updater_run_bulk_update():
         return jsonify({'status': 'error', 'message': 'Neplatné ID zariadení.'}), 400
     if not device_ids:
         return jsonify({'status': 'error', 'message': 'Žiadne zariadenia.'}), 400
-    for did in device_ids:
-        if did in _running_manual_updates:
-            return jsonify({'status': 'error', 'message': f'Zariadenie ID {did} sa už aktualizuje.'}), 409
-    bulk_group_id = str(uuid.uuid4())
-    _manual_bulk_groups[bulk_group_id] = {
-        'device_ids': device_ids,
-        'remaining_ids': device_ids[1:],
-        'current_device_id': device_ids[0],
-        'channel': channel,
-        'cancelled_ids': set()
+    device_ids = list(dict.fromkeys(device_ids))
+    with get_db_connection() as conn:
+        site_groups = _partition_devices_by_site(conn, device_ids)
+    if sum(len(group['devices']) for group in site_groups) != len(device_ids):
+        return jsonify({'status': 'error', 'message': 'Niektoré zariadenia neexistujú alebo sú v koši.'}), 400
+
+    reservations = []
+    for group in site_groups:
+        group['bulk_group_id'] = str(uuid.uuid4())
+        ids = [device['id'] for device in group['devices']]
+        reserved, busy = _reserve_update_devices(ids, group['bulk_group_id'])
+        if not reserved:
+            for reserved_ids, owner in reservations:
+                _release_update_devices(reserved_ids, owner)
+            return jsonify({
+                'status': 'error',
+                'message': f'Niektoré zariadenia sa už aktualizujú: {", ".join(map(str, busy))}.'
+            }), 409
+        reservations.append((ids, group['bulk_group_id']))
+
+    response_groups = []
+    for group in site_groups:
+        ids = [device['id'] for device in group['devices']]
+        bulk_group_id = group['bulk_group_id']
+        _manual_bulk_groups[bulk_group_id] = {
+            'device_ids': ids,
+            'remaining_ids': ids[1:],
+            'current_device_id': ids[0],
+            'channel': channel,
+            'site_id': group['site_id'],
+            'site_name': group['site_name'],
+            'cancelled_ids': set()
+        }
+        response_groups.append({
+            'bulk_group_id': bulk_group_id,
+            'site_id': group['site_id'],
+            'site_name': group['site_name'],
+            'current_device_id': ids[0],
+            'remaining_ids': ids[1:]
+        })
+        threading.Thread(target=run_manual_bulk_update, args=(ids, bulk_group_id, channel), daemon=True).start()
+
+    response = {
+        'status': 'success',
+        'groups': response_groups,
+        'queued_ids': [device_id for group in response_groups for device_id in group['remaining_ids']]
     }
-    threading.Thread(target=run_manual_bulk_update, args=(device_ids, bulk_group_id, channel), daemon=True).start()
-    return jsonify({'status': 'success', 'bulk_group_id': bulk_group_id, 'queued_ids': device_ids[1:]})
+    if len(response_groups) == 1:
+        response['bulk_group_id'] = response_groups[0]['bulk_group_id']
+    return jsonify(response)
 
 
 @app.route('/api/updater/running-bulk-queue')
@@ -4409,7 +4540,9 @@ def api_updater_running_bulk_queue():
             'bulk_group_id': group_id,
             'remaining_ids': list(group.get('remaining_ids', [])),
             'current_device_id': group.get('current_device_id'),
-            'channel': group.get('channel', 'stable')
+            'channel': group.get('channel', 'stable'),
+            'site_id': group.get('site_id'),
+            'site_name': group.get('site_name', 'Bez lokality')
         })
     return jsonify({'groups': groups})
 
@@ -4423,6 +4556,7 @@ def api_updater_bulk_cancel(device_id):
         if device_id in remaining:
             group.setdefault('cancelled_ids', set()).add(device_id)
             group['remaining_ids'] = [d for d in remaining if d != device_id]
+            _release_update_devices([device_id], group_id)
             return jsonify({'status': 'success', 'device_id': device_id})
     return jsonify({'status': 'error', 'message': 'Zariadenie nie je v čakajúcom fronte'}), 404
 
@@ -4700,6 +4834,117 @@ def get_2fa_status():
         logger.error(f"Chyba pri získavaní 2FA stavu: {e}")
         return jsonify({'status': 'error', 'message': 'Chyba pri načítavaní stavu.'}), 500
 
+def _validate_site_payload(data):
+    """Validate and normalize a site create/update payload."""
+    name = str((data or {}).get('name') or '').strip()
+    description = str((data or {}).get('description') or '').strip()
+    if not name:
+        return None, 'Názov lokality je povinný.'
+    if len(name) > 100:
+        return None, 'Názov lokality môže mať najviac 100 znakov.'
+    if len(description) > 500:
+        return None, 'Opis lokality môže mať najviac 500 znakov.'
+    return {'name': name, 'description': description or None}, None
+
+
+def _site_name_exists(conn, name, exclude_id=None):
+    folded = name.casefold()
+    rows = conn.execute('SELECT id, name FROM sites').fetchall()
+    return any(
+        row['id'] != exclude_id and str(row['name']).casefold() == folded
+        for row in rows
+    )
+
+
+def _parse_device_site_id(conn, value):
+    """Return a normalized nullable site id, or an API error tuple."""
+    if value in (None, '', 'null'):
+        return None, None
+    try:
+        site_id = int(value)
+    except (TypeError, ValueError):
+        return None, (jsonify({'status': 'error', 'message': 'Neplatná lokalita.'}), 400)
+    if site_id <= 0 or not conn.execute('SELECT id FROM sites WHERE id = ?', (site_id,)).fetchone():
+        return None, (jsonify({'status': 'error', 'message': 'Lokalita neexistuje.'}), 400)
+    return site_id, None
+
+
+@app.route('/api/sites', methods=['GET', 'POST'])
+@login_required
+def handle_sites():
+    with get_db_connection() as conn:
+        if request.method == 'GET':
+            rows = conn.execute('''
+                SELECT s.id, s.name, s.description,
+                       COUNT(CASE WHEN d.deleted_at IS NULL THEN 1 END) AS device_count
+                FROM sites s
+                LEFT JOIN devices d ON d.site_id = s.id
+                GROUP BY s.id, s.name, s.description
+                ORDER BY s.name COLLATE NOCASE
+            ''').fetchall()
+            return jsonify([dict(row) for row in rows])
+
+        payload, error = _validate_site_payload(request.get_json(silent=True) or {})
+        if error:
+            return jsonify({'status': 'error', 'message': error}), 400
+        if _site_name_exists(conn, payload['name']):
+            return jsonify({'status': 'error', 'message': 'Lokalita s týmto názvom už existuje.'}), 409
+        try:
+            cursor = conn.execute(
+                'INSERT INTO sites (name, description) VALUES (?, ?)',
+                (payload['name'], payload['description'])
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            return jsonify({'status': 'error', 'message': 'Lokalita s týmto názvom už existuje.'}), 409
+    add_log('info', f"Lokalita '{payload['name']}' bola vytvorená.")
+    return jsonify({'status': 'success', 'site': {
+        'id': cursor.lastrowid, 'name': payload['name'],
+        'description': payload['description'], 'device_count': 0
+    }}), 201
+
+
+@app.route('/api/sites/<int:site_id>', methods=['PUT', 'DELETE'])
+@login_required
+def handle_site(site_id):
+    with get_db_connection() as conn:
+        existing = conn.execute('SELECT id, name FROM sites WHERE id = ?', (site_id,)).fetchone()
+        if not existing:
+            return jsonify({'status': 'error', 'message': 'Lokalita nebola nájdená.'}), 404
+
+        if request.method == 'PUT':
+            payload, error = _validate_site_payload(request.get_json(silent=True) or {})
+            if error:
+                return jsonify({'status': 'error', 'message': error}), 400
+            if _site_name_exists(conn, payload['name'], exclude_id=site_id):
+                return jsonify({'status': 'error', 'message': 'Lokalita s týmto názvom už existuje.'}), 409
+            try:
+                conn.execute(
+                    'UPDATE sites SET name = ?, description = ? WHERE id = ?',
+                    (payload['name'], payload['description'], site_id)
+                )
+                conn.commit()
+            except sqlite3.IntegrityError:
+                return jsonify({'status': 'error', 'message': 'Lokalita s týmto názvom už existuje.'}), 409
+            old_name = existing['name']
+        else:
+            unassigned_count = conn.execute(
+                'SELECT COUNT(*) FROM devices WHERE site_id = ?', (site_id,)
+            ).fetchone()[0]
+            conn.execute('UPDATE devices SET site_id = NULL WHERE site_id = ?', (site_id,))
+            conn.execute('DELETE FROM sites WHERE id = ?', (site_id,))
+            conn.commit()
+
+    if request.method == 'PUT':
+        add_log('info', f"Lokalita '{old_name}' bola upravená na '{payload['name']}'.")
+        return jsonify({'status': 'success', 'site': {
+            'id': site_id, 'name': payload['name'], 'description': payload['description']
+        }})
+
+    add_log('warning', f"Lokalita '{existing['name']}' bola zmazaná; {unassigned_count} zariadení je bez lokality.")
+    return jsonify({'status': 'success', 'unassigned_device_count': unassigned_count})
+
+
 @app.route('/api/devices', methods=['GET', 'POST'])
 @login_required
 def handle_devices():
@@ -4708,7 +4953,8 @@ def handle_devices():
             # Include all necessary fields including status and last_snmp_data
             devices = []
             for row in conn.execute('''
-                SELECT d.id, d.name, d.name_source, d.ip, d.username, d.low_memory,
+                SELECT d.id, d.name, d.name_source, d.site_id, s.name AS site_name,
+                       d.ip, d.username, d.low_memory,
                        d.password, d.snmp_community,
                        d.snmp_version, d.snmp_v3_username, d.snmp_v3_security_level,
                        d.snmp_v3_auth_protocol, d.snmp_v3_auth_password,
@@ -4726,6 +4972,7 @@ def handle_devices():
                        k.pending_fingerprint AS ssh_pending_fingerprint,
                        k.pending_detected_at AS ssh_pending_detected_at
                 FROM devices d
+                LEFT JOIN sites s ON s.id = d.site_id
                 LEFT JOIN ssh_host_keys k ON k.device_id = d.id
                 WHERE d.deleted_at IS NULL
                 ORDER BY LOWER(d.name)
@@ -4767,6 +5014,10 @@ def handle_devices():
         if request.method == 'POST':
             data = request.json or {}
 
+            site_id, site_error = _parse_device_site_id(conn, data.get('site_id'))
+            if site_error:
+                return site_error
+
             def parse_device_port_override(key, label):
                 raw_value = data.get(key, 0)
                 if raw_value in (None, ''):
@@ -4792,6 +5043,10 @@ def handle_devices():
                     old_device = conn.execute('SELECT * FROM devices WHERE id = ? AND deleted_at IS NULL', (data['id'],)).fetchone()
                     if not old_device:
                         return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
+                    # Preserve the assignment for older API clients that do not
+                    # know about sites yet. An explicit null still unassigns it.
+                    if 'site_id' not in data:
+                        site_id = old_device['site_id']
                     old_ip = old_device['ip']
                     ip_changed = old_ip != data['ip']
                     old_snmp_interval = old_device['snmp_interval_minutes'] if old_device else 0
@@ -4829,8 +5084,8 @@ def handle_devices():
                     if data.get('password'):
                         # Ak je zadané nové heslo, aktualizujeme všetko vrátane hesla
                         encrypted_password = encrypt_password(data['password'])
-                        conn.execute("UPDATE devices SET name=?, name_source=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
-                                   (device_name, device_name_source, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
+                        conn.execute("UPDATE devices SET name=?, name_source=?, site_id=?, ip=?, username=?, password=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
+                                   (device_name, device_name_source, site_id, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
                                     snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
                                     snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
                                     snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
@@ -4840,8 +5095,8 @@ def handle_devices():
                                     new_cert_www_port, new_cert_www_ssl_port, data['id']))
                     else:
                         # Ak heslo nie je zadané, aktualizujeme len ostatné polia
-                        conn.execute("UPDATE devices SET name=?, name_source=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
-                                   (device_name, device_name_source, data['ip'], data['username'], data.get('low_memory', False),
+                        conn.execute("UPDATE devices SET name=?, name_source=?, site_id=?, ip=?, username=?, low_memory=?, snmp_community=?, snmp_version=?, snmp_v3_username=?, snmp_v3_security_level=?, snmp_v3_auth_protocol=?, snmp_v3_auth_password=?, snmp_v3_priv_protocol=?, snmp_v3_priv_password=?, snmp_allowed_address=?, snmp_location=?, snmp_interval_minutes=?, ping_interval_seconds=?, ping_retry_interval_seconds=?, cert_www_port=?, cert_www_ssl_port=? WHERE id=? AND deleted_at IS NULL",
+                                   (device_name, device_name_source, site_id, data['ip'], data['username'], data.get('low_memory', False),
                                     snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
                                     snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
                                     snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
@@ -4922,8 +5177,8 @@ def handle_devices():
                     device_name_source = 'snmp' if (
                         str(data.get('name_source') or '').strip() == 'snmp' and str(data.get('name') or '').strip()
                     ) else 'local'
-                    cursor.execute("INSERT INTO devices (name, name_source, ip, username, password, low_memory, snmp_community, snmp_version, snmp_v3_username, snmp_v3_security_level, snmp_v3_auth_protocol, snmp_v3_auth_password, snmp_v3_priv_protocol, snmp_v3_priv_password, snmp_allowed_address, snmp_location, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                 (device_name, device_name_source, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
+                    cursor.execute("INSERT INTO devices (name, name_source, site_id, ip, username, password, low_memory, snmp_community, snmp_version, snmp_v3_username, snmp_v3_security_level, snmp_v3_auth_protocol, snmp_v3_auth_password, snmp_v3_priv_protocol, snmp_v3_priv_password, snmp_allowed_address, snmp_location, snmp_interval_minutes, ping_interval_seconds, ping_retry_interval_seconds, cert_www_port, cert_www_ssl_port) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                 (device_name, device_name_source, site_id, data['ip'], data['username'], encrypted_password, data.get('low_memory', False),
                                   snmp_secrets['snmp_community'], snmp_config['snmp_version'], snmp_config['snmp_v3_username'],
                                   snmp_config['snmp_v3_security_level'], snmp_config['snmp_v3_auth_protocol'],
                                   snmp_secrets['snmp_v3_auth_password'], snmp_config['snmp_v3_priv_protocol'],
@@ -5134,6 +5389,8 @@ def delete_device(device_id):
             return jsonify({'status': 'error', 'message': 'Prebieha manuálna aktualizácia'}), 409
         if device_id in _running_scheduled_updates:
             return jsonify({'status': 'error', 'message': 'Prebieha naplánovaná aktualizácia'}), 409
+        if device_id in _reserved_update_devices:
+            return jsonify({'status': 'error', 'message': 'Zariadenie je rezervované pre aktualizačnú frontu'}), 409
         for group in _manual_bulk_groups.values():
             if device_id == group.get('current_device_id') or device_id in group.get('remaining_ids', []):
                 return jsonify({'status': 'error', 'message': 'Zariadenie je súčasťou hromadnej aktualizácie'}), 409
@@ -5168,9 +5425,14 @@ def delete_device(device_id):
 @login_required
 def get_deleted_devices():
     with get_db_connection() as conn:
-        rows = conn.execute(
-            'SELECT id, name, ip, deleted_at, purge_after FROM devices WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC'
-        ).fetchall()
+        rows = conn.execute('''
+            SELECT d.id, d.name, d.ip, d.site_id, s.name AS site_name,
+                   d.deleted_at, d.purge_after
+            FROM devices d
+            LEFT JOIN sites s ON s.id = d.site_id
+            WHERE d.deleted_at IS NOT NULL
+            ORDER BY d.deleted_at DESC
+        ''').fetchall()
         devices = []
         now = datetime.now(timezone.utc)
         for row in rows:
@@ -5185,6 +5447,8 @@ def get_deleted_devices():
                 'id': row['id'],
                 'name': row['name'],
                 'ip': row['ip'],
+                'site_id': row['site_id'],
+                'site_name': row['site_name'],
                 'deleted_at': row['deleted_at'],
                 'purge_after': row['purge_after'],
                 'remaining_seconds': int(remaining)
@@ -7100,7 +7364,7 @@ def _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_do
     _step_done(2, msg='Pauza po zálohe preskočená, status zálohy nie je jednoznačný.')
     return True
 
-def run_scheduled_update(schedule_id):
+def run_scheduled_update(schedule_id, reservation_owner=None):
     """Vykoná naplánovaný full update (OS + Firmware + Reboot) pre zariadenie."""
     with app.app_context():
         device_id = None
@@ -7393,7 +7657,11 @@ def run_scheduled_update(schedule_id):
             except Exception:
                 pass
 
-def run_device_update(device_id, update_channel='stable'):
+        finally:
+            if device_id is not None and reservation_owner:
+                _release_update_devices([device_id], reservation_owner)
+
+def run_device_update(device_id, update_channel='stable', reservation_owner=None):
     """Vykoná manuálny full update (OS + Firmware + Reboot) pre zariadenie (server-side daemon thread)."""
     with app.app_context():
         try:
@@ -7624,9 +7892,11 @@ def run_device_update(device_id, update_channel='stable'):
                 pass
         finally:
             _running_manual_updates.pop(device_id, None)
+            if reservation_owner:
+                _release_update_devices([device_id], reservation_owner)
 
 
-def run_device_update_os(device_id, update_channel='stable'):
+def run_device_update_os(device_id, update_channel='stable', reservation_owner=None):
     """Vykoná manuálny RouterOS-only update (kroky 1–5) pre zariadenie (server-side daemon thread)."""
     with app.app_context():
         try:
@@ -7766,9 +8036,11 @@ def run_device_update_os(device_id, update_channel='stable'):
                 pass
         finally:
             _running_manual_updates.pop(device_id, None)
+            if reservation_owner:
+                _release_update_devices([device_id], reservation_owner)
 
 
-def run_device_update_firmware(device_id):
+def run_device_update_firmware(device_id, reservation_owner=None):
     """Vykoná manuálny Firmware-only update (kroky 1–5, mapované z krokov 7–9) pre zariadenie."""
     with app.app_context():
         try:
@@ -7923,6 +8195,8 @@ def run_device_update_firmware(device_id):
                 pass
         finally:
             _running_manual_updates.pop(device_id, None)
+            if reservation_owner:
+                _release_update_devices([device_id], reservation_owner)
 
 
 def run_manual_bulk_update(device_ids, bulk_group_id, update_channel='stable'):
@@ -7939,6 +8213,7 @@ def run_manual_bulk_update(device_ids, bulk_group_id, update_channel='stable'):
             for i, device_id in enumerate(device_ids):
                 cancelled = _manual_bulk_groups[bulk_group_id].get('cancelled_ids', set())
                 if device_id in cancelled:
+                    _release_update_devices([device_id], bulk_group_id)
                     _manual_bulk_groups[bulk_group_id]['remaining_ids'] = [
                         d for d in device_ids[i + 1:] if d not in cancelled
                     ]
@@ -7948,10 +8223,11 @@ def run_manual_bulk_update(device_ids, bulk_group_id, update_channel='stable'):
                     d for d in device_ids[i + 1:] if d not in cancelled
                 ]
                 device_channel, _ = get_device_update_channel(device_id, update_channel)
-                run_device_update(device_id, device_channel)
+                run_device_update(device_id, device_channel, bulk_group_id)
                 if i < len(device_ids) - 1:
                     time.sleep(delay)
         finally:
+            _release_update_devices(device_ids, bulk_group_id)
             _manual_bulk_groups.pop(bulk_group_id, None)
 
 
@@ -7976,6 +8252,10 @@ def check_update_schedules():
 
         # Start individual schedules immediately
         for row in individual:
+            owner = f"schedule:{row['id']}"
+            reserved, _ = _reserve_update_devices([row['device_id']], owner)
+            if not reserved:
+                continue
             with get_db_connection() as conn:
                 updated = conn.execute(
                     "UPDATE update_schedule SET status='running', started_at=? WHERE id=? AND status='pending'",
@@ -7983,11 +8263,16 @@ def check_update_schedules():
                 ).rowcount
                 conn.commit()
             if updated:
-                threading.Thread(target=run_scheduled_update, args=(row['id'],), daemon=True).start()
+                threading.Thread(target=run_scheduled_update, args=(row['id'], owner), daemon=True).start()
+            else:
+                _release_update_devices([row['device_id']], owner)
 
         # Start bulk groups sequentially (one thread per group)
         for group_id, rows in bulk_groups.items():
             rows_sorted = sorted(rows, key=lambda r: r['bulk_sequence'])
+            with _update_state_lock:
+                if group_id in _active_scheduled_bulk_groups:
+                    continue
             # Only start a group if no device in it is already running
             with get_db_connection() as conn:
                 running_in_group = conn.execute(
@@ -7995,6 +8280,11 @@ def check_update_schedules():
                     (group_id,)
                 ).fetchone()[0]
             if running_in_group == 0:
+                owner = f'scheduled-group:{group_id}'
+                group_device_ids = [row['device_id'] for row in rows_sorted]
+                reserved, _ = _reserve_update_devices(group_device_ids, owner)
+                if not reserved:
+                    continue
                 # Start the first pending item in the group
                 first = next((r for r in rows_sorted if r['id'] in [d['id'] for d in due]), None)
                 if first:
@@ -8005,16 +8295,22 @@ def check_update_schedules():
                         ).rowcount
                         conn.commit()
                     if updated:
+                        with _update_state_lock:
+                            _active_scheduled_bulk_groups.add(group_id)
                         threading.Thread(
                             target=run_scheduled_update_bulk,
-                            args=(first['id'], group_id, rows_sorted),
+                            args=(first['id'], group_id, rows_sorted, owner),
                             daemon=True
                         ).start()
+                    else:
+                        _release_update_devices(group_device_ids, owner)
+                else:
+                    _release_update_devices(group_device_ids, owner)
     except Exception as e:
         logger.error(f"check_update_schedules error: {e}")
 
 
-def run_scheduled_update_bulk(schedule_id, group_id, all_rows_sorted):
+def run_scheduled_update_bulk(schedule_id, group_id, all_rows_sorted, reservation_owner=None):
     """Spustí sekvenčný bulk scheduled update – po každom zariadení čaká na delay a potom spustí ďalšie."""
     with app.app_context():
         try:
@@ -8024,30 +8320,34 @@ def run_scheduled_update_bulk(schedule_id, group_id, all_rows_sorted):
         except Exception:
             delay = 60
 
-        # Run the first item
-        run_scheduled_update(schedule_id)
+        try:
+            # Run the first item
+            run_scheduled_update(schedule_id, reservation_owner)
 
-        # After completing, find the next pending item in the group
-        for row in all_rows_sorted:
-            if row['id'] == schedule_id:
-                continue
-            with get_db_connection() as conn:
-                status = conn.execute(
-                    "SELECT status FROM update_schedule WHERE id=?", (row['id'],)
-                ).fetchone()
-            if status and status['status'] == 'pending':
-                # Wait the configured delay
-                logger.info(f"Bulk update skupiny {group_id}: čakám {delay}s pred ďalším zariadením (schedule {row['id']})")
-                time.sleep(delay)
-                now2 = datetime.now()
+            # After completing, find the next pending item in the group
+            for row in all_rows_sorted:
+                if row['id'] == schedule_id:
+                    continue
                 with get_db_connection() as conn:
-                    updated = conn.execute(
-                        "UPDATE update_schedule SET status='running', started_at=? WHERE id=? AND status='pending'",
-                        (now2, row['id'])
-                    ).rowcount
-                    conn.commit()
-                if updated:
-                    run_scheduled_update(row['id'])
+                    status = conn.execute(
+                        "SELECT status FROM update_schedule WHERE id=?", (row['id'],)
+                    ).fetchone()
+                if status and status['status'] == 'pending':
+                    logger.info(f"Bulk update skupiny {group_id}: čakám {delay}s pred ďalším zariadením (schedule {row['id']})")
+                    time.sleep(delay)
+                    now2 = datetime.now()
+                    with get_db_connection() as conn:
+                        updated = conn.execute(
+                            "UPDATE update_schedule SET status='running', started_at=? WHERE id=? AND status='pending'",
+                            (now2, row['id'])
+                        ).rowcount
+                        conn.commit()
+                    if updated:
+                        run_scheduled_update(row['id'], reservation_owner)
+        finally:
+            _release_update_devices([row['device_id'] for row in all_rows_sorted], reservation_owner)
+            with _update_state_lock:
+                _active_scheduled_bulk_groups.discard(group_id)
 
 def check_deleted_devices_for_purge():
     """Skontroluje soft-deleted zariadenia a spustí purge pre expirované."""

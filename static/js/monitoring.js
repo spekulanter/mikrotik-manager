@@ -305,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pauseResumeBtn = document.getElementById('pauseResumeBtn');
     const pauseResumeIcon = document.getElementById('pauseResumeIcon');
     const pauseResumeText = document.getElementById('pauseResumeText');
+    const manualPingBtn = document.getElementById('manualPingBtn');
     const deviceSettingsModal = document.getElementById('deviceSettingsModal');
     const deviceSettingsForm = document.getElementById('deviceSettingsForm');
     const closeSettingsModal = document.getElementById('closeSettingsModal');
@@ -3405,15 +3406,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Manual ping - force new ping
+    const showPingTestResult = (message, isOnline) => {
+        const notification = document.createElement('div');
+        notification.className = `ping-test-notification ${isOnline ? 'success' : 'error'}`;
+        notification.setAttribute('role', 'status');
+
+        const content = document.createElement('div');
+        content.className = 'flex items-center gap-2';
+
+        const icon = document.createElement('i');
+        icon.className = isOnline ? 'fas fa-check-circle' : 'fas fa-times-circle';
+
+        const text = document.createElement('span');
+        text.className = 'text-sm font-medium';
+        text.textContent = message;
+
+        content.append(icon, text);
+        notification.appendChild(content);
+        document.body.appendChild(notification);
+
+        setTimeout(() => notification.remove(), 5000);
+    };
+
+    // Manual ping - run a five-packet availability test
     const triggerManualPing = async (deviceId) => {
+        if (!deviceId || !manualPingBtn || manualPingBtn.disabled) return;
+
+        const icon = manualPingBtn.querySelector('i');
+        const label = manualPingBtn.querySelector('span');
+
         try {
-            const pingResult = await api.post(`monitoring/ping/manual/${deviceId}`, {});
+            manualPingBtn.disabled = true;
+            if (icon) icon.className = 'fas fa-circle-notch fa-spin mr-1';
+            if (label) label.textContent = '…';
+
+            const pingResult = await api.post(`monitoring/ping/manual/${deviceId}`, { count: 5 });
             if (pingResult) {
+                if (currentDeviceId !== deviceId) return;
                 updatePingStatus(pingResult);
+
+                const sent = Number(pingResult.packets_sent) || 5;
+                const received = Number(pingResult.packets_received) || 0;
+                const loss = Number(pingResult.packet_loss);
+                const latency = pingResult.avg_latency == null
+                    ? '–'
+                    : `${Number(pingResult.avg_latency).toFixed(1)} ms`;
+                const isOnline = pingResult.status === 'online';
+
+                showPingTestResult(
+                    `${received}/${sent} odpovedí · ${latency} · strata ${Number.isFinite(loss) ? loss : 100} %`,
+                    isOnline
+                );
             }
         } catch (error) {
             console.error('Chyba pri manuálnom ping:', error);
+            if (currentDeviceId === deviceId) {
+                showPingTestResult(`Test zlyhal: ${error.message}`, false);
+            }
+        } finally {
+            manualPingBtn.disabled = false;
+            if (icon) icon.className = 'fas fa-wave-square mr-1';
+            if (label) label.textContent = 'Test ping';
         }
     };
 
@@ -3820,6 +3873,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentDeviceId) return;
         await toggleDeviceMonitoring(currentDeviceId);
     });
+
+    if (manualPingBtn) {
+        manualPingBtn.addEventListener('click', async () => {
+            if (!currentDeviceId) return;
+            await triggerManualPing(currentDeviceId);
+        });
+    }
 
     // Device settings modal handlers
     deviceSettingsBtn.addEventListener('click', async () => {

@@ -87,6 +87,64 @@
             animation: pulse 2s infinite;
         }
 
+        .ping-test-btn {
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            background: rgba(148, 163, 184, 0.05);
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1;
+            margin-right: 2px;
+            transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+        }
+
+        .ping-test-btn:hover:not(:disabled) {
+            background: rgba(148, 163, 184, 0.12);
+            border-color: rgba(148, 163, 184, 0.3);
+            color: #94a3b8;
+            transform: translateY(-1px);
+        }
+
+        .ping-test-btn:disabled {
+            cursor: wait;
+            opacity: 0.7;
+        }
+
+        body.light-theme .ping-test-btn {
+            background: rgba(71, 85, 105, 0.04);
+            border-color: rgba(71, 85, 105, 0.14);
+            color: #64748b;
+        }
+
+        body.light-theme .ping-test-btn:hover:not(:disabled) {
+            background: rgba(71, 85, 105, 0.1);
+            border-color: rgba(71, 85, 105, 0.25);
+            color: #475569;
+        }
+
+        .ping-test-notification {
+            position: fixed;
+            top: 18px;
+            left: 50%;
+            z-index: 100;
+            max-width: calc(100vw - 32px);
+            padding: 10px 16px;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transform: translateX(-50%);
+        }
+
+        .ping-test-notification.success {
+            background: rgba(5, 150, 105, 0.35);
+        }
+
+        .ping-test-notification.error {
+            background: rgba(220, 38, 38, 0.35);
+        }
+
         /* Light Theme */
         body.light-theme {
             --main-bg: #cddbf2;
@@ -983,6 +1041,55 @@
             #deviceInfoPanel .grid .card .flex {
                 gap: 0.25rem !important;
             }
+
+            /* Ping test na mobile nezaberá miesto v rozložení karty. */
+            #deviceInfoPanel #manualPingBtn {
+                position: absolute !important;
+                top: calc(50% - 7px) !important;
+                right: 2rem !important;
+                width: 22px !important;
+                height: 20px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border: 1px solid rgba(148, 163, 184, 0.32) !important;
+                border-radius: 5px !important;
+                background: rgba(148, 163, 184, 0.1) !important;
+                color: #94a3b8 !important;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+                transform: translateY(-50%) !important;
+            }
+
+            #deviceInfoPanel #manualPingBtn:active {
+                background: rgba(148, 163, 184, 0.2) !important;
+                transform: translateY(-50%) scale(0.94) !important;
+            }
+
+            body.light-theme #deviceInfoPanel #manualPingBtn {
+                border-color: rgba(71, 85, 105, 0.28) !important;
+                background: rgba(71, 85, 105, 0.08) !important;
+                color: #64748b !important;
+            }
+
+            #deviceInfoPanel #manualPingBtn span {
+                display: none !important;
+            }
+
+            #deviceInfoPanel #manualPingBtn i {
+                display: block !important;
+                width: 10px !important;
+                margin: 0 !important;
+                font-size: 10px !important;
+                line-height: 1 !important;
+                text-align: center !important;
+            }
+
+            /* Font Awesome stopky sú opticky menšie než ostatné stavové ikony. */
+            #deviceInfoPanel .grid .card i.fa-stopwatch {
+                font-size: 1rem !important;
+            }
         }
 
         .chart-fade-in {
@@ -1813,7 +1920,7 @@
             <!-- Ping Status Cards - responzívne pre desktop a mobile -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <div class="card p-3 rounded-lg">
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between gap-3">
                         <div>
                             <p class="text-sm text-gray-400">Ping Status</p>
                             <div id="pingStatus" class="ping-status text-lg font-bold">
@@ -1821,7 +1928,15 @@
                                 <span>Načítava...</span>
                             </div>
                         </div>
-                        <i class="fas fa-wifi text-2xl text-gray-500"></i>
+                        <div class="flex items-center gap-2">
+                            <button id="manualPingBtn" type="button"
+                                class="ping-test-btn px-1.5 py-1 rounded whitespace-nowrap"
+                                title="Otestovať dostupnosť pomocou 5 pingov"
+                                aria-label="Spustiť test piatimi pingmi">
+                                <i class="fas fa-wave-square mr-1"></i><span>Test ping</span>
+                            </button>
+                            <i class="fas fa-wifi text-2xl text-gray-500"></i>
+                        </div>
                     </div>
                 </div>
 

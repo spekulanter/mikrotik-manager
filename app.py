@@ -8119,8 +8119,11 @@ def ping_device(ip, count=1, timeout=None):
                 timeout = int(timeout_setting['value']) if timeout_setting else 1
         
         # Pre rýchle intervaly používame len 1 ping s nastaveným timeout
-        result = subprocess.run(['ping', '-c', str(count), '-W', str(timeout), ip], 
-                              capture_output=True, text=True, timeout=timeout + 2)  # Pridáme +2s buffer pre subprocess timeout
+        # ping odosiela pakety približne v sekundových rozostupoch; procesný limit
+        # preto musí okrem timeoutu poslednej odpovede zohľadniť aj počet paketov.
+        process_timeout = timeout + max(count - 1, 0) + 2
+        result = subprocess.run(['ping', '-c', str(count), '-W', str(timeout), ip],
+                              capture_output=True, text=True, timeout=process_timeout)
         
         if result.returncode == 0:
             # Parsovanie výsledkov
@@ -8757,10 +8760,19 @@ def monitoring_device_pause_resume(device_id):
 @app.route('/api/monitoring/ping/manual/<int:device_id>', methods=['POST'])
 @login_required
 def manual_ping_device(device_id):
-    """Manuálny ping zariadenia"""
+    """Manuálny test dostupnosti zariadenia pomocou ICMP pingov."""
     try:
+        request_data = request.get_json(silent=True) or {}
+        try:
+            test_count = int(request_data.get('count', 1))
+        except (TypeError, ValueError):
+            return jsonify({'status': 'error', 'message': 'Neplatný počet pingov'}), 400
+
+        if test_count < 1 or test_count > 5:
+            return jsonify({'status': 'error', 'message': 'Počet pingov musí byť od 1 do 5'}), 400
+
         with get_db_connection() as conn:
-            device = conn.execute('SELECT ip, name FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
+            device = conn.execute('SELECT ip FROM devices WHERE id = ? AND deleted_at IS NULL', (device_id,)).fetchone()
 
             if not device:
                 return jsonify({'status': 'error', 'message': 'Zariadenie nenájdené'}), 404
@@ -8769,8 +8781,14 @@ def manual_ping_device(device_id):
             ping_timeout = conn.execute('SELECT value FROM settings WHERE key = ?', ('ping_timeout',)).fetchone()
             timeout = int(ping_timeout['value']) if ping_timeout else 5
             
-            ip, name = device
-            ping_result = ping_device(ip, timeout=timeout)
+            ip = device['ip']
+            ping_result = ping_device(ip, count=test_count, timeout=timeout)
+            packet_loss = int(ping_result.get('packet_loss', 100))
+            ping_result['packets_sent'] = test_count
+            ping_result['packets_received'] = max(
+                0,
+                min(test_count, round(test_count * (100 - packet_loss) / 100))
+            )
             save_ping_result(device_id, ping_result)
             
             # Pošleme update cez WebSocket
@@ -8782,7 +8800,6 @@ def manual_ping_device(device_id):
                 'timestamp': ping_result['timestamp']
             })
             
-            add_log('info', f"Manuálny ping {ip} ({name}): {ping_result['status']}")
             return jsonify(ping_result)
             
     except Exception as e:

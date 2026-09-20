@@ -3552,7 +3552,7 @@
                     if (_offlineDeviceIds.has(dev.id)) return;
                     if (e.target.classList.contains('device-select-cb')) return;
                     const cb = tr.querySelector('.device-select-cb');
-                    if (cb) { cb.checked = !cb.checked; onCbChange(cb); }
+                    if (cb && !cb.disabled) { cb.checked = !cb.checked; onCbChange(cb); }
                 });
 
                 const isActiveUpdate = _deviceUpdateState[dev.id]?.active;
@@ -3607,7 +3607,7 @@
                     if (e.target.classList.contains('device-select-cb')) return;
                     if (e.target.closest('button')) return;
                     const cb = card.querySelector('.device-select-cb');
-                    if (cb) { cb.checked = !cb.checked; onCbChange(cb); }
+                    if (cb && !cb.disabled) { cb.checked = !cb.checked; onCbChange(cb); }
                 });
                 const initStatusHtml = isActiveUpdate ? updatingHtml : isWaiting ? waitingHtml : '<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;"></span>';
                 card.innerHTML = `

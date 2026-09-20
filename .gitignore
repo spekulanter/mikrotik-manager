@@ -12,3 +12,4 @@ GEMINI.md
 sync-agents.sh
 .claude/settings.local.json
 .claude/audit-*.md
+.opencode

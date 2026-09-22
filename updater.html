@@ -3714,7 +3714,7 @@
                     // OS cell
                     const osInstalledVer = data.os['installed-version'];
                     const osLatestVer = data.os['latest-version'];
-                    const osHasUpdate = osInstalledVer !== osLatestVer;
+                    const osHasUpdate = data.os['update-available'] === true;
                     document.getElementById(`os-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
                             <span class="version-label">Aktuálna:</span>
@@ -3738,11 +3738,12 @@
                     // future firmware target from os.latest-version so the user sees it correctly.
                     const fwCurrent = data.firmware['current-firmware'];
                     const fwUpgrade = data.firmware['upgrade-firmware'];
-                    const hasOsUpdateFw = data.os['installed-version'] !== 'N/A' && data.os['installed-version'] !== data.os['latest-version'];
+                    const hasOsUpdateFw = data.os['update-available'] === true;
                     const fwAvailable = (fwCurrent !== 'N/A' && fwCurrent === fwUpgrade && hasOsUpdateFw && data.os['latest-version'] !== 'N/A')
                         ? data.os['latest-version']
                         : fwUpgrade;
-                    const fwHasUpdate = fwCurrent !== fwAvailable;
+                    const fwHasUpdate = data.firmware['update-available'] === true ||
+                        (fwCurrent !== 'N/A' && fwCurrent === fwUpgrade && hasOsUpdateFw && fwCurrent !== fwAvailable);
                     document.getElementById(`fw-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
                             <span class="version-label">Aktuálny:</span>
@@ -3760,9 +3761,10 @@
                         </div>
                     `;
                     // Sync model
-                    document.getElementById(`model-${id}`).innerHTML = data.firmware['model'];
+                    const displayModel = data.firmware['display-model'] || 'N/A';
+                    document.getElementById(`model-${id}`).textContent = displayModel;
                     const cardModelEl = document.getElementById(`card-model-${id}`);
-                    if (cardModelEl) cardModelEl.innerHTML = data.firmware['model'];
+                    if (cardModelEl) cardModelEl.textContent = displayModel;
 
                     // Only render actions if no update is currently running/persisted
                     if (!(_deviceUpdateState[id] && (_deviceUpdateState[id].active || _deviceUpdateState[id].persistedResult))) {
@@ -4128,7 +4130,7 @@
                     showToast('Toto zariadenie nemá routerboard (VM/CHR) – firmware update nie je dostupný.', 'warning');
                     return;
                 }
-                if (current && upgrade && current !== 'N/A' && upgrade !== 'N/A' && current === upgrade) {
+                if (data.firmware['update-available'] !== true) {
                     showToast(`Firmware je už na aktuálnej verzii (${current}) – aktualizácia nebola spustená.`, 'info');
                     return;
                 }
@@ -4759,12 +4761,8 @@
             // Pre-check: skip if both OS and Firmware are already up to date
             const data = deviceDataMap[id];
             if (data) {
-                const hasOsUpdate = data.os &&
-                    data.os['installed-version'] !== 'N/A' &&
-                    data.os['installed-version'] !== data.os['latest-version'];
-                const hasFwUpdate = data.firmware &&
-                    data.firmware['current-firmware'] !== 'N/A' &&
-                    data.firmware['current-firmware'] !== data.firmware['upgrade-firmware'];
+                const hasOsUpdate = data.os && data.os['update-available'] === true;
+                const hasFwUpdate = data.firmware && data.firmware['update-available'] === true;
 
                 if (!hasOsUpdate && !hasFwUpdate) {
                     const osVer = (data.os && data.os['installed-version']) ? data.os['installed-version'] : '–';
@@ -4879,14 +4877,9 @@
                 await fullUpdateDevice(idsToUpdate[0]);
             } else {
                 // Multiple devices – delegate full sequence to backend (F5-resilient)
-                // Pre-show inline UI for first device (instant feedback)
-                if (!(_deviceUpdateState[idsToUpdate[0]] && _deviceUpdateState[idsToUpdate[0]].active)) {
-                    startInlineUpdate(idsToUpdate[0]);
-                }
-                setUpdatingCells(idsToUpdate[0]);
-                setInlineStep(idsToUpdate[0], 1, 'active');
-                // Mark remaining devices as waiting
-                idsToUpdate.slice(1).forEach(qid => setWaitingCell(qid));
+                // Backend aplikuje uložené poradie lokality. Kým ho nevráti,
+                // nezobrazujeme nesprávne prvé zariadenie z poradia tabuľky.
+                idsToUpdate.forEach(qid => setWaitingCell(qid));
 
                 try {
                     const res = await fetch('/api/updater/run-bulk-update', {
@@ -4896,11 +4889,11 @@
                     });
                     const data = await res.json();
                     if (res.status === 409 || data.status !== 'success') {
-                        endInlineUpdate(idsToUpdate[0], false, `❌ Chyba pri spustení: ${data.message || 'Neznáma chyba'}`);
-                        idsToUpdate.slice(1).forEach(qid => {
+                        idsToUpdate.forEach(qid => {
                             _bulkWaitingDeviceIds.delete(qid);
                             fetchDeviceDetails(qid);
                         });
+                        showToast(`Chyba pri spustení: ${data.message || 'Neznáma chyba'}`, 'error');
                         bulkBtn.disabled = false;
                         return;
                     }
@@ -4917,11 +4910,11 @@
                     showToast(`${idsToUpdate.length} zariadení v ${Math.max(groups.length, 1)} site frontách: lokality bežia paralelne, zariadenia v nich sekvenčne s ${_bulkUpdateDelaySec}s oneskorením.`, 'info', 7000);
                     // Backend drives the sequence – SocketIO events update the UI
                 } catch (err) {
-                    endInlineUpdate(idsToUpdate[0], false, `❌ Chyba pri spustení: ${err.message}`);
-                    idsToUpdate.slice(1).forEach(qid => {
+                    idsToUpdate.forEach(qid => {
                         _bulkWaitingDeviceIds.delete(qid);
                         fetchDeviceDetails(qid);
                     });
+                    showToast(`Chyba pri spustení: ${err.message}`, 'error');
                     bulkBtn.disabled = false;
                     return;
                 }
@@ -5033,14 +5026,15 @@
         function deviceHasUpdate(id) {
             const data = deviceDataMap[id];
             if (!data || data.status !== 'success') return false;
-            const hasOsUpdate = data.os &&
-                data.os['installed-version'] !== 'N/A' &&
-                data.os['installed-version'] !== data.os['latest-version'];
+            const hasOsUpdate = data.os && data.os['update-available'] === true;
             const _fwCur = data.firmware && data.firmware['current-firmware'];
             const _fwUpg = data.firmware && data.firmware['upgrade-firmware'];
             const _fwAvail = (_fwCur !== 'N/A' && _fwCur === _fwUpg && hasOsUpdate && data.os['latest-version'] !== 'N/A')
                 ? data.os['latest-version'] : _fwUpg;
-            const hasFwUpdate = _fwCur && _fwCur !== 'N/A' && _fwCur !== _fwAvail;
+            const hasFwUpdate = data.firmware && (
+                data.firmware['update-available'] === true ||
+                (_fwCur && _fwCur !== 'N/A' && _fwCur === _fwUpg && hasOsUpdate && _fwCur !== _fwAvail)
+            );
             return !!(hasOsUpdate || hasFwUpdate);
         }
 

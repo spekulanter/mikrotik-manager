@@ -77,6 +77,7 @@ class SitesTests(unittest.TestCase):
                 "SELECT name FROM sqlite_master WHERE type='index'"
             ).fetchall()}
         self.assertIn('site_id', columns)
+        self.assertIn('site_update_order', columns)
         self.assertIn('idx_devices_site_id', indexes)
 
     def test_sites_api_requires_login(self):
@@ -136,6 +137,45 @@ class SitesTests(unittest.TestCase):
             groups = app._partition_devices_by_site(conn, [703, 701, 702, 701])
         self.assertEqual([group['site_name'] for group in groups], ['Bez lokality', 'Bratislava', 'Košice'])
         self.assertEqual([[d['id'] for d in group['devices']] for group in groups], [[703], [701], [702]])
+
+    def test_site_device_order_is_dense_validated_and_used_by_updater(self):
+        with app.get_db_connection() as conn:
+            conn.execute('UPDATE devices SET site_id=701 WHERE id=703')
+            conn.commit()
+
+        response = self.client.put('/api/sites/701/device-order', json={'device_ids': [703, 701]})
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        payload = self.client.get('/api/sites/701/device-order').get_json()
+        self.assertEqual([(item['id'], item['order']) for item in payload['devices']], [(703, 1), (701, 2)])
+
+        with app.get_db_connection() as conn:
+            groups = app._partition_devices_by_site(conn, [701, 703])
+        self.assertEqual([device['id'] for device in groups[0]['devices']], [703, 701])
+
+        duplicate = self.client.put('/api/sites/701/device-order', json={'device_ids': [701, 701]})
+        missing = self.client.put('/api/sites/701/device-order', json={'device_ids': [701]})
+        foreign = self.client.put('/api/sites/701/device-order', json={'device_ids': [701, 702]})
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(foreign.status_code, 400)
+
+    def test_moving_device_to_another_site_clears_old_priority(self):
+        with app.get_db_connection() as conn:
+            conn.execute('UPDATE devices SET site_update_order=1 WHERE id=703')
+            conn.commit()
+        with mock.patch.object(app, 'trigger_immediate_health_check'):
+            response = self.client.post('/api/devices', json={
+                'id': 703, 'name': 'Router C', 'name_source': 'local',
+                'site_id': 701, 'ip': '192.0.2.73', 'username': 'admin', 'password': '',
+                'snmp_version': '2c', 'snmp_community': '', 'snmp_interval_minutes': 0,
+                'ping_interval_seconds': 0, 'ping_retry_interval_seconds': 0,
+                'cert_www_port': 0, 'cert_www_ssl_port': 0,
+            })
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        with app.get_db_connection() as conn:
+            row = conn.execute('SELECT site_id, site_update_order FROM devices WHERE id=703').fetchone()
+        self.assertEqual(row['site_id'], 701)
+        self.assertIsNone(row['site_update_order'])
 
     def test_scheduled_bulk_creates_one_group_per_site(self):
         scheduled_time = (datetime.now() + timedelta(hours=1)).isoformat(timespec='minutes')

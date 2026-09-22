@@ -837,6 +837,7 @@ def init_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
                 name_source TEXT NOT NULL DEFAULT 'local',
                 site_id INTEGER DEFAULT NULL,
+                site_update_order INTEGER DEFAULT NULL,
                 username TEXT NOT NULL, password TEXT NOT NULL, low_memory BOOLEAN DEFAULT 0,
                 snmp_community TEXT DEFAULT 'public', status TEXT DEFAULT 'unknown',
                 last_backup TIMESTAMP, last_snmp_data TEXT, snmp_interval_minutes INTEGER DEFAULT 0,
@@ -914,6 +915,10 @@ def init_database():
             pass
         try:
             cursor.execute('ALTER TABLE devices ADD COLUMN site_id INTEGER DEFAULT NULL')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute('ALTER TABLE devices ADD COLUMN site_update_order INTEGER DEFAULT NULL')
         except sqlite3.OperationalError:
             pass
         snmp_v3_columns = (
@@ -1518,7 +1523,7 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
         pattern = re.compile(f"_{ip}_\d{{8}}")
         local_backups = sorted(
             [f for f in os.listdir(BACKUP_DIR) if pattern.search(f) and f.endswith('.rsc')],
-            reverse=True
+            key=_backup_sort_key, reverse=True
         )
         if not local_backups:
             if detailed_logging:
@@ -1551,6 +1556,88 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
         # IP je už vo vizuálnom log prefixe, netreba ju v texte
         add_log('error', f"Chyba pri porovnávaní záloh: {e}", ip)
         return True
+
+
+def _is_manager_remote_backup(filename, ip):
+    """Match only backup artifacts created by this application."""
+    basename = str(filename).rsplit('/', 1)[-1]
+    return bool(re.fullmatch(
+        rf'.*_{re.escape(str(ip))}_\d{{8}}-\d{{4}}(?:\d{{2}})?\.backup',
+        basename,
+    ))
+
+
+def _cleanup_manager_remote_backups(sftp, ip, keep_path=None):
+    """Remove app-owned remote binary backups without touching user files."""
+    removed = []
+    normalized_keep = str(keep_path or '').lstrip('/')
+    for directory in ('.', 'flash'):
+        try:
+            names = sftp.listdir(directory)
+        except (IOError, OSError):
+            continue
+        for name in names:
+            remote_path = name if directory == '.' else f'{directory}/{name}'
+            if remote_path.lstrip('/') == normalized_keep or not _is_manager_remote_backup(name, ip):
+                continue
+            try:
+                sftp.remove(remote_path)
+                removed.append(remote_path)
+            except (IOError, OSError):
+                # A disappearing file is harmless; a still-present one will make
+                # the following backup command fail with a useful RouterOS error.
+                pass
+    return removed
+
+
+def _wait_for_remote_file(sftp, remote_path, timeout_seconds, poll_seconds=2):
+    """Wait until a remote file exists, is non-empty and has a stable size."""
+    deadline = time.monotonic() + timeout_seconds
+    previous_size = None
+    stable_observations = 0
+    while time.monotonic() < deadline:
+        try:
+            size = int(sftp.stat(remote_path).st_size)
+        except (IOError, OSError):
+            size = 0
+        if size > 0 and size == previous_size:
+            stable_observations += 1
+            if stable_observations >= 2:
+                return size
+        else:
+            stable_observations = 0
+        previous_size = size
+        time.sleep(poll_seconds)
+    raise TimeoutError(f'Vzdialený súbor {remote_path} nebol dokončený do {timeout_seconds} s.')
+
+
+def _write_text_atomic(path, content):
+    partial_path = f'{path}.part'
+    try:
+        with open(partial_path, 'w', encoding='utf-8', newline='') as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+        if os.path.getsize(partial_path) <= 0:
+            raise ValueError('Lokálny export je prázdny.')
+        os.replace(partial_path, path)
+    except Exception:
+        try:
+            os.remove(partial_path)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _backup_sort_key(filename):
+    """Order backups by their embedded creation timestamp, not by raw name.
+
+    A device rename changes the filename prefix; plain lexical sorting would
+    then treat a freshly created backup as the oldest one and retention would
+    purge it instead of the genuinely oldest files.
+    """
+    match = re.search(r'_(\d{8}-\d{4}(?:\d{2})?)\.', str(filename))
+    return (match.group(1) if match else '', str(filename))
 
 def run_backup_logic(device, is_sequential=False, result_holder=None):
     """Vykoná zálohu daného zariadenia s pokročilým logovaním a kontrolou."""
@@ -1645,39 +1732,101 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
         
         if detailed_logging:
             add_log('info', f"Zariadenie {'má' if has_flash else 'nemá'} /flash adresár.", ip)
-            add_log('info', "Vykonávam cleanup všetkých starých backup súborov na zariadení...", ip)
-        
-        # Vymaž všetky .backup súbory (ale zachovaj iné súbory ako .rsc scripty, blacklists, atď.)
-        cleanup_backup_command = ':foreach i in=[/file find where name~".backup"] do={/file remove $i}'
-        client.exec_command(cleanup_backup_command)
-        time.sleep(15)  # Dlhšie čakanie pre pomalé zariadenia, ako v referenčnom scripte
-        
-        if detailed_logging:
-            add_log('info', "Cleanup starých backup súborov dokončený.", ip)
         date_str = datetime.now().strftime("%Y%m%d-%H%M")
         base_filename = f"{safe_identity}_{ip}_{date_str}"
         backup_path = f"flash/{base_filename}.backup" if has_flash else f"{base_filename}.backup"
-        rsc_path = f"flash/{base_filename}.rsc" if has_flash else f"{base_filename}.rsc"
-        
-        if detailed_logging:
-            add_log('info', f"Vytváram súbory {base_filename}.backup a .rsc...", ip)
-        
-        client.exec_command(f'/system backup save name="{backup_path}" dont-encrypt=yes')
-        if detailed_logging and low_memory:
-            add_log('info', "Čakám (low-memory) 30s na dokončenie /system backup save...", ip)
-        time.sleep(30 if low_memory else 20)
-        client.exec_command(f'/export file="{rsc_path}"')
-        if detailed_logging and low_memory:
-            add_log('info', "Čakám (low-memory) 180s na dokončenie /export...", ip)
-        time.sleep(180 if low_memory else 30)
+        local_backup_path = os.path.join(BACKUP_DIR, f"{base_filename}.backup")
+        local_export_path = os.path.join(BACKUP_DIR, f"{base_filename}.rsc")
+        local_backup_partial = f'{local_backup_path}.part'
+
         with client.open_sftp() as sftp:
-            sftp.get(backup_path, os.path.join(BACKUP_DIR, f"{base_filename}.backup"))
-            sftp.get(rsc_path, os.path.join(BACKUP_DIR, f"{base_filename}.rsc"))
-            
+            if low_memory:
+                removed = _cleanup_manager_remote_backups(sftp, ip)
+                if detailed_logging:
+                    add_log(
+                        'info',
+                        f"16 MB režim: pred vytvorením novej zálohy odstránené staré aplikačné backupy: {len(removed)}.",
+                        ip,
+                    )
+            elif detailed_logging:
+                add_log(
+                    'info',
+                    'Existujúci vzdialený backup zostáva zachovaný až do overenia nového.',
+                    ip,
+                )
             if detailed_logging:
-                add_log('info', "Súbory úspešne stiahnuté.", ip)
-            
-            sftp.remove(rsc_path)
+                add_log('info', f"Vytváram binárny backup {base_filename}.backup; .rsc zostane iba v aplikácii.", ip)
+
+            try:
+                _, stdout, stderr = client.exec_command(
+                    f'/system backup save name="{backup_path}" dont-encrypt=yes'
+                )
+                command_output = stdout.read().decode('utf-8', errors='ignore').strip()
+                command_error = stderr.read().decode('utf-8', errors='ignore').strip()
+                if command_error:
+                    raise RuntimeError(command_error)
+
+                expected_size = _wait_for_remote_file(
+                    sftp, backup_path, 240 if low_memory else 120
+                )
+                sftp.get(backup_path, local_backup_partial)
+                downloaded_size = os.path.getsize(local_backup_partial)
+                if downloaded_size <= 0 or downloaded_size != expected_size:
+                    raise IOError(
+                        f'Neúplný binárny backup: lokálne {downloaded_size} B, vzdialene {expected_size} B.'
+                    )
+
+                final_export = get_mikrotik_export_direct(client, ip, detailed_logging)
+                if final_export is None:
+                    raise RuntimeError('Nepodarilo sa získať finálny textový export.')
+                _write_text_atomic(local_export_path, final_export)
+                os.replace(local_backup_partial, local_backup_path)
+
+                # Bežnému zariadeniu ponecháme posledný binárny backup aj lokálne
+                # na routeri. Iba 16 MB zariadenia ho po overenom stiahnutí odstránia,
+                # pretože potrebujú okamžite uvoľniť obmedzenú flash.
+                if low_memory:
+                    try:
+                        sftp.remove(backup_path)
+                    except (IOError, OSError) as cleanup_error:
+                        add_log(
+                            'warning',
+                            f'Lokálna záloha je overená, ale dočasný backup na 16 MB zariadení sa nepodarilo odstrániť: {cleanup_error}',
+                            ip,
+                        )
+                else:
+                    # Nový backup už existuje lokálne aj na routeri. Teraz môžeme
+                    # bezpečne odstrániť staršie aplikačné backupy a ponechať nový.
+                    removed = _cleanup_manager_remote_backups(
+                        sftp, ip, keep_path=backup_path
+                    )
+                    if detailed_logging:
+                        add_log(
+                            'info',
+                            f'Staršie vzdialené aplikačné backupy odstránené po overení nového: {len(removed)}.',
+                            ip,
+                        )
+                if detailed_logging:
+                    detail = f" ({command_output})" if command_output else ''
+                    remote_state = (
+                        'Vzdialený backup bol kvôli 16 MB flash odstránený.'
+                        if low_memory else 'Posledný binárny backup zostal aj na zariadení.'
+                    )
+                    add_log('info', f"Backup aj priamy export boli overené a uložené lokálne{detail} {remote_state}", ip)
+            except Exception:
+                for partial_path in (
+                    local_backup_partial, f'{local_export_path}.part',
+                    local_backup_path, local_export_path,
+                ):
+                    try:
+                        os.remove(partial_path)
+                    except FileNotFoundError:
+                        pass
+                try:
+                    sftp.remove(backup_path)
+                except (IOError, OSError):
+                    pass
+                raise
         backup_performed = True
         with get_db_connection() as conn:
             conn.execute("UPDATE devices SET last_backup = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL", (device['id'],))
@@ -1770,7 +1919,7 @@ def cleanup_old_backups(device_ip, settings, detailed_logging=True):
 
         # Lokálne čistenie
         file_pattern = f"_{device_ip}_"
-        local_files = sorted([f for f in os.listdir(BACKUP_DIR) if file_pattern in f])
+        local_files = sorted([f for f in os.listdir(BACKUP_DIR) if file_pattern in f], key=_backup_sort_key)
         
         # Keďže máme .backup a .rsc, počet súborov je dvojnásobný
         if len(local_files) > retention_count * 2:
@@ -1798,7 +1947,7 @@ def cleanup_old_backups(device_ip, settings, detailed_logging=True):
                 if 'ftp_directory' in settings and settings['ftp_directory']:
                     ftp.cwd(settings['ftp_directory'])
                 
-                ftp_files = sorted([f for f in ftp.nlst() if file_pattern in f])
+                ftp_files = sorted([f for f in ftp.nlst() if file_pattern in f], key=_backup_sort_key)
                 if len(ftp_files) > retention_count * 2:
                     files_to_delete_ftp = ftp_files[:-retention_count * 2]
                     for f_del in files_to_delete_ftp:
@@ -3090,8 +3239,9 @@ def delete_backup(filename):
                 
                 # Kontrola, či ešte existujú nejaké zálohy pre toto zariadenie
                 candidate_files = []
+                device_marker = f'_{device_ip}_'
                 for f in os.listdir(BACKUP_DIR):
-                    if not f.endswith('.backup') or device_ip not in f:
+                    if not f.endswith('.backup') or device_marker not in f:
                         continue
                     full_path = os.path.join(BACKUP_DIR, f)
                     if os.path.isfile(full_path):
@@ -3646,13 +3796,13 @@ def _release_update_devices(device_ids, owner=None):
 
 
 def _partition_devices_by_site(conn, device_ids):
-    """Return selected active devices grouped by site while preserving input order."""
+    """Return selected active devices grouped by site and ordered by site priority."""
     ordered_ids = list(dict.fromkeys(int(device_id) for device_id in device_ids))
     if not ordered_ids:
         return []
     placeholders = ','.join('?' for _ in ordered_ids)
     rows = conn.execute(f'''
-        SELECT d.id, d.name, d.site_id, d.routeros_update_channel,
+        SELECT d.id, d.name, d.site_id, d.site_update_order, d.routeros_update_channel,
                COALESCE(s.name, 'Bez lokality') AS site_name
         FROM devices d
         LEFT JOIN sites s ON s.id = d.site_id
@@ -3672,6 +3822,13 @@ def _partition_devices_by_site(conn, device_ids):
                 'devices': []
             }
         groups[key]['devices'].append(device)
+    input_position = {device_id: index for index, device_id in enumerate(ordered_ids)}
+    for group in groups.values():
+        group['devices'].sort(key=lambda device: (
+            device['site_update_order'] is None,
+            device['site_update_order'] if device['site_update_order'] is not None else input_position[device['id']],
+            input_position[device['id']],
+        ))
     return list(groups.values())
 
 
@@ -4311,6 +4468,18 @@ def api_updater_device(device_id):
         final_cert_days = cert_auto_renewal_days
         is_custom_cert_days = False
 
+    os_relation = _version_relation(
+        os_info.get('installed-version'), os_info.get('latest-version')
+    )
+    fw_relation = _version_relation(
+        fw_info.get('current-firmware'), fw_info.get('upgrade-firmware')
+    )
+    try:
+        snmp_info = json.loads(device['last_snmp_data'] or '{}')
+        dashboard_board_name = str(snmp_info.get('board_name') or 'N/A')
+    except (TypeError, ValueError, json.JSONDecodeError):
+        dashboard_board_name = 'N/A'
+
     return jsonify({
         'status': 'success',
         'ssl_ok': ssl_ok,
@@ -4326,13 +4495,18 @@ def api_updater_device(device_id):
             'installed-version': os_info.get('installed-version', 'N/A'),
             'latest-version': os_info.get('latest-version', 'N/A'),
             'status': os_info.get('status', 'N/A'),
-            'channel': os_info.get('channel', channel)
+            'channel': os_info.get('channel', channel),
+            'update-available': os_relation is not None and os_relation < 0,
+            'offered-version-older': os_relation is not None and os_relation > 0
         },
         'firmware': {
             'current-firmware': fw_info.get('current-firmware', 'N/A'),
             'upgrade-firmware': fw_info.get('upgrade-firmware', 'N/A'),
             'model': fw_info.get('model', 'N/A'),
-            'board-name': fw_info.get('board-name', 'N/A')
+            'board-name': fw_info.get('board-name', 'N/A'),
+            'display-model': dashboard_board_name,
+            'update-available': fw_relation is not None and fw_relation < 0,
+            'offered-version-older': fw_relation is not None and fw_relation > 0
         }
     })
 
@@ -5065,7 +5239,10 @@ def handle_site(site_id):
             unassigned_count = conn.execute(
                 'SELECT COUNT(*) FROM devices WHERE site_id = ?', (site_id,)
             ).fetchone()[0]
-            conn.execute('UPDATE devices SET site_id = NULL WHERE site_id = ?', (site_id,))
+            conn.execute(
+                'UPDATE devices SET site_id = NULL, site_update_order = NULL WHERE site_id = ?',
+                (site_id,)
+            )
             conn.execute('DELETE FROM sites WHERE id = ?', (site_id,))
             conn.commit()
 
@@ -5077,6 +5254,58 @@ def handle_site(site_id):
 
     add_log('warning', f"Lokalita '{existing['name']}' bola zmazaná; {unassigned_count} zariadení je bez lokality.")
     return jsonify({'status': 'success', 'unassigned_device_count': unassigned_count})
+
+
+@app.route('/api/sites/<int:site_id>/device-order', methods=['GET', 'PUT'])
+@login_required
+def handle_site_device_order(site_id):
+    """Read or atomically replace the dense updater priority within one site."""
+    with get_db_connection() as conn:
+        site = conn.execute('SELECT id, name FROM sites WHERE id = ?', (site_id,)).fetchone()
+        if not site:
+            return jsonify({'status': 'error', 'message': 'Lokalita nebola nájdená.'}), 404
+
+        rows = conn.execute('''
+            SELECT id, name, ip, site_update_order
+            FROM devices
+            WHERE site_id = ? AND deleted_at IS NULL
+            ORDER BY site_update_order IS NULL, site_update_order, LOWER(name), id
+        ''', (site_id,)).fetchall()
+
+        if request.method == 'GET':
+            return jsonify({
+                'site': {'id': site['id'], 'name': site['name']},
+                'devices': [
+                    {'id': row['id'], 'name': row['name'], 'ip': row['ip'], 'order': index}
+                    for index, row in enumerate(rows, start=1)
+                ]
+            })
+
+        data = request.get_json(silent=True) or {}
+        raw_ids = data.get('device_ids')
+        if not isinstance(raw_ids, list):
+            return jsonify({'status': 'error', 'message': 'device_ids musí byť zoznam.'}), 400
+        try:
+            device_ids = [int(device_id) for device_id in raw_ids]
+        except (TypeError, ValueError):
+            return jsonify({'status': 'error', 'message': 'Poradie obsahuje neplatné ID zariadenia.'}), 400
+
+        current_ids = {row['id'] for row in rows}
+        if len(device_ids) != len(set(device_ids)) or set(device_ids) != current_ids:
+            return jsonify({
+                'status': 'error',
+                'message': 'Zoznam musí obsahovať každé aktívne zariadenie lokality práve raz.'
+            }), 400
+
+        for order, device_id in enumerate(device_ids, start=1):
+            conn.execute(
+                'UPDATE devices SET site_update_order = ? WHERE id = ? AND site_id = ? AND deleted_at IS NULL',
+                (order, device_id, site_id)
+            )
+        conn.commit()
+
+    add_log('info', f"Poradie aktualizácií v lokalite '{site['name']}' bolo uložené.")
+    return jsonify({'status': 'success', 'device_ids': device_ids})
 
 
 @app.route('/api/devices', methods=['GET', 'POST'])
@@ -5181,6 +5410,7 @@ def handle_devices():
                     # know about sites yet. An explicit null still unassigns it.
                     if 'site_id' not in data:
                         site_id = old_device['site_id']
+                    site_changed = site_id != old_device['site_id']
                     old_ip = old_device['ip']
                     ip_changed = old_ip != data['ip']
                     old_snmp_interval = old_device['snmp_interval_minutes'] if old_device else 0
@@ -5238,6 +5468,10 @@ def handle_devices():
                                     new_snmp_location or None, new_snmp_interval,
                                     new_ping_interval, new_ping_retry_interval,
                                     new_cert_www_port, new_cert_www_ssl_port, data['id']))
+                    if site_changed:
+                        # V novej lokalite sa zariadenie zaradí na koniec, kým používateľ
+                        # explicitne neuloží nové poradie cez správu lokalít.
+                        conn.execute('UPDATE devices SET site_update_order = NULL WHERE id = ?', (data['id'],))
                     if ip_changed:
                         # A pinned key belongs to a network endpoint. A new IP must be
                         # explicitly enrolled instead of inheriting the previous pin.
@@ -5539,7 +5773,7 @@ def delete_device(device_id):
         purge_after = now + timedelta(days=retention_days)
 
         # Soft-delete
-        conn.execute("UPDATE devices SET deleted_at = ?, purge_after = ? WHERE id = ?",
+        conn.execute("UPDATE devices SET deleted_at = ?, purge_after = ?, site_update_order = NULL WHERE id = ?",
                      (now.isoformat(), purge_after.isoformat(), device_id))
         conn.commit()
 
@@ -5791,7 +6025,7 @@ def backup_all_devices():
         settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
     
     # Získame nastavenie oneskorenia medzi zálohami (predvolené 30 sekúnd)
-    backup_delay = int(settings.get('backup_delay_seconds', 30))
+    backup_delay = parse_int_setting(settings.get('backup_delay_seconds'), 30, 5, 300)
     
     # Filtrujeme len zariadenia, ktoré nemajú bežiacu zálohu
     available_devices = [device for device in devices if device['ip'] not in backup_tasks]
@@ -6364,6 +6598,29 @@ def handle_settings():
                 except (ValueError, TypeError):
                     return jsonify({'status': 'error', 'message': 'Neplatná hodnota pre uchovávanie zmazaných zariadení'}), 400
 
+            # Server-side hranice musia zodpovedať poliam v Settings; HTML min/max
+            # nie je bezpečnostná ani konzistenčná validácia API.
+            for timer_key, timer_label, minimum, maximum in (
+                ('backup_retention_count', 'Počet uchovávaných záloh', 1, 100),
+                ('backup_delay_seconds', 'Oneskorenie medzi zálohami', 5, 300),
+                ('bulk_update_delay_seconds', 'Oneskorenie medzi aktualizáciami', 10, 3600),
+                ('updater_post_backup_delay', 'Pauza po zálohe', 0, 600),
+                ('updater_stabilization_delay', 'Interval stabilizácie', 10, 600),
+                ('updater_pre_reboot_delay', 'Pauza pred reštartom', 5, 300),
+            ):
+                timer_value = request_data.get(timer_key)
+                if timer_value is None:
+                    continue
+                try:
+                    timer_int = int(timer_value)
+                except (ValueError, TypeError):
+                    return jsonify({'status': 'error', 'message': f'Neplatná hodnota: {timer_label}'}), 400
+                if not minimum <= timer_int <= maximum:
+                    return jsonify({
+                        'status': 'error',
+                        'message': f'{timer_label}: povolený rozsah je {minimum}-{maximum}.'
+                    }), 400
+
             # Validácia portov MikroTik web služieb používaných Updaterom
             for port_key, port_label in (
                 ('cert_www_port', 'Port služby www (HTTP)'),
@@ -6918,7 +7175,7 @@ def scheduled_backup_job():
             devices = [dict(row) for row in conn.execute('SELECT * FROM devices WHERE deleted_at IS NULL').fetchall()]
             settings = {row['key']: row['value'] for row in conn.execute('SELECT key, value FROM settings').fetchall()}
 
-        backup_delay = int(settings.get('backup_delay_seconds', 30))
+        backup_delay = parse_int_setting(settings.get('backup_delay_seconds'), 30, 5, 300)
         available_devices = [device for device in devices if device['ip'] not in backup_tasks]
         
         if available_devices:
@@ -7396,23 +7653,136 @@ def get_schedule_info():
 
 # SNMP checks sú spracované centrálnym schedulerom (pozri funkcie vyššie)
 
-def _wait_device_offline(device_id, timeout=240, interval=10):
-    """Čaká kým zariadenie prestane odpovedať (reboot). Vracia True ak offline, False ak timeout."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+def _wait_device_offline(device_id, timeout=240, interval=3, confirmations=2):
+    """Require consecutive failures so a transient REST error is not a reboot."""
+    deadline = time.monotonic() + timeout
+    failed_checks = 0
+    while time.monotonic() < deadline:
         data, err, _ = mk_api(device_id, 'GET', 'system/identity', timeout_val=2)
         if err:
-            return True
+            failed_checks += 1
+            if failed_checks >= confirmations:
+                return True
+        else:
+            failed_checks = 0
         time.sleep(interval)
     return False
 
-def _wait_device_online(device_id, timeout=300, interval=15):
-    """Čaká kým zariadenie začne znova odpovedať po reboote. Vracia True ak online, False ak timeout."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        data, err, _ = mk_api(device_id, 'GET', 'system/identity', timeout_val=3)
-        if not err:
-            return True
+def _wait_device_online(device_id, timeout=300, interval=5, confirmations=3):
+    """Require multiple successful identity/resource checks after a reboot."""
+    deadline = time.monotonic() + timeout
+    successful_checks = 0
+    while time.monotonic() < deadline:
+        _, identity_err, _ = mk_api(device_id, 'GET', 'system/identity', timeout_val=3)
+        _, resource_err, _ = mk_api(device_id, 'GET', 'system/resource', timeout_val=3)
+        if not identity_err and not resource_err:
+            successful_checks += 1
+            if successful_checks >= confirmations:
+                return True
+        else:
+            successful_checks = 0
+        time.sleep(interval)
+    return False
+
+
+def _routeros_version_key(version):
+    """Return a comparable RouterOS key supporting beta/rc/final versions."""
+    match = re.match(r'^\s*(\d+(?:\.\d+)*)(?:(beta|rc)(\d+))?', str(version or ''), re.IGNORECASE)
+    if not match:
+        return None
+    numbers = [int(part) for part in match.group(1).split('.')]
+    numbers = (numbers + [0] * 4)[:4]
+    stage = {'beta': 0, 'rc': 1, None: 2}[match.group(2).lower() if match.group(2) else None]
+    stage_number = int(match.group(3) or 0)
+    return tuple(numbers + [stage, stage_number])
+
+
+def _version_relation(installed, offered):
+    """Return -1 for upgrade, 0 for equal, 1 for downgrade, None if unknown."""
+    installed_key = _routeros_version_key(installed)
+    offered_key = _routeros_version_key(offered)
+    if installed_key is None or offered_key is None:
+        return None
+    return (installed_key > offered_key) - (installed_key < offered_key)
+
+
+def _api_error_message(error):
+    if isinstance(error, dict):
+        return str(error.get('message') or error)
+    return str(error)
+
+
+def _get_routerboard_state(device_id, retries=3):
+    """Distinguish a confirmed unsupported routerboard endpoint from transport errors."""
+    last_error = None
+    for attempt in range(retries):
+        data, error, code = mk_api(device_id, 'GET', 'system/routerboard', timeout_val=8)
+        if not error:
+            info = data[0] if isinstance(data, list) and data else (data if isinstance(data, dict) else {})
+            current = str(info.get('current-firmware') or '')
+            return {
+                'supported': bool(current and current != 'N/A'),
+                'info': info,
+                'error': None,
+            }
+        last_error = error
+        error_text = _api_error_message(error).lower()
+        explicitly_unsupported = code == 404 or (
+            code == 400 and any(marker in error_text for marker in (
+                'no such', 'not supported', 'unsupported', 'not implemented',
+                'does not exist', 'unknown command',
+            ))
+        )
+        if explicitly_unsupported:
+            return {'supported': False, 'info': {}, 'error': None}
+        if attempt < retries - 1:
+            time.sleep(3)
+    return {'supported': None, 'info': {}, 'error': _api_error_message(last_error)}
+
+
+def _wait_routeros_version(device_id, expected_version, timeout=120, interval=5):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        data, error, _ = mk_api(device_id, 'GET', 'system/resource', timeout_val=5)
+        if not error:
+            info = data[0] if isinstance(data, list) and data else (data if isinstance(data, dict) else {})
+            actual = str(info.get('version') or '')
+            if _version_relation(actual, expected_version) == 0:
+                return True, actual
+        time.sleep(interval)
+    return False, actual if 'actual' in locals() else ''
+
+
+def _wait_routerboard_firmware(device_id, expected_version, timeout=120, interval=5):
+    deadline = time.monotonic() + timeout
+    last_actual = ''
+    while time.monotonic() < deadline:
+        state = _get_routerboard_state(device_id, retries=1)
+        if state['supported'] is True:
+            last_actual = str(state['info'].get('current-firmware') or '')
+            if _version_relation(last_actual, expected_version) == 0:
+                return True, last_actual
+        time.sleep(interval)
+    return False, last_actual
+
+
+def _wait_services_stable(device_id, stable_seconds, interval=5):
+    """Actively verify REST services for the configured stabilization period."""
+    stable_seconds = max(0, int(stable_seconds))
+    if stable_seconds == 0:
+        return True
+    deadline = time.monotonic() + stable_seconds + 120
+    stable_since = None
+    while time.monotonic() < deadline:
+        _, identity_err, _ = mk_api(device_id, 'GET', 'system/identity', timeout_val=5)
+        _, resource_err, _ = mk_api(device_id, 'GET', 'system/resource', timeout_val=5)
+        now = time.monotonic()
+        if not identity_err and not resource_err:
+            stable_since = stable_since or now
+            if now - stable_since >= stable_seconds:
+                return True
+        else:
+            stable_since = None
         time.sleep(interval)
     return False
 
@@ -7435,7 +7805,7 @@ def _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_do
 
     enabled = settings.get('updater_backup_before_update', 'true').lower() == 'true'
     try:
-        post_backup_delay = max(0, int(settings.get('updater_post_backup_delay', 10)))
+        post_backup_delay = parse_int_setting(settings.get('updater_post_backup_delay'), 10, 0, 600)
     except (TypeError, ValueError):
         post_backup_delay = 10
     if not enabled:
@@ -7566,8 +7936,8 @@ def run_scheduled_update(schedule_id, reservation_owner=None):
             try:
                 with get_db_connection() as _sc:
                     _sett = {r['key']: r['value'] for r in _sc.execute('SELECT key, value FROM settings').fetchall()}
-                stabilization_delay = int(_sett.get('updater_stabilization_delay', 120))
-                pre_reboot_delay = int(_sett.get('updater_pre_reboot_delay', 20))
+                stabilization_delay = parse_int_setting(_sett.get('updater_stabilization_delay'), 120, 10, 600)
+                pre_reboot_delay = parse_int_setting(_sett.get('updater_pre_reboot_delay'), 20, 5, 300)
             except Exception:
                 stabilization_delay = 120
                 pre_reboot_delay = 20
@@ -7591,16 +7961,11 @@ def run_scheduled_update(schedule_id, reservation_owner=None):
             if not _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
                 return
 
-            # Pre-check: zisti či zariadenie má routerboard (VM/CHR nemá firmware)
-            fw_probe, fw_probe_err, _ = mk_api(device_id, 'GET', 'system/routerboard')
-            fw_probe_info = {}
-            if not fw_probe_err:
-                if isinstance(fw_probe, list) and fw_probe:
-                    fw_probe_info = fw_probe[0]
-                elif isinstance(fw_probe, dict):
-                    fw_probe_info = fw_probe
-            _probe_fw_val = fw_probe_info.get('current-firmware', '')
-            is_vm = bool(fw_probe_err) or not _probe_fw_val or _probe_fw_val == 'N/A'
+            routerboard = _get_routerboard_state(device_id)
+            if routerboard['supported'] is None:
+                _fail(f"Kontrola routerboardu zlyhala: {routerboard['error']}")
+                return
+            is_vm = not routerboard['supported']
 
             # Krok 3: Zisti dostupnosť OS update
             _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
@@ -7618,7 +7983,12 @@ def run_scheduled_update(schedule_id, reservation_owner=None):
 
             installed = os_info.get('installed-version', '')
             latest = os_info.get('latest-version', '')
-            has_os_update = installed and latest and installed != latest
+            os_relation = _version_relation(installed, latest)
+            if os_relation is None:
+                _emit('step_error', step=3)
+                _fail(f'Neplatná verzia RouterOS (nainštalovaná: {installed or "?"}, dostupná: {latest or "?"})')
+                return
+            has_os_update = os_relation < 0
 
             if has_os_update:
                 _emit('step_active', step=3, msg=f'Inštalujem RouterOS {installed} → {latest}...')
@@ -7643,6 +8013,11 @@ def run_scheduled_update(schedule_id, reservation_owner=None):
                 if not _wait_device_online(device_id, timeout=300):
                     _emit('step_error', step=5)
                     _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    return
+                verified, actual_version = _wait_routeros_version(device_id, latest)
+                if not verified:
+                    _emit('step_error', step=5)
+                    _fail(f'RouterOS po reštarte nemá očakávanú verziu {latest} (zistené: {actual_version or "neznáme"})')
                     return
                 _step_done(5)
 
@@ -7671,8 +8046,11 @@ def run_scheduled_update(schedule_id, reservation_owner=None):
                     return
 
                 # Krok 6: stabilizácia (iba pre zariadenia s routerboardom)
-                _emit('step_active', step=6, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
-                time.sleep(stabilization_delay)
+                _emit('step_active', step=6, msg=f'Overujem stabilitu služieb počas {stabilization_delay}s...')
+                if not _wait_services_stable(device_id, stabilization_delay):
+                    _emit('step_error', step=6)
+                    _fail('Služby RouterOS neboli počas stabilizačného intervalu stabilné')
+                    return
                 _step_done(6)
             else:
                 _step_done(3)
@@ -7705,17 +8083,25 @@ def run_scheduled_update(schedule_id, reservation_owner=None):
 
             # Krok 7: Zisti dostupnosť firmware update
             _emit('step_active', step=7, msg='Kontrolujem verzie firmware...')
-            fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
-            fw_info = {}
-            if not err:
-                if isinstance(fw_data, list) and fw_data:
-                    fw_info = fw_data[0]
-                elif isinstance(fw_data, dict):
-                    fw_info = fw_data
+            routerboard = _get_routerboard_state(device_id)
+            if routerboard['supported'] is None:
+                _emit('step_error', step=7)
+                _fail(f"Kontrola firmware zlyhala: {routerboard['error']}")
+                return
+            if not routerboard['supported']:
+                _emit('step_error', step=7)
+                _fail('Routerboard bol pred aktualizáciou dostupný, po reštarte však chýba')
+                return
+            fw_info = routerboard['info']
 
             fw_current = fw_info.get('current-firmware', '')
             fw_upgrade = fw_info.get('upgrade-firmware', '')
-            has_fw_update = fw_current and fw_upgrade and fw_current != fw_upgrade
+            fw_relation = _version_relation(fw_current, fw_upgrade)
+            if fw_relation is None:
+                _emit('step_error', step=7)
+                _fail(f'Neplatná verzia firmware (aktuálna: {fw_current or "?"}, upgrade: {fw_upgrade or "?"})')
+                return
+            has_fw_update = fw_relation < 0
 
             if has_fw_update:
                 _emit('step_active', step=7, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
@@ -7733,11 +8119,23 @@ def run_scheduled_update(schedule_id, reservation_owner=None):
 
                 # Krok 9: Finálny reštart
                 _emit('step_active', step=9, msg='Odosielam príkaz na finálny reštart...')
-                mk_api(device_id, 'POST', 'system/reboot')
-                _wait_device_offline(device_id, timeout=120)
+                _, reboot_err, reboot_code = mk_api(device_id, 'POST', 'system/reboot')
+                if reboot_err and reboot_code != 500:
+                    _emit('step_error', step=9)
+                    _fail(f'Príkaz na reštart zlyhal: {_api_error_message(reboot_err)}')
+                    return
+                if not _wait_device_offline(device_id, timeout=120):
+                    _emit('step_error', step=9)
+                    _fail('Zariadenie po firmware upgrade neprešlo do offline stavu (timeout 120s)')
+                    return
                 if not _wait_device_online(device_id, timeout=300):
                     _emit('step_error', step=9)
                     _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
+                    return
+                verified, actual_firmware = _wait_routerboard_firmware(device_id, fw_upgrade)
+                if not verified:
+                    _emit('step_error', step=9)
+                    _fail(f'Firmware po reštarte nemá očakávanú verziu {fw_upgrade} (zistené: {actual_firmware or "neznáme"})')
                     return
                 _step_done(9)
             else:
@@ -7850,8 +8248,8 @@ def run_device_update(device_id, update_channel='stable', reservation_owner=None
             try:
                 with get_db_connection() as _sc:
                     _sett = {r['key']: r['value'] for r in _sc.execute('SELECT key, value FROM settings').fetchall()}
-                stabilization_delay = int(_sett.get('updater_stabilization_delay', 120))
-                pre_reboot_delay = int(_sett.get('updater_pre_reboot_delay', 20))
+                stabilization_delay = parse_int_setting(_sett.get('updater_stabilization_delay'), 120, 10, 600)
+                pre_reboot_delay = parse_int_setting(_sett.get('updater_pre_reboot_delay'), 20, 5, 300)
             except Exception:
                 stabilization_delay = 120
                 pre_reboot_delay = 20
@@ -7874,16 +8272,11 @@ def run_device_update(device_id, update_channel='stable', reservation_owner=None
             if not _run_backup_before_update(device_id, device_ip, device_name, _emit, _step_done, _fail):
                 return
 
-            # Pre-check VM/CHR: probe routerboard while device is still fully online
-            fw_probe, fw_probe_err, _ = mk_api(device_id, 'GET', 'system/routerboard')
-            fw_probe_info = {}
-            if not fw_probe_err:
-                if isinstance(fw_probe, list) and fw_probe:
-                    fw_probe_info = fw_probe[0]
-                elif isinstance(fw_probe, dict):
-                    fw_probe_info = fw_probe
-            _probe_fw_val = fw_probe_info.get('current-firmware', '')
-            is_vm = bool(fw_probe_err) or not _probe_fw_val or _probe_fw_val == 'N/A'
+            routerboard = _get_routerboard_state(device_id)
+            if routerboard['supported'] is None:
+                _fail(f"Kontrola routerboardu zlyhala: {routerboard['error']}")
+                return
+            is_vm = not routerboard['supported']
 
             # Krok 3: Zisti dostupnosť OS update
             _emit('step_active', step=3, msg='Kontrolujem dostupnosť RouterOS aktualizácie...')
@@ -7901,7 +8294,12 @@ def run_device_update(device_id, update_channel='stable', reservation_owner=None
 
             installed = os_info.get('installed-version', '')
             latest = os_info.get('latest-version', '')
-            has_os_update = installed and latest and installed != latest
+            os_relation = _version_relation(installed, latest)
+            if os_relation is None:
+                _emit('step_error', step=3)
+                _fail(f'Neplatná verzia RouterOS (nainštalovaná: {installed or "?"}, dostupná: {latest or "?"})')
+                return
+            has_os_update = os_relation < 0
 
             if has_os_update:
                 _emit('step_active', step=3, msg=f'Inštalujem RouterOS {installed} → {latest}...')
@@ -7926,6 +8324,11 @@ def run_device_update(device_id, update_channel='stable', reservation_owner=None
                     _emit('step_error', step=5)
                     _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
                     return
+                verified, actual_version = _wait_routeros_version(device_id, latest)
+                if not verified:
+                    _emit('step_error', step=5)
+                    _fail(f'RouterOS po reštarte nemá očakávanú verziu {latest} (zistené: {actual_version or "neznáme"})')
+                    return
                 _step_done(5)
 
                 if is_vm:
@@ -7944,8 +8347,11 @@ def run_device_update(device_id, update_channel='stable', reservation_owner=None
                     return
 
                 # Krok 6: stabilizácia
-                _emit('step_active', step=6, msg=f'Čakám {stabilization_delay}s na stabilizáciu služieb...')
-                time.sleep(stabilization_delay)
+                _emit('step_active', step=6, msg=f'Overujem stabilitu služieb počas {stabilization_delay}s...')
+                if not _wait_services_stable(device_id, stabilization_delay):
+                    _emit('step_error', step=6)
+                    _fail('Služby RouterOS neboli počas stabilizačného intervalu stabilné')
+                    return
                 _step_done(6)
             else:
                 _step_done(3, msg=f'RouterOS {installed} je aktuálny.')
@@ -7954,17 +8360,25 @@ def run_device_update(device_id, update_channel='stable', reservation_owner=None
 
             # Krok 7: Zisti dostupnosť firmware update
             _emit('step_active', step=7, msg='Kontrolujem verzie firmware...')
-            fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
-            fw_info = {}
-            if not err:
-                if isinstance(fw_data, list) and fw_data:
-                    fw_info = fw_data[0]
-                elif isinstance(fw_data, dict):
-                    fw_info = fw_data
+            routerboard = _get_routerboard_state(device_id)
+            if routerboard['supported'] is None:
+                _emit('step_error', step=7)
+                _fail(f"Kontrola firmware zlyhala: {routerboard['error']}")
+                return
+            if not routerboard['supported']:
+                _emit('step_error', step=7)
+                _fail('Routerboard bol pred aktualizáciou dostupný, po reštarte však chýba')
+                return
+            fw_info = routerboard['info']
 
             fw_current = fw_info.get('current-firmware', '')
             fw_upgrade = fw_info.get('upgrade-firmware', '')
-            has_fw_update = fw_current and fw_upgrade and fw_current != fw_upgrade
+            fw_relation = _version_relation(fw_current, fw_upgrade)
+            if fw_relation is None:
+                _emit('step_error', step=7)
+                _fail(f'Neplatná verzia firmware (aktuálna: {fw_current or "?"}, upgrade: {fw_upgrade or "?"})')
+                return
+            has_fw_update = fw_relation < 0
 
             if has_fw_update:
                 _emit('step_active', step=7, msg=f'Inštalujem Firmware {fw_current} → {fw_upgrade}...')
@@ -7982,11 +8396,23 @@ def run_device_update(device_id, update_channel='stable', reservation_owner=None
 
                 # Krok 9: Finálny reštart
                 _emit('step_active', step=9, msg='Odosielam príkaz na finálny reštart...')
-                mk_api(device_id, 'POST', 'system/reboot')
-                _wait_device_offline(device_id, timeout=120)
+                _, reboot_err, reboot_code = mk_api(device_id, 'POST', 'system/reboot')
+                if reboot_err and reboot_code != 500:
+                    _emit('step_error', step=9)
+                    _fail(f'Príkaz na reštart zlyhal: {_api_error_message(reboot_err)}')
+                    return
+                if not _wait_device_offline(device_id, timeout=120):
+                    _emit('step_error', step=9)
+                    _fail('Zariadenie po firmware upgrade neprešlo do offline stavu (timeout 120s)')
+                    return
                 if not _wait_device_online(device_id, timeout=300):
                     _emit('step_error', step=9)
                     _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
+                    return
+                verified, actual_firmware = _wait_routerboard_firmware(device_id, fw_upgrade)
+                if not verified:
+                    _emit('step_error', step=9)
+                    _fail(f'Firmware po reštarte nemá očakávanú verziu {fw_upgrade} (zistené: {actual_firmware or "neznáme"})')
                     return
                 _step_done(9)
             else:
@@ -8114,7 +8540,12 @@ def run_device_update_os(device_id, update_channel='stable', reservation_owner=N
 
             installed = os_info.get('installed-version', '')
             latest = os_info.get('latest-version', '')
-            has_os_update = installed and latest and installed != latest
+            os_relation = _version_relation(installed, latest)
+            if os_relation is None:
+                _emit('step_error', step=3)
+                _fail(f'Neplatná verzia RouterOS (nainštalovaná: {installed or "?"}, dostupná: {latest or "?"})')
+                return
+            has_os_update = os_relation < 0
 
             if has_os_update:
                 _emit('step_active', step=3, msg=f'Inštalujem RouterOS {installed} → {latest}...')
@@ -8138,6 +8569,11 @@ def run_device_update_os(device_id, update_channel='stable', reservation_owner=N
                 if not _wait_device_online(device_id, timeout=300):
                     _emit('step_error', step=5)
                     _fail('Zariadenie sa nespustilo po aktualizácii OS (timeout 300s)')
+                    return
+                verified, actual_version = _wait_routeros_version(device_id, latest)
+                if not verified:
+                    _emit('step_error', step=5)
+                    _fail(f'RouterOS po reštarte nemá očakávanú verziu {latest} (zistené: {actual_version or "neznáme"})')
                     return
                 _step_done(5)
             else:
@@ -8227,7 +8663,7 @@ def run_device_update_firmware(device_id, reservation_owner=None):
             try:
                 with get_db_connection() as _sc:
                     _sett = {r['key']: r['value'] for r in _sc.execute('SELECT key, value FROM settings').fetchall()}
-                pre_reboot_delay = int(_sett.get('updater_pre_reboot_delay', 20))
+                pre_reboot_delay = parse_int_setting(_sett.get('updater_pre_reboot_delay'), 20, 5, 300)
             except Exception:
                 pre_reboot_delay = 20
 
@@ -8249,19 +8685,23 @@ def run_device_update_firmware(device_id, reservation_owner=None):
 
             # Krok 3 (≡ pôv. krok 7): Zisti dostupnosť firmware update
             _emit('step_active', step=3, msg='Kontrolujem verzie firmware...')
-            fw_data, err, _ = mk_api(device_id, 'GET', 'system/routerboard')
-            fw_info = {}
-            if not err:
-                if isinstance(fw_data, list) and fw_data:
-                    fw_info = fw_data[0]
-                elif isinstance(fw_data, dict):
-                    fw_info = fw_data
+            routerboard = _get_routerboard_state(device_id)
+            if routerboard['supported'] is None:
+                _emit('step_error', step=3)
+                _fail(f"Kontrola routerboardu zlyhala: {routerboard['error']}")
+                return
+            fw_info = routerboard['info']
 
             fw_current = fw_info.get('current-firmware', '')
             fw_upgrade = fw_info.get('upgrade-firmware', '')
-            has_fw_update = fw_current and fw_upgrade and fw_current != fw_upgrade
+            fw_relation = _version_relation(fw_current, fw_upgrade) if routerboard['supported'] else 0
+            if routerboard['supported'] and fw_relation is None:
+                _emit('step_error', step=3)
+                _fail(f'Neplatná verzia firmware (aktuálna: {fw_current or "?"}, upgrade: {fw_upgrade or "?"})')
+                return
+            has_fw_update = routerboard['supported'] and fw_relation < 0
 
-            if not fw_current:
+            if not routerboard['supported']:
                 # VM/CHR – žiadny routerboard
                 _step_done(3, msg='Firmware nie je podporovaný (VM/CHR).')
                 for s in [4, 5]:
@@ -8291,11 +8731,23 @@ def run_device_update_firmware(device_id, reservation_owner=None):
 
                 # Krok 5 (≡ pôv. krok 9): Finálny reštart
                 _emit('step_active', step=5, msg='Odosielam príkaz na finálny reštart...')
-                mk_api(device_id, 'POST', 'system/reboot')
-                _wait_device_offline(device_id, timeout=120)
+                _, reboot_err, reboot_code = mk_api(device_id, 'POST', 'system/reboot')
+                if reboot_err and reboot_code != 500:
+                    _emit('step_error', step=5)
+                    _fail(f'Príkaz na reštart zlyhal: {_api_error_message(reboot_err)}')
+                    return
+                if not _wait_device_offline(device_id, timeout=120):
+                    _emit('step_error', step=5)
+                    _fail('Zariadenie po firmware upgrade neprešlo do offline stavu (timeout 120s)')
+                    return
                 if not _wait_device_online(device_id, timeout=300):
                     _emit('step_error', step=5)
                     _fail('Zariadenie sa nespustilo po finálnom reštarte (timeout 300s)')
+                    return
+                verified, actual_firmware = _wait_routerboard_firmware(device_id, fw_upgrade)
+                if not verified:
+                    _emit('step_error', step=5)
+                    _fail(f'Firmware po reštarte nemá očakávanú verziu {fw_upgrade} (zistené: {actual_firmware or "neznáme"})')
                     return
                 _step_done(5)
             else:
@@ -8340,7 +8792,7 @@ def run_manual_bulk_update(device_ids, bulk_group_id, update_channel='stable'):
         try:
             with get_db_connection() as conn:
                 settings = {r['key']: r['value'] for r in conn.execute('SELECT key, value FROM settings').fetchall()}
-            delay = int(settings.get('bulk_update_delay_seconds', 60))
+            delay = parse_int_setting(settings.get('bulk_update_delay_seconds'), 60, 10, 3600)
         except Exception:
             delay = 60
         try:
@@ -8450,7 +8902,7 @@ def run_scheduled_update_bulk(schedule_id, group_id, all_rows_sorted, reservatio
         try:
             with get_db_connection() as conn:
                 settings = {r['key']: r['value'] for r in conn.execute('SELECT key, value FROM settings').fetchall()}
-            delay = int(settings.get('bulk_update_delay_seconds', 60))
+            delay = parse_int_setting(settings.get('bulk_update_delay_seconds'), 60, 10, 3600)
         except Exception:
             delay = 60
 

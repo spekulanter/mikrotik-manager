@@ -3475,6 +3475,27 @@
         </div>
     </div>
 
+    <!-- Update priority within a site -->
+    <div id="siteOrderModal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center hidden p-4" style="z-index: 60;">
+        <div class="modal-content card rounded-xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="device-modal-header px-6 py-5 flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-bold text-white">Poradie aktualizácií</h2>
+                    <p id="siteOrderSubtitle" class="text-xs text-sky-300/70 mt-1"></p>
+                </div>
+                <button id="closeSiteOrderModalBtn" type="button" class="text-gray-400 hover:text-white p-2" aria-label="Zavrieť"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <p class="text-sm text-gray-300 mb-4">Potiahnutím zmeňte prioritu. Čísla sa prepočítajú automaticky; pri aktualizácii sa použijú iba označené zariadenia.</p>
+                <div id="siteOrderList" class="space-y-2"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-700 flex justify-end gap-2">
+                <button id="cancelSiteOrderBtn" type="button" class="btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg">Zrušiť</button>
+                <button id="saveSiteOrderBtn" type="button" class="btn bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-2 rounded-lg"><i class="fas fa-floppy-disk mr-2"></i>Uložiť poradie</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modals -->
     <div id="deviceModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
         <div class="card rounded-xl w-full max-w-4xl modal-content device-modal-content overflow-hidden">
@@ -4906,6 +4927,13 @@
                     }
                     const actions = document.createElement('div');
                     actions.className = 'flex gap-1 flex-shrink-0';
+                    const order = document.createElement('button');
+                    order.type = 'button';
+                    order.className = 'btn bg-sky-700 hover:bg-sky-800 text-white rounded p-2';
+                    order.title = 'Nastaviť poradie aktualizácií';
+                    order.innerHTML = '<i class="fas fa-arrow-down-1-9"></i>';
+                    order.disabled = !(site.device_count > 0);
+                    order.addEventListener('click', () => openSiteOrderModal(site));
                     const edit = document.createElement('button');
                     edit.type = 'button';
                     edit.className = 'btn bg-amber-600 hover:bg-amber-700 text-white rounded p-2';
@@ -4937,7 +4965,7 @@
                             showToast(error.message, 'error');
                         }
                     });
-                    actions.append(edit, remove);
+                    actions.append(order, edit, remove);
                     row.append(content, actions);
                     list.appendChild(row);
                 });
@@ -4948,6 +4976,106 @@
                 populateSiteControls();
                 renderSitesList();
             };
+
+            let orderedSiteId = null;
+            let draggedSiteOrderItem = null;
+
+            const renumberSiteOrder = () => {
+                [...document.querySelectorAll('#siteOrderList [data-device-id]')].forEach((row, index) => {
+                    row.querySelector('[data-order-number]').textContent = index + 1;
+                    row.querySelector('[data-move-up]').disabled = index === 0;
+                    row.querySelector('[data-move-down]').disabled = index === document.querySelectorAll('#siteOrderList [data-device-id]').length - 1;
+                });
+            };
+
+            const moveSiteOrderRow = (row, direction) => {
+                const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+                if (!sibling) return;
+                if (direction < 0) row.parentNode.insertBefore(row, sibling);
+                else row.parentNode.insertBefore(sibling, row);
+                renumberSiteOrder();
+            };
+
+            const createSiteOrderRow = device => {
+                const row = document.createElement('div');
+                row.dataset.deviceId = device.id;
+                row.draggable = true;
+                row.className = 'interval-card rounded-lg border p-3 flex items-center gap-3 cursor-move';
+                row.innerHTML = `
+                    <span data-order-number class="w-8 h-8 rounded-full bg-cyan-700 text-white font-bold flex items-center justify-center flex-shrink-0"></span>
+                    <i class="fas fa-grip-vertical text-gray-500" aria-hidden="true"></i>
+                    <span class="min-w-0 flex-1"><span class="block font-semibold text-white truncate"></span><span class="block text-xs text-gray-400"></span></span>
+                    <span class="flex gap-1">
+                        <button data-move-up type="button" class="btn bg-gray-700 hover:bg-gray-600 text-white rounded p-2" title="Posunúť vyššie"><i class="fas fa-chevron-up"></i></button>
+                        <button data-move-down type="button" class="btn bg-gray-700 hover:bg-gray-600 text-white rounded p-2" title="Posunúť nižšie"><i class="fas fa-chevron-down"></i></button>
+                    </span>`;
+                const labels = row.querySelectorAll('.min-w-0 span');
+                labels[0].textContent = device.name;
+                labels[1].textContent = device.ip;
+                row.querySelector('[data-move-up]').addEventListener('click', () => moveSiteOrderRow(row, -1));
+                row.querySelector('[data-move-down]').addEventListener('click', () => moveSiteOrderRow(row, 1));
+                row.addEventListener('dragstart', event => {
+                    draggedSiteOrderItem = row;
+                    row.classList.add('opacity-50');
+                    event.dataTransfer.effectAllowed = 'move';
+                });
+                row.addEventListener('dragend', () => {
+                    row.classList.remove('opacity-50');
+                    draggedSiteOrderItem = null;
+                    renumberSiteOrder();
+                });
+                row.addEventListener('dragover', event => {
+                    event.preventDefault();
+                    if (!draggedSiteOrderItem || draggedSiteOrderItem === row) return;
+                    const rect = row.getBoundingClientRect();
+                    row.parentNode.insertBefore(draggedSiteOrderItem, event.clientY < rect.top + rect.height / 2 ? row : row.nextSibling);
+                });
+                return row;
+            };
+
+            const closeSiteOrderModal = () => {
+                document.getElementById('siteOrderModal').classList.add('hidden');
+                orderedSiteId = null;
+            };
+
+            const openSiteOrderModal = async site => {
+                try {
+                    const data = await api.get(`sites/${site.id}/device-order`);
+                    orderedSiteId = site.id;
+                    document.getElementById('siteOrderSubtitle').textContent = `${site.name} · ${data.devices.length} zariadení`;
+                    const list = document.getElementById('siteOrderList');
+                    list.replaceChildren(...data.devices.map(createSiteOrderRow));
+                    renumberSiteOrder();
+                    document.getElementById('siteOrderModal').classList.remove('hidden');
+                } catch (error) {
+                    showToast(error.message, 'error');
+                }
+            };
+
+            document.getElementById('closeSiteOrderModalBtn').addEventListener('click', closeSiteOrderModal);
+            document.getElementById('cancelSiteOrderBtn').addEventListener('click', closeSiteOrderModal);
+            document.getElementById('siteOrderModal').addEventListener('click', event => {
+                if (event.target.id === 'siteOrderModal') closeSiteOrderModal();
+            });
+            document.getElementById('saveSiteOrderBtn').addEventListener('click', async () => {
+                if (!orderedSiteId) return;
+                const deviceIds = [...document.querySelectorAll('#siteOrderList [data-device-id]')].map(row => Number(row.dataset.deviceId));
+                const button = document.getElementById('saveSiteOrderBtn');
+                button.disabled = true;
+                try {
+                    const response = await fetch(`/api/sites/${orderedSiteId}/device-order`, {
+                        method: 'PUT', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({device_ids: deviceIds})
+                    });
+                    await api._handleResponse(response);
+                    showToast('Poradie aktualizácií bolo uložené.', 'success');
+                    closeSiteOrderModal();
+                } catch (error) {
+                    showToast(error.message, 'error');
+                } finally {
+                    button.disabled = false;
+                }
+            });
 
             document.getElementById('manageSitesBtn').addEventListener('click', async () => {
                 await loadSites();
@@ -5094,15 +5222,19 @@
                 }
             });
             socket.on('backup_status', ({ ip, id, status, last_backup }) => {
+                const backupFinished = !['starting', 'stop_requested'].includes(status);
                 document.querySelectorAll(`[data-id="${id}"]`).forEach(el => {
                     const icon = el.querySelector('.backup-btn i');
-                    if (icon) icon.classList.remove('spinning');
+                    if (icon && backupFinished) icon.classList.remove('spinning');
                     if (last_backup) {
                         const val = el.querySelector('.last-backup-val');
                         if (val) val.textContent = formatLocalDate(last_backup);
                     }
                 });
 
+                if (status === 'skipped') {
+                    showToast(`Záloha ${ip} preskočená – konfigurácia sa od poslednej zálohy nezmenila.`, 'info');
+                }
                 // Ak bola záloha zastavená, zobrazíme správu len raz za event
                 if (status === 'stopped') {
                     addLog('warning', `Záloha pre ${ip} bola zastavená používateľom.`, ip);

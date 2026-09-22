@@ -1060,6 +1060,128 @@
             scrollbar-color: rgba(75, 85, 99, 0.4) transparent;
         }
 
+        .confirm-modal-content {
+            max-width: 430px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+            animation: confirm-modal-in 0.18s ease-out;
+        }
+
+        .confirm-modal-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 22px 22px 16px;
+        }
+
+        .confirm-modal-icon {
+            width: 44px;
+            height: 44px;
+            flex: 0 0 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: var(--danger-color);
+            background: rgba(248, 113, 113, 0.12);
+            border: 1px solid rgba(248, 113, 113, 0.28);
+            font-size: 18px;
+        }
+
+        .confirm-modal-title {
+            margin: 0;
+            color: var(--text-color);
+            font-size: 18px;
+            font-weight: 650;
+        }
+
+        .confirm-modal-subtitle {
+            margin: 4px 0 0;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .confirm-modal-body {
+            padding: 0 22px 20px;
+        }
+
+        .confirm-modal-message {
+            margin: 0;
+            color: var(--text-color);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .confirm-modal-warning {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-top: 14px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: #fbbf24;
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .confirm-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 16px 22px 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .confirm-modal-button {
+            min-width: 104px;
+            padding: 9px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .confirm-modal-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .confirm-modal-button.cancel {
+            color: var(--text-color);
+            background: transparent;
+        }
+
+        .confirm-modal-button.cancel:hover {
+            border-color: var(--accent-color);
+            background: rgba(56, 189, 248, 0.08);
+        }
+
+        .confirm-modal-button.danger {
+            color: #fff;
+            border-color: #dc2626;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 5px 14px rgba(220, 38, 38, 0.24);
+        }
+
+        .confirm-modal-button.danger:hover {
+            background: linear-gradient(135deg, #f05252, #c81e1e);
+        }
+
+        @keyframes confirm-modal-in {
+            from {
+                opacity: 0;
+                transform: translateY(8px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
         .modal-content::-webkit-scrollbar {
             width: 6px;
         }
@@ -1099,6 +1221,15 @@
 
         body.light-theme .modal-content::-webkit-scrollbar-thumb:hover {
             background-color: rgba(100, 116, 139, 0.45);
+        }
+
+        body.light-theme .confirm-modal-subtitle {
+            color: #64748b;
+        }
+
+        body.light-theme .confirm-modal-warning {
+            color: #92400e;
+            background: rgba(245, 158, 11, 0.1);
         }
 
         /* Light Theme */
@@ -2477,13 +2608,30 @@
         </div>
     </div>
 
-    <!-- Custom confirm modal (replaces native confirm() which is blocked in Android WebView) -->
-    <div id="confirmModal" class="modal-overlay" style="z-index:2000;">
-        <div class="modal-content" style="max-width:360px;padding:24px 22px 20px;" onclick="event.stopPropagation()">
-            <p id="confirmModalMsg" style="font-size:15px;margin:0 0 20px;line-height:1.5;"></p>
-            <div style="display:flex;gap:10px;justify-content:flex-end;">
-                <button id="confirmModalCancel" style="background:none;border:1px solid var(--border-color);color:var(--text-color);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;">Zrušiť</button>
-                <button id="confirmModalOk" style="background:#ef4444;border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">Potvrdiť</button>
+    <!-- Potvrdenie rizikovej akcie v dizajne aplikácie. -->
+    <div id="confirmModal" class="modal-overlay" style="z-index:2000;" role="dialog" aria-modal="true"
+        aria-labelledby="confirmModalTitle" aria-describedby="confirmModalMsg"
+        onclick="if (event.target === this) closeConfirmModal(false)">
+        <div class="modal-content confirm-modal-content" onclick="event.stopPropagation()">
+            <div class="confirm-modal-header">
+                <span class="confirm-modal-icon" aria-hidden="true"><i class="fas fa-power-off"></i></span>
+                <div>
+                    <h2 id="confirmModalTitle" class="confirm-modal-title">Reštart zariadenia</h2>
+                    <p class="confirm-modal-subtitle">Vyžaduje sa potvrdenie</p>
+                </div>
+            </div>
+            <div class="confirm-modal-body">
+                <p id="confirmModalMsg" class="confirm-modal-message"></p>
+                <div class="confirm-modal-warning">
+                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                    <span>Zariadenie bude počas reštartu dočasne nedostupné.</span>
+                </div>
+            </div>
+            <div class="confirm-modal-actions">
+                <button id="confirmModalCancel" class="confirm-modal-button cancel" type="button"
+                    onclick="closeConfirmModal(false)">Zrušiť</button>
+                <button id="confirmModalOk" class="confirm-modal-button danger" type="button"
+                    onclick="closeConfirmModal(true)">Reštartovať</button>
             </div>
         </div>
     </div>
@@ -2588,25 +2736,32 @@
             }
         }
 
-        // Custom confirm() replacement – works in Android WebView
-        function showConfirm(message, onConfirm) {
+        let _confirmAction = null;
+        let _confirmPreviousFocus = null;
+
+        // Vlastné potvrdenie funguje rovnako v prehliadači aj Android WebView.
+        function showConfirm(message, onConfirm, options = {}) {
             const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmModalTitle').textContent = options.title || 'Potvrdenie akcie';
             document.getElementById('confirmModalMsg').textContent = message;
+            document.getElementById('confirmModalOk').textContent = options.confirmLabel || 'Potvrdiť';
+            _confirmAction = onConfirm;
+            _confirmPreviousFocus = document.activeElement;
             modal.style.display = 'flex';
-            const ok = document.getElementById('confirmModalOk');
-            const cancel = document.getElementById('confirmModalCancel');
-            function cleanup() {
-                modal.style.display = 'none';
-                ok.replaceWith(ok.cloneNode(true));
-                cancel.replaceWith(cancel.cloneNode(true));
+            requestAnimationFrame(() => document.getElementById('confirmModalCancel').focus());
+        }
+
+        function closeConfirmModal(confirmed) {
+            const modal = document.getElementById('confirmModal');
+            if (!modal || modal.style.display !== 'flex') return;
+            const action = _confirmAction;
+            _confirmAction = null;
+            modal.style.display = 'none';
+            if (_confirmPreviousFocus && typeof _confirmPreviousFocus.focus === 'function') {
+                _confirmPreviousFocus.focus();
             }
-            document.getElementById('confirmModalOk').addEventListener('click', function () {
-                cleanup();
-                onConfirm();
-            }, { once: true });
-            document.getElementById('confirmModalCancel').addEventListener('click', function () {
-                cleanup();
-            }, { once: true });
+            _confirmPreviousFocus = null;
+            if (confirmed && typeof action === 'function') action();
         }
         let deviceDataMap = {};
         let originalOrder = [];
@@ -2926,6 +3081,7 @@
             });
             document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') {
+                    closeConfirmModal(false);
                     closeGlobalChannelDropdown();
                     const dropdown = document.getElementById('changelogVersionDropdown');
                     if (dropdown && dropdown.classList.contains('is-open')) {
@@ -4166,12 +4322,12 @@
                 const res = await fetch(endpoint, { method: 'POST' });
                 const json = await res.json();
                 if (json.status === 'success') {
-                    alert('Úspech: ' + json.message);
+                    showToast(json.message || 'Požiadavka bola úspešne odoslaná.', 'success');
                 } else {
-                    alert('Chyba: ' + (json.message || 'Neznáma chyba'));
+                    showToast(json.message || 'Požiadavku sa nepodarilo vykonať.', 'error', 6500);
                 }
             } catch (err) {
-                alert(managerConnectionFailure('Požiadavku sa nepodarilo odoslať.', err));
+                showToast(managerConnectionFailure('Požiadavku sa nepodarilo odoslať.', err), 'error', 6500);
             } finally {
                 btn.innerHTML = prevHtml;
                 btn.disabled = false;
@@ -4179,8 +4335,13 @@
         }
 
         async function rebootDevice(id, btn) {
-            showConfirm("Skutočne chcete reštartovať (reboot) toto zariadenie?", () => {
+            const device = devicesList.find(item => Number(item.id) === Number(id));
+            const deviceLabel = device?.name ? `zariadenie „${device.name}“` : 'toto zariadenie';
+            showConfirm(`Skutočne chcete reštartovať ${deviceLabel}?`, () => {
                 apiCall(`/api/updater/reboot/${id}`, btn);
+            }, {
+                title: 'Reštart zariadenia',
+                confirmLabel: 'Reštartovať'
             });
         }
 

@@ -3591,6 +3591,12 @@ def parse_mikrotik_date(date_str):
 # In-memory tracking to avoid repeated daily auto-renewal per device
 _cert_expiry_notified = {}
 
+# Certificate renewal can be triggered by the daily job and manually from the
+# Updater at the same time. Keep one in-process operation per device/IP so the
+# two flows cannot remove or create WebCert underneath each other.
+_certificate_renewal_locks_guard = threading.Lock()
+_certificate_renewal_locks = {}
+
 # In-memory tracking of manually started (non-scheduled) updates per device
 # device_id -> {device_name, device_ip, started_at, current_step, steps_done, current_msg}
 _running_manual_updates = {}
@@ -3669,21 +3675,31 @@ def _partition_devices_by_site(conn, device_ids):
     return list(groups.values())
 
 
-def _do_renew_certificate(ip, username, password, days, http_port=None):
+def _do_renew_certificate(ip, username, password, days, http_port=None, low_memory=False):
     """Obnoví TLS certifikát WebCert na MikroTik zariadení cez HTTP službu www.
     Vracia (success: bool, message: str)."""
     if http_port is None:
         http_port, _ = get_updater_web_ports()
 
+    with _certificate_renewal_locks_guard:
+        renewal_lock = _certificate_renewal_locks.setdefault(str(ip), threading.Lock())
+    if not renewal_lock.acquire(blocking=False):
+        return False, 'Obnova TLS certifikátu na tomto zariadení už prebieha.'
+
+    attempt_id = datetime.now().strftime('%Y%m%d-%H%M%S-%f')[:-3]
+
+    def cert_log(level, message):
+        add_log(level, f'TLS obnova [{attempt_id}]: {message}', device_ip=ip)
+
     def http_api(method, endpoint, payload=None, timeout=20):
         url = routeros_rest_url('http', ip, endpoint, http_port=http_port)
         try:
             r = requests.request(method, url, auth=(username, password), json=payload, timeout=timeout)
-            if r.status_code in [200, 201, 202]:
+            if 200 <= r.status_code < 300:
                 try:
-                    return r.json(), None
+                    return r.json(), None, r.status_code
                 except Exception:
-                    return r.text, None
+                    return r.text, None, r.status_code
             else:
                 err_msg = r.text
                 try:
@@ -3692,70 +3708,174 @@ def _do_renew_certificate(ip, username, password, days, http_port=None):
                         err_msg = ej['detail']
                 except Exception:
                     pass
-                return None, f'API chyba ({r.status_code}): {err_msg}'
+                return None, f'API chyba ({r.status_code}): {err_msg}', r.status_code
         except Exception as e:
-            return None, f'Chyba spojenia: {str(e)}'
+            return None, f'Chyba spojenia: {str(e)}', None
 
-    # 1. Odstránenie starého certifikátu (ignorujeme chybu ak neexistuje)
-    http_api('POST', 'certificate/remove', {'numbers': 'WebCert'})
-    time.sleep(2)
+    def webcert_from_response(response):
+        if not isinstance(response, list):
+            return None
+        return next((item for item in response if item.get('name') == 'WebCert'), None)
 
-    # 2. Pridanie nového certifikátu
-    res, err = http_api('POST', 'certificate/add', {
-        'name': 'WebCert',
-        'common-name': 'WebCert',
-        'days-valid': str(days)
-    }, timeout=30)
-    if err:
-        return False, f'Chyba pri pridaní certifikátu: {err}'
+    def format_space(value):
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return 'neznáme'
+        if value < 1024:
+            return f'{value} B'
+        return f'{value / 1024:.0f} KiB'
 
-    time.sleep(3)
+    try:
+        mode = '16MB' if low_memory else 'bežný'
+        cert_log('info', f'Začiatok procesu, režim={mode}, požadovaná platnosť={days} dní.')
 
-    # 3. Zistenie interného .id certifikátu (REST API vyžaduje .id namiesto mena)
-    cert_id = None
-    for attempt in range(5):
-        res, err = http_api('GET', 'certificate?name=WebCert')
-        if not err and isinstance(res, list) and len(res) > 0:
-            cert_id = res[0].get('.id')
+        # Storage is diagnostic only. Low free space must never block a renewal
+        # that RouterOS itself is still able to complete.
+        resource, resource_err, _ = http_api('GET', 'system/resource', timeout=10)
+        if not resource_err:
+            if isinstance(resource, list):
+                resource = resource[0] if resource else {}
+            if isinstance(resource, dict):
+                cert_log(
+                    'info',
+                    'RouterOS úložisko: '
+                    f"voľné={format_space(resource.get('free-hdd-space'))}, "
+                    f"celkom={format_space(resource.get('total-hdd-space'))}."
+                )
+        else:
+            cert_log('warning', f'Nepodarilo sa načítať stav úložiska (obnovu to neblokuje): {resource_err}')
+
+        certs, certs_err, _ = http_api('GET', 'certificate?name=WebCert', timeout=10)
+        if certs_err:
+            return False, f'Nepodarilo sa overiť existujúci certifikát: {certs_err}'
+        existing_cert = webcert_from_response(certs)
+
+        if existing_cert:
+            existing_id = existing_cert.get('.id')
+            if not existing_id:
+                return False, 'Existujúci WebCert nemá interné ID; obnova bola bezpečne zastavená.'
+            cert_log(
+                'info',
+                f"Existujúci WebCert: id={existing_id}, platnosť-do={existing_cert.get('invalid-after', 'neznáma')}."
+            )
+
+            removal_confirmed = False
+            last_remove_error = None
+            poll_attempts = 15 if low_memory else 6
+            for remove_attempt in range(2):
+                target_id = existing_cert.get('.id')
+                _, remove_err, remove_status = http_api(
+                    'POST', 'certificate/remove', {'numbers': target_id}, timeout=30
+                )
+                last_remove_error = remove_err
+                if remove_err:
+                    cert_log(
+                        'warning',
+                        f'Odstránenie id={target_id} vrátilo chybu: {remove_err}. Overujem skutočný stav.'
+                    )
+                else:
+                    cert_log('info', f'Odstránenie id={target_id} prijaté (HTTP {remove_status}).')
+
+                for poll_attempt in range(1, poll_attempts + 1):
+                    time.sleep(2)
+                    certs, poll_err, _ = http_api('GET', 'certificate?name=WebCert', timeout=10)
+                    if poll_err:
+                        last_remove_error = poll_err
+                        continue
+                    existing_cert = webcert_from_response(certs)
+                    if not existing_cert:
+                        cert_log('info', f'Odstránenie potvrdené po {poll_attempt * 2} s.')
+                        removal_confirmed = True
+                        break
+
+                if removal_confirmed:
+                    break
+                if remove_attempt == 0 and existing_cert and existing_cert.get('.id'):
+                    cert_log(
+                        'warning',
+                        f"WebCert id={existing_cert.get('.id')} stále existuje; vykonávam posledný kontrolovaný pokus."
+                    )
+
+            if not removal_confirmed:
+                detail = last_remove_error or 'RouterOS nepotvrdil odstránenie v časovom limite.'
+                return False, f'Pôvodný WebCert sa nepodarilo potvrdene odstrániť: {detail}'
+        else:
+            cert_log('info', 'WebCert neexistuje; pokračujem priamo vytvorením.')
+
+        _, err, add_status = http_api('POST', 'certificate/add', {
+            'name': 'WebCert',
+            'common-name': 'WebCert',
+            'days-valid': str(days)
+        }, timeout=30)
+        if err:
+            certs_after_error, inspect_err, _ = http_api('GET', 'certificate?name=WebCert', timeout=10)
+            found = webcert_from_response(certs_after_error) if not inspect_err else None
+            found_detail = f"; nájdený WebCert id={found.get('.id')}" if found else ''
+            cert_log('error', f'Vytvorenie zlyhalo: {err}{found_detail}.')
+            return False, f'Chyba pri pridaní certifikátu: {err}{found_detail}'
+        cert_log('info', f'Vytvorenie WebCert prijaté (HTTP {add_status}).')
+
+        # REST API requires the internal .id for signing instead of the name.
+        cert_id = None
+        id_poll_attempts = 10 if low_memory else 5
+        for _ in range(id_poll_attempts):
+            time.sleep(2)
+            certs, err, _ = http_api('GET', 'certificate?name=WebCert', timeout=10)
+            new_cert = webcert_from_response(certs) if not err else None
+            cert_id = new_cert.get('.id') if new_cert else None
             if cert_id:
                 break
-        time.sleep(2)
 
-    if not cert_id:
-        return False, 'Nepodarilo sa získať ID certifikátu na podpísanie.'
+        if not cert_id:
+            return False, 'Nepodarilo sa získať ID nového certifikátu na podpísanie.'
+        cert_log('info', f'Nový WebCert je dostupný ako id={cert_id}.')
 
-    # 4. Podpísanie certifikátu
-    http_api('POST', 'certificate/sign', {'number': cert_id}, timeout=30)
+        _, sign_err, sign_status = http_api(
+            'POST', 'certificate/sign', {'number': cert_id}, timeout=30
+        )
+        if sign_err:
+            return False, f'Chyba pri podpísaní certifikátu id={cert_id}: {sign_err}'
+        cert_log('info', f'Podpísanie id={cert_id} prijaté (HTTP {sign_status}).')
 
-    # 5. Overenie, či bol certifikát podpísaný (trusted=true, RouterBOARD môže trvať 5–30s)
-    signed = False
-    for attempt in range(10):
-        time.sleep(3)
-        res, err = http_api('GET', f'certificate/{cert_id}')
-        if isinstance(res, dict) and res.get('trusted') == 'true':
-            signed = True
-            break
+        signed = False
+        signed_cert = None
+        sign_poll_attempts = 15 if low_memory else 10
+        for _ in range(sign_poll_attempts):
+            time.sleep(3)
+            signed_cert, poll_err, _ = http_api('GET', f'certificate/{cert_id}', timeout=10)
+            if not poll_err and isinstance(signed_cert, dict) and signed_cert.get('trusted') == 'true':
+                signed = True
+                break
 
-    if not signed:
-        return False, 'Certifikát sa nepodarilo podpísať v časovom limite.'
+        if not signed:
+            return False, 'Certifikát sa nepodarilo podpísať v časovom limite.'
+        cert_log(
+            'info',
+            f"Podpis potvrdený, platnosť-do={signed_cert.get('invalid-after', 'neznáma')}."
+        )
 
-    # 6. Aktivácia certifikátu pre www-ssl službu (pomalé zariadenia potrebujú viac času)
-    res, err = None, None
-    for attempt in range(3):
-        res, err = http_api('POST', 'ip/service/set', {
-            'numbers': 'www-ssl',
-            'certificate': 'WebCert',
-            'disabled': 'no'
-        }, timeout=45)
-        if not err:
-            break
-        if attempt < 2:
-            time.sleep(5)
+        err = None
+        service_status = None
+        for attempt in range(3):
+            _, err, service_status = http_api('POST', 'ip/service/set', {
+                'numbers': 'www-ssl',
+                'certificate': 'WebCert',
+                'disabled': 'no'
+            }, timeout=45)
+            if not err:
+                break
+            cert_log('warning', f'Nastavenie www-ssl, pokus {attempt + 1}/3, zlyhalo: {err}')
+            if attempt < 2:
+                time.sleep(5)
 
-    if err:
-        return False, f'Chyba pri nastavení služby www-ssl: {err}'
+        if err:
+            return False, f'Chyba pri nastavení služby www-ssl: {err}'
 
-    return True, f'Certifikát úspešne vygenerovaný ({days} dní) a aplikovaný.'
+        cert_log('info', f'www-ssl používa WebCert (HTTP {service_status}); proces dokončený.')
+        return True, f'Certifikát úspešne vygenerovaný ({days} dní) a aplikovaný.'
+    finally:
+        renewal_lock.release()
 
 
 def check_certificates_expiry():
@@ -3846,7 +3966,14 @@ def check_certificates_expiry():
 
                 if days_remaining <= warning_days:
                     logger.info(f"Auto-renewing cert for {device_name} ({ip}), {days_remaining} days remaining.")
-                    success, message = _do_renew_certificate(ip, username, password, final_renewal_days, http_port=http_port)
+                    success, message = _do_renew_certificate(
+                        ip,
+                        username,
+                        password,
+                        final_renewal_days,
+                        http_port=http_port,
+                        low_memory=bool(device.get('low_memory'))
+                    )
 
                     if success:
                         add_log('info', f'Certifikát automaticky obnovený ({final_renewal_days} dní). Zostatok bol {days_remaining} dní.', device_ip=ip)
@@ -4330,7 +4457,14 @@ def api_updater_certificate(device_id):
     password = device_dec['password']
     http_port, _ = get_updater_web_ports(device=device_dec)
 
-    success, message = _do_renew_certificate(ip, username, password, days, http_port=http_port)
+    success, message = _do_renew_certificate(
+        ip,
+        username,
+        password,
+        days,
+        http_port=http_port,
+        low_memory=bool(device_dec.get('low_memory'))
+    )
 
     if success:
         add_log('info', f'Nový TLS certifikát vygenerovaný ({days} dní) a aplikovaný na www-ssl.', device_ip=ip)

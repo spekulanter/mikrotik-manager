@@ -1183,8 +1183,9 @@ def safe_ftp_error(error):
 
 
 def add_log(level, message, device_ip=None):
-    level_map = {'INFO': logging.INFO, 'SUCCESS': logging.INFO, 'WARNING': logging.WARNING, 'ERROR': logging.ERROR, 'DEBUG': logging.DEBUG}
-    log_level_int = level_map.get(level.upper(), logging.INFO)
+    level = str(level or 'info').strip().lower()
+    level_map = {'info': logging.INFO, 'success': logging.INFO, 'warning': logging.WARNING, 'error': logging.ERROR, 'debug': logging.DEBUG}
+    log_level_int = level_map.get(level, logging.INFO)
     safe_message = sanitize_log_message(message)
     logger.log(log_level_int, f"{f'[{device_ip}] ' if device_ip else ''}{safe_message}")
     

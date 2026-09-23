@@ -6064,7 +6064,13 @@
             }, { passive: true });
 
             // Extract log element creation logic for reuse
+            const normalizeActivityLogLevel = level => {
+                const normalized = String(level || 'info').trim().toLowerCase();
+                return ['info', 'success', 'warning', 'error'].includes(normalized) ? normalized : 'info';
+            };
+
             const createLogElement = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
+                level = normalizeActivityLogLevel(level);
                 // Offline správy budú warning
                 if (message.toLowerCase().includes('offline') || message.toLowerCase().includes('nedostupné')) {
                     level = 'warning';
@@ -6138,6 +6144,7 @@
             // Globálna pamäť pre dôležité správy - ODSTRÁNENÁ (zjednodušujeme logging)
 
             const addLog = (level, message, device_ip = '', timestamp = new Date().toISOString()) => {
+                level = normalizeActivityLogLevel(level);
                 // Úplne ignorujeme startup správy
                 if (message.includes('MikroTik Manager') && message.includes('úspešne načítaný!')) {
                     return; // Túto správu už nezobrazujeme vôbec

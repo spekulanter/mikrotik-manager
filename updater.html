@@ -1027,13 +1027,6 @@
         }
 
 
-        .inline-decision {
-            display: none;
-            gap: 6px;
-            margin-top: 6px;
-            flex-wrap: wrap;
-        }
-
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -3142,7 +3135,6 @@
 
         // Setup clear storage on logout if needed, but not here
         function saveUpdateState() {
-            // Nemôžeme serializovať funkcie ako decideResolve
             const stateToSave = {};
             for (const [id, state] of Object.entries(_deviceUpdateState)) {
                 if (state.active || state.persistedResult) {
@@ -4401,12 +4393,13 @@
                     const osInstalledVer = data.os['installed-version'];
                     const osLatestVer = data.os['latest-version'];
                     const osHasUpdate = data.os['update-available'] === true;
+                    const osIsDowngrade = data.os['offered-version-older'] === true;
                     document.getElementById(`os-${id}`).innerHTML = `
                         <div style="display: grid; grid-template-columns: max-content max-content; text-align: left; justify-content: center; column-gap: 16px; font-size: 14px;">
                             <span class="version-label">Aktuálna:</span>
                             <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osInstalledVer}</strong>
                             <span class="version-label">Dostupná:</span>
-                            <strong>${osLatestVer}</strong>
+                            <strong${osIsDowngrade ? ' style="color:var(--warning-color)" title="Prechod na staršiu verziu ponúkanú zvoleným kanálom"' : ''}>${osLatestVer}</strong>
                         </div>
                     `;
                     // Card: compact two-line version display
@@ -4414,7 +4407,7 @@
                     if (cardOsEl) cardOsEl.innerHTML = `
                         <div style="line-height:1.5;">
                             <span style="color:#9ca3af;">Aktuálna:</span> <strong style="${osHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${osInstalledVer}</strong><br>
-                            <span style="color:#9ca3af;">Dostupná:</span> <strong>${osLatestVer}</strong>
+                            <span style="color:#9ca3af;">Dostupná:</span> <strong${osIsDowngrade ? ' style="color:var(--warning-color)" title="Prechod na staršiu verziu ponúkanú zvoleným kanálom"' : ''}>${osLatestVer}</strong>
                         </div>
                     `;
 
@@ -4424,8 +4417,9 @@
                     // future firmware target from os.latest-version so the user sees it correctly.
                     const fwCurrent = data.firmware['current-firmware'];
                     const fwUpgrade = data.firmware['upgrade-firmware'];
+                    const fwIsDowngrade = data.firmware['offered-version-older'] === true;
                     const hasOsUpdateFw = data.os['update-available'] === true;
-                    const fwAvailable = (fwCurrent !== 'N/A' && fwCurrent === fwUpgrade && hasOsUpdateFw && data.os['latest-version'] !== 'N/A')
+                    const fwAvailable = (fwCurrent !== 'N/A' && fwCurrent === fwUpgrade && hasOsUpdateFw && !osIsDowngrade && data.os['latest-version'] !== 'N/A')
                         ? data.os['latest-version']
                         : fwUpgrade;
                     const fwHasUpdate = data.firmware['update-available'] === true ||
@@ -4435,7 +4429,7 @@
                             <span class="version-label">Aktuálny:</span>
                             <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwCurrent}</strong>
                             <span class="version-label">Dostupný:</span>
-                            <strong>${fwAvailable}</strong>
+                            <strong${fwIsDowngrade ? ' style="color:var(--warning-color)" title="Prechod na firmware verziu dodanú aktuálnym RouterOS"' : ''}>${fwAvailable}</strong>
                         </div>
                     `;
                     // Card: compact two-line firmware display
@@ -4443,7 +4437,7 @@
                     if (cardFwEl) cardFwEl.innerHTML = `
                         <div style="line-height:1.5;">
                             <span style="color:#9ca3af;">Aktuálny:</span> <strong style="${fwHasUpdate ? 'color:var(--danger-color)' : 'color:var(--success-color)'}">${fwCurrent}</strong><br>
-                            <span style="color:#9ca3af;">Dostupný:</span> <strong>${fwAvailable}</strong>
+                            <span style="color:#9ca3af;">Dostupný:</span> <strong${fwIsDowngrade ? ' style="color:var(--warning-color)" title="Prechod na firmware verziu dodanú aktuálnym RouterOS"' : ''}>${fwAvailable}</strong>
                         </div>
                     `;
                     // Sync model
@@ -5065,10 +5059,9 @@
         }
 
         // ─── Inline progress helpers ──────────────────────────────────────────────
-        let _updaterPostBackupDelay = 10;
-        let _updaterStabilizationDelay = 120;
+        let _updaterStabilizationDelay = 30;
         let _updaterPreRebootDelay = 20;
-        let STEP_LABELS = ['', 'Záloha', `${_updaterPostBackupDelay}s pauza po zálohe`, 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', `${_updaterStabilizationDelay}s pauza`, 'Update Firmware', `${_updaterPreRebootDelay}s pauza`, 'Finálny reštart'];
+        let STEP_LABELS = ['', 'Záloha', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot', `${_updaterStabilizationDelay}s stabilizácia`, 'Update Firmware', `${_updaterPreRebootDelay}s pauza`, 'Finálny reštart'];
         const STEP_ICONS = { '': '○', active: '⟳', done: '✓', error: '✗' };
 
         function startInlineUpdate(id, updateType) {
@@ -5076,19 +5069,19 @@
 
             let stepLabels, stepCount;
             if (updateType === 'os') {
-                stepLabels = ['', 'Záloha', `${_updaterPostBackupDelay}s pauza po zálohe`, 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot'];
-                stepCount = 5;
+                stepLabels = ['', 'Záloha', 'Update RouterOS', 'Čakám na reštart', 'Čakám na boot'];
+                stepCount = 4;
             } else if (updateType === 'firmware') {
                 const delay = _updaterPreRebootDelay || 20;
-                stepLabels = ['', 'Záloha', `${_updaterPostBackupDelay}s pauza po zálohe`, 'Update Firmware', `${delay}s pauza`, 'Finálny reštart'];
-                stepCount = 5;
+                stepLabels = ['', 'Záloha', 'Update Firmware', `${delay}s pauza`, 'Finálny reštart'];
+                stepCount = 4;
             } else {
                 stepLabels = STEP_LABELS;
-                stepCount = 9;
+                stepCount = 8;
             }
             const finalStep = stepCount + 1;
 
-            _deviceUpdateState[id] = { active: true, decideResolve: null, persistedResult: false, updateType: updateType, stepLabels: stepLabels, stepCount: stepCount, finalStep: finalStep };
+            _deviceUpdateState[id] = { active: true, persistedResult: false, updateType: updateType, stepLabels: stepLabels, stepCount: stepCount, finalStep: finalStep };
             const actionsEl = document.getElementById(`actions-${id}`);
             if (!actionsEl) return;
             actionsEl.style.opacity = '1';
@@ -5105,14 +5098,6 @@
                         <div id="itrack-${id}" class="inline-progress-track inline-progress">
                             ${stepsHtml}
                         </div>
-                    </div>
-                    <div id="idecision-${id}" class="inline-decision">
-                        <button onclick="inlineDecisionAnswer(${id}, 'continue')" class="action-btn primary" style="font-size:12px; padding:4px 10px;">
-                            <i class="fas fa-forward"></i> Pokračovať
-                        </button>
-                        <button onclick="inlineDecisionAnswer(${id}, 'stop')" class="action-btn danger" style="font-size:12px; padding:4px 10px;">
-                            <i class="fas fa-stop"></i> Zastaviť
-                        </button>
                     </div>
                 </div>
             `;
@@ -5136,7 +5121,7 @@
         }
 
         function endInlineUpdate(id, success, message) {
-            const finalStep = (_deviceUpdateState[id] && _deviceUpdateState[id].finalStep) || 10;
+            const finalStep = (_deviceUpdateState[id] && _deviceUpdateState[id].finalStep) || 9;
             if (_deviceUpdateState[id]) {
                 _deviceUpdateState[id].active = false;
                 _deviceUpdateState[id].persistedResult = true;
@@ -5171,9 +5156,9 @@
 
         function setInlineStep(id, stepNum, state) {
             const st = _deviceUpdateState[id] || {};
-            const stepCount = st.stepCount || 9;
+            const stepCount = st.stepCount || 8;
             const stepLabels = st.stepLabels || STEP_LABELS;
-            const finalStep = st.finalStep || 10;
+            const finalStep = st.finalStep || 9;
 
             const el = document.getElementById(`istep-${id}-${stepNum}`);
             if (!el) return;
@@ -5219,233 +5204,6 @@
             saveUpdateState();
         }
 
-
-        function inlineCountdown(id, stepNum, seconds) {
-            return new Promise(resolve => {
-                let remaining = seconds;
-                const tick = () => {
-                    const el = document.getElementById(`istep-${id}-${stepNum}`);
-                    const st = _deviceUpdateState[id] || {};
-                    const stepLabels = st.stepLabels || STEP_LABELS;
-                    if (el) el.textContent = `⟳ ${stepLabels[stepNum]} (${remaining}s)`;
-                    if (remaining <= 0) { resolve(); return; }
-                    remaining--;
-                    setTimeout(tick, 1000);
-                };
-                tick();
-            });
-        }
-
-        function waitInlineDecision(id) {
-            return new Promise(resolve => {
-                if (_deviceUpdateState[id]) _deviceUpdateState[id].decideResolve = resolve;
-                const decEl = document.getElementById(`idecision-${id}`);
-                if (decEl) decEl.style.display = 'flex';
-                saveUpdateState();
-            });
-        }
-
-        function inlineDecisionAnswer(id, answer) {
-            const decEl = document.getElementById(`idecision-${id}`);
-            if (decEl) decEl.style.display = 'none';
-            saveUpdateState();
-
-            const resolve = _deviceUpdateState[id]?.decideResolve;
-            if (resolve) {
-                _deviceUpdateState[id].decideResolve = null;
-                resolve(answer);
-            } else {
-                // Obnova stateu bez resolve? Pravdepodobne bol refresh stranky.
-                // Ulozime zamer, ale updater bol strateny
-                endInlineUpdate(id, false, "Kroky neprešli kvôli obnove spojenia.");
-            }
-        }
-
-        // Sleep helper
-        const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-        // Poll device offline
-        async function pollOffline(deviceId, timeoutMs, intervalMs) {
-            const start = Date.now();
-            while (Date.now() - start < timeoutMs) {
-                await sleep(intervalMs);
-                try {
-                    const r = await fetch(`/api/updater/ping/${deviceId}`);
-                    const j = await r.json();
-                    if (j.status === 'offline') return true;
-                } catch (e) {
-                    return true; // fetch error = device likely offline
-                }
-            }
-            return false;
-        }
-
-        // Poll device online
-        async function pollOnline(deviceId, timeoutMs, intervalMs) {
-            const start = Date.now();
-            while (Date.now() - start < timeoutMs) {
-                await sleep(intervalMs);
-                try {
-                    const r = await fetch(`/api/updater/ping/${deviceId}`);
-                    const j = await r.json();
-                    if (j.status === 'online') return true;
-                } catch (e) { /* continue */ }
-            }
-            return false;
-        }
-
-        // After final reboot: wait for device to go offline then come back, then refresh row
-        async function waitOnlineThenRefresh(id, isLowMem) {
-            // Wait for device to go offline (up to 60s)
-            await pollOffline(id, 60000, 2000);
-            // Then wait for it to come back online
-            const onlineTimeout = isLowMem ? 300000 : 180000;
-            const cameOnline = await pollOnline(id, onlineTimeout, 5000);
-            if (cameOnline) {
-                await sleep(3000); // Brief settle time for services
-                clearUpdateState(id); // This will restore normal buttons
-            }
-        }
-
-        // ─── Shared helper: steps 7-8-9 (firmware check + optional reboot) ─────────
-        async function _doFirmwareAndReboot(id, isLowMem) {
-            // Step 7 – Check firmware versions (fetch fresh data)
-            setInlineStep(id, 7, 'active');
-            let fwUpdateNeeded = true;
-            try {
-                const freshRes = await fetch(`/api/updater/device/${id}?channel=${encodeURIComponent(selectedUpdateChannel)}`);
-                const freshData = await freshRes.json();
-                if (freshData.status === 'success') {
-                    deviceDataMap[id] = freshData;
-                    const cur = freshData.firmware['current-firmware'];
-                    const upg = freshData.firmware['upgrade-firmware'];
-                    // cur === 'N/A' means no routerboard (VM/CHR) → skip; cur === upg → already up to date
-                    if (cur === 'N/A' || cur === upg) fwUpdateNeeded = false;
-                }
-            } catch (e) { /* keep fwUpdateNeeded = true */ }
-
-            if (!fwUpdateNeeded) {
-                setInlineStep(id, 7, 'done');
-                setInlineStep(id, 8, 'done');
-                setInlineStep(id, 9, 'done');
-                endInlineUpdate(id, true, '✅ Firmware je aktuálny. Aktualizácia dokončená!');
-                setTimeout(() => { if (!(_deviceUpdateState[id] && _deviceUpdateState[id].active)) clearUpdateState(id); }, 2000);
-                return;
-            }
-
-            const fwRes = await fetch(`/api/updater/install-firmware/${id}`, { method: 'POST' });
-            const fwData = await fwRes.json();
-            if (fwData.status !== 'success') {
-                setInlineStep(id, 7, 'error');
-                endInlineUpdate(id, false, `❌ Chyba Update Firmware: ${fwData.message}`);
-                return;
-            }
-            setInlineStep(id, 7, 'done');
-
-            // Step 8 – pre-reboot countdown
-            setInlineStep(id, 8, 'active');
-            await inlineCountdown(id, 8, _updaterPreRebootDelay);
-            setInlineStep(id, 8, 'done');
-
-            await _doFinalReboot(id, isLowMem);
-        }
-
-        async function _doFinalReboot(id, isLowMem) {
-            // Step 9 – Final reboot
-            setInlineStep(id, 9, 'active');
-            const rebootRes = await fetch(`/api/updater/reboot/${id}`, { method: 'POST' });
-            const rebootData = await rebootRes.json();
-            if (rebootData.status !== 'success') {
-                setInlineStep(id, 9, 'error');
-                endInlineUpdate(id, false, `❌ Chyba Reštart: ${rebootData.message}`);
-                return;
-            }
-            setInlineStep(id, 9, 'done');
-            endInlineUpdate(id, true, '✅ Aktualizácia dokončená!');
-            await waitOnlineThenRefresh(id, isLowMem);
-        }
-
-        // ─── Auto-resume after page navigation / reload ───────────────────────────
-        async function resumeUpdateAfterReload(id) {
-            const state = _deviceUpdateState[id];
-            if (!state || !state.active) return;
-
-            const dev = devicesList.find(d => d.id === id);
-            const isLowMem = dev && dev.low_memory;
-
-            const actionsEl = document.getElementById(`actions-${id}`);
-            if (actionsEl) actionsEl.style.opacity = '1';
-
-            const step = state.currentStep || 1;
-
-            try {
-                if (step <= 6) {
-                    // Was waiting for reboot or boot – check current device status
-                    let isOnline = false;
-                    try {
-                        const r = await fetch(`/api/updater/ping/${id}`);
-                        const j = await r.json();
-                        isOnline = (j.status === 'online');
-                    } catch (e) { isOnline = false; }
-
-                    if (!isOnline) {
-                        // Device still offline – wait for it to boot
-                        setInlineStep(id, 1, 'done');
-                        setInlineStep(id, 2, 'done');
-                        setInlineStep(id, 3, 'done');
-                        setInlineStep(id, 4, 'done');
-                        setInlineStep(id, 5, 'active');
-                        const onlineTimeout = isLowMem ? 300000 : 180000;
-                        const cameOnline = await pollOnline(id, onlineTimeout, 5000);
-                        if (!cameOnline) {
-                            setInlineStep(id, 5, 'error');
-                            endInlineUpdate(id, false, `❌ Zariadenie sa nevrátilo online v časovom limite (${onlineTimeout / 1000}s).`);
-                            return;
-                        }
-                        setInlineStep(id, 5, 'done');
-
-                        // VM/CHR (no routerboard) – skip stabilization + firmware steps entirely
-                        const _resumeDevData = deviceDataMap[id];
-                        if (_resumeDevData && _resumeDevData.firmware && _resumeDevData.firmware['current-firmware'] === 'N/A') {
-                            setInlineStep(id, 6, 'done');
-                            setInlineStep(id, 7, 'done');
-                            setInlineStep(id, 8, 'done');
-                            setInlineStep(id, 9, 'done');
-                            endInlineUpdate(id, true, '✅ RouterOS aktualizovaný. (VM/CHR – firmware nie je potrebný)');
-                            setTimeout(() => clearUpdateState(id), 3000);
-                            return;
-                        }
-
-                        setInlineStep(id, 6, 'active');
-                        await inlineCountdown(id, 6, _updaterStabilizationDelay);
-                        setInlineStep(id, 6, 'done');
-                    } else {
-                        // Device already online – skip steps 1-6
-                        setInlineStep(id, 1, 'done');
-                        setInlineStep(id, 2, 'done');
-                        setInlineStep(id, 3, 'done');
-                        setInlineStep(id, 4, 'done');
-                        setInlineStep(id, 5, 'done');
-                        setInlineStep(id, 6, 'done');
-                    }
-                    await _doFirmwareAndReboot(id, isLowMem);
-
-                } else if (step === 7) {
-                    await _doFirmwareAndReboot(id, isLowMem);
-
-                } else if (step === 8) {
-                    // Was in pre-reboot countdown after firmware install – skip to reboot
-                    setInlineStep(id, 8, 'done');
-                    await _doFinalReboot(id, isLowMem);
-
-                } else if (step === 9) {
-                    await _doFinalReboot(id, isLowMem);
-                }
-
-            } catch (err) {
-                endInlineUpdate(id, false, `❌ Chyba pri obnovení procesu: ${err.message}`);
-            }
-        }
 
         // ─── Full update sequence (server-side, F5-resilient) ────────────────────
         async function fullUpdateDevice(id) {
@@ -5505,12 +5263,10 @@
                 const res = await fetch('/api/settings');
                 const s = await res.json();
                 _bulkUpdateDelaySec = parseInt(s.bulk_update_delay_seconds || 60);
-                _updaterPostBackupDelay = parseInt(s.updater_post_backup_delay || 10);
-                _updaterStabilizationDelay = parseInt(s.updater_stabilization_delay || 120);
+                _updaterStabilizationDelay = parseInt(s.updater_stabilization_delay || 30);
                 _updaterPreRebootDelay = parseInt(s.updater_pre_reboot_delay || 20);
-                STEP_LABELS[2] = `${_updaterPostBackupDelay}s pauza po zálohe`;
-                STEP_LABELS[6] = `${_updaterStabilizationDelay}s pauza`;
-                STEP_LABELS[8] = `${_updaterPreRebootDelay}s pauza`;
+                STEP_LABELS[5] = `${_updaterStabilizationDelay}s stabilizácia`;
+                STEP_LABELS[7] = `${_updaterPreRebootDelay}s pauza`;
             } catch (e) { /* keep defaults */ }
         }
         _loadBulkDelay();
@@ -5718,9 +5474,10 @@
             const data = deviceDataMap[id];
             if (!data || data.status !== 'success') return false;
             const hasOsUpdate = data.os && data.os['update-available'] === true;
+            const osIsDowngrade = data.os && data.os['offered-version-older'] === true;
             const _fwCur = data.firmware && data.firmware['current-firmware'];
             const _fwUpg = data.firmware && data.firmware['upgrade-firmware'];
-            const _fwAvail = (_fwCur !== 'N/A' && _fwCur === _fwUpg && hasOsUpdate && data.os['latest-version'] !== 'N/A')
+            const _fwAvail = (_fwCur !== 'N/A' && _fwCur === _fwUpg && hasOsUpdate && !osIsDowngrade && data.os['latest-version'] !== 'N/A')
                 ? data.os['latest-version'] : _fwUpg;
             const hasFwUpdate = data.firmware && (
                 data.firmware['update-available'] === true ||

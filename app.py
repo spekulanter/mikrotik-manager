@@ -1559,27 +1559,53 @@ def compare_with_local_backup(ip, remote_content, detailed_logging=True):
         return True
 
 
-def _is_manager_remote_backup(filename, ip):
-    """Match only backup artifacts created by this application."""
+def _is_manager_remote_export(filename):
+    """Match timestamped .rsc artifacts created by this application."""
     basename = str(filename).rsplit('/', 1)[-1]
     return bool(re.fullmatch(
-        rf'.*_{re.escape(str(ip))}_\d{{8}}-\d{{4}}(?:\d{{2}})?\.backup',
+        r'.*_\d{1,3}(?:\.\d{1,3}){3}_\d{8}-\d{4}(?:\d{2})?\.rsc',
         basename,
+        flags=re.IGNORECASE,
     ))
 
 
-def _cleanup_manager_remote_backups(sftp, ip, keep_path=None):
-    """Remove app-owned remote binary backups without touching user files."""
+def _cleanup_remote_backup_artifacts(sftp, keep_path=None):
+    """Remove stale backups and related exports from root and /flash.
+
+    Every old ``.backup`` is removed regardless of its name or embedded IP.
+    An ``.rsc`` is removed only when it has the same basename as an old backup,
+    or when it matches the timestamped naming scheme used by older versions of
+    this application. Unrelated RouterOS scripts and exports remain untouched.
+    """
     removed = []
     normalized_keep = str(keep_path or '').lstrip('/')
     for directory in ('.', 'flash'):
         try:
-            names = sftp.listdir(directory)
+            names = [str(name) for name in sftp.listdir(directory)]
         except (IOError, OSError):
             continue
+
+        backup_paths = {
+            (name if directory == '.' else f'{directory}/{name}').lstrip('/').lower()
+            for name in names
+            if name.lower().endswith('.backup')
+        }
         for name in names:
             remote_path = name if directory == '.' else f'{directory}/{name}'
-            if remote_path.lstrip('/') == normalized_keep or not _is_manager_remote_backup(name, ip):
+            normalized_path = remote_path.lstrip('/')
+            lower_path = normalized_path.lower()
+            is_backup = name.lower().endswith('.backup')
+            paired_backup_path = f'{lower_path[:-4]}.backup' if name.lower().endswith('.rsc') else ''
+            is_related_export = (
+                name.lower().endswith('.rsc')
+                and (
+                    paired_backup_path in backup_paths
+                    or _is_manager_remote_export(name)
+                )
+            )
+            if normalized_path == normalized_keep or not (is_backup or is_related_export):
+                continue
+            if paired_backup_path and paired_backup_path == normalized_keep.lower():
                 continue
             try:
                 sftp.remove(remote_path)
@@ -1742,11 +1768,11 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
 
         with client.open_sftp() as sftp:
             if low_memory:
-                removed = _cleanup_manager_remote_backups(sftp, ip)
+                removed = _cleanup_remote_backup_artifacts(sftp)
                 if detailed_logging:
                     add_log(
                         'info',
-                        f"16 MB režim: pred vytvorením novej zálohy odstránené staré aplikačné backupy: {len(removed)}.",
+                        f"16 MB režim: pred vytvorením novej zálohy odstránené staré vzdialené backupy/exporty: {len(removed)}.",
                         ip,
                     )
             elif detailed_logging:
@@ -1797,14 +1823,15 @@ def run_backup_logic(device, is_sequential=False, result_holder=None):
                         )
                 else:
                     # Nový backup už existuje lokálne aj na routeri. Teraz môžeme
-                    # bezpečne odstrániť staršie aplikačné backupy a ponechať nový.
-                    removed = _cleanup_manager_remote_backups(
-                        sftp, ip, keep_path=backup_path
+                    # bezpečne odstrániť všetky staršie backupy a súvisiace exporty
+                    # v root aj /flash a ponechať nový.
+                    removed = _cleanup_remote_backup_artifacts(
+                        sftp, keep_path=backup_path
                     )
                     if detailed_logging:
                         add_log(
                             'info',
-                            f'Staršie vzdialené aplikačné backupy odstránené po overení nového: {len(removed)}.',
+                            f'Staršie vzdialené backupy a súvisiace exporty odstránené po overení nového: {len(removed)}.',
                             ip,
                         )
                 if detailed_logging:

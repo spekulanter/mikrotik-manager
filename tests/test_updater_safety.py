@@ -62,27 +62,46 @@ class UpdaterSafetyTests(unittest.TestCase):
 
 
 class BackupArtifactTests(unittest.TestCase):
-    def test_remote_cleanup_only_removes_manager_owned_backup_files(self):
+    def test_remote_cleanup_removes_all_backups_and_only_related_exports(self):
         class FakeSftp:
             def __init__(self):
                 self.removed = []
 
             def listdir(self, directory):
                 return {
-                    '.': ['AP_Katka_192.0.2.7_20260921-0203.backup', 'manual.backup', 'notes.rsc'],
-                    'flash': ['AP_Katka_192.0.2.7_20260922-030405.backup', 'other_192.0.2.8_20260922-0304.backup'],
+                    '.': [
+                        'AP_Katka_192.0.2.7_20260921-0203.backup',
+                        'AP_Katka_192.0.2.7_20260921-0203.rsc',
+                        'manual.backup',
+                        'manual.rsc',
+                        'notes.rsc',
+                        'script.rsc',
+                    ],
+                    'flash': [
+                        'other_192.0.2.8_20260922-0304.backup',
+                        'other_192.0.2.8_20260922-0304.rsc',
+                        'orphan_192.0.2.9_20260920-0102.rsc',
+                        'keep-this.txt',
+                    ],
                 }[directory]
 
             def remove(self, path):
                 self.removed.append(path)
 
         sftp = FakeSftp()
-        removed = app._cleanup_manager_remote_backups(sftp, '192.0.2.7')
+        removed = app._cleanup_remote_backup_artifacts(sftp)
         self.assertEqual(removed, [
             'AP_Katka_192.0.2.7_20260921-0203.backup',
-            'flash/AP_Katka_192.0.2.7_20260922-030405.backup',
+            'AP_Katka_192.0.2.7_20260921-0203.rsc',
+            'manual.backup',
+            'manual.rsc',
+            'flash/other_192.0.2.8_20260922-0304.backup',
+            'flash/other_192.0.2.8_20260922-0304.rsc',
+            'flash/orphan_192.0.2.9_20260920-0102.rsc',
         ])
-        self.assertNotIn('manual.backup', sftp.removed)
+        self.assertNotIn('notes.rsc', sftp.removed)
+        self.assertNotIn('script.rsc', sftp.removed)
+        self.assertNotIn('flash/keep-this.txt', sftp.removed)
 
     def test_remote_cleanup_can_keep_new_validated_backup(self):
         class FakeSftp:
@@ -93,7 +112,9 @@ class BackupArtifactTests(unittest.TestCase):
                 if directory == '.':
                     return [
                         'Router_192.0.2.7_20260921-0203.backup',
+                        'Router_192.0.2.7_20260921-0203.rsc',
                         'Router_192.0.2.7_20260922-030405.backup',
+                        'Router_192.0.2.7_20260922-030405.rsc',
                     ]
                 return []
 
@@ -102,11 +123,15 @@ class BackupArtifactTests(unittest.TestCase):
 
         sftp = FakeSftp()
         newest = 'Router_192.0.2.7_20260922-030405.backup'
-        removed = app._cleanup_manager_remote_backups(
-            sftp, '192.0.2.7', keep_path=newest
+        removed = app._cleanup_remote_backup_artifacts(
+            sftp, keep_path=newest
         )
-        self.assertEqual(removed, ['Router_192.0.2.7_20260921-0203.backup'])
+        self.assertEqual(removed, [
+            'Router_192.0.2.7_20260921-0203.backup',
+            'Router_192.0.2.7_20260921-0203.rsc',
+        ])
         self.assertNotIn(newest, sftp.removed)
+        self.assertNotIn('Router_192.0.2.7_20260922-030405.rsc', sftp.removed)
 
     def test_remote_file_waits_for_nonempty_stable_size(self):
         sizes = iter([0, 1024, 2048, 2048, 2048])
